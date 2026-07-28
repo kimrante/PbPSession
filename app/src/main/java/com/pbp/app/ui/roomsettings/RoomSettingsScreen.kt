@@ -53,6 +53,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
 import com.pbp.app.PbpApp
+import com.pbp.app.data.Images
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpPalette
@@ -60,9 +61,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.util.UUID
 
 class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) : ViewModel() {
     private val repo = app.repository
@@ -75,14 +73,9 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
     fun setBackground(key: String) = viewModelScope.launch { repo.setBackground(roomId, key) }
 
     fun importBackground(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
-        runCatching {
-            val dir = File(app.filesDir, "backgrounds").apply { mkdirs() }
-            val file = File(dir, "${UUID.randomUUID()}.img")
-            app.contentResolver.openInputStream(uri)!!.use { input ->
-                file.outputStream().use { input.copyTo(it) }
-            }
-            repo.setBackground(roomId, file.absolutePath)
-        }
+        // 배경은 최대 1600px로 축소 저장
+        Images.importDownscaled(app, uri, "backgrounds", maxSize = 1600)
+            ?.let { repo.setBackground(roomId, it) }
     }
 
     fun share(onResult: (String?) -> Unit) = viewModelScope.launch {

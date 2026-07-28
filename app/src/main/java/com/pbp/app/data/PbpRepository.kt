@@ -15,6 +15,9 @@ class PbpRepository(private val db: AppDatabase) {
     fun observeLastMessages() = db.messageDao().observeLastPerRoom()
     fun observeUnreadCounts() = db.messageDao().observeUnreadCounts()
     fun observeMessages(roomId: Long) = db.messageDao().observeForRoom(roomId)
+    fun observeLatestMessages(roomId: Long, limit: Int) =
+        db.messageDao().observeLatestForRoom(roomId, limit)
+    suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
     fun observeGlobalProfiles() = db.profileDao().observeGlobal()
 

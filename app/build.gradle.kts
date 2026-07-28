@@ -20,12 +20,22 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
     buildFeatures {
         compose = true
+    }
+
+    lint {
+        // Fragment 미사용 앱에서 registerForActivityResult에 뜨는 오탐
+        disable += "InvalidFragmentVersionForActivityResult"
     }
 
     compileOptions {

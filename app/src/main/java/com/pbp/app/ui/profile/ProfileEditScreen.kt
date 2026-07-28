@@ -52,6 +52,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
+import com.pbp.app.data.Images
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.theme.Pbp
@@ -60,7 +61,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.UUID
 
 class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
 
@@ -76,7 +76,10 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         onDone: () -> Unit,
     ) = viewModelScope.launch {
         withContext(Dispatchers.IO) {
-            val imagePath = newImageUri?.let { copyImage(it) } ?: existing?.imagePath
+            // 아바타는 최대 512px로 축소 저장 (풀사이즈 디코딩 방지)
+            val imagePath = newImageUri
+                ?.let { Images.importDownscaled(app, it, "avatars", maxSize = 512) }
+                ?: existing?.imagePath
             val profile = (existing ?: CharacterProfile(name = "")).copy(
                 name = name.trim().ifEmpty { "이름 없음" },
                 nameColor = nameColor,
@@ -95,16 +98,6 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         }
         onDone()
     }
-
-    /** 갤러리 원본이 지워져도 안전하도록 앱 내부 저장소로 복사한다. */
-    private fun copyImage(uri: Uri): String? = runCatching {
-        val dir = File(app.filesDir, "avatars").apply { mkdirs() }
-        val file = File(dir, "${UUID.randomUUID()}.img")
-        app.contentResolver.openInputStream(uri)!!.use { input ->
-            file.outputStream().use { input.copyTo(it) }
-        }
-        file.absolutePath
-    }.getOrNull()
 }
 
 @Composable

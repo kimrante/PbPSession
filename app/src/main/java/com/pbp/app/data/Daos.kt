@@ -77,6 +77,15 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE roomId = :roomId ORDER BY createdAt ASC, id ASC")
     fun observeForRoom(roomId: Long): Flow<List<Message>>
 
+    /** 최신 limit개만 시간순으로 — 장기 캠페인에서 전체 로딩 방지 */
+    @Query(
+        """SELECT * FROM (
+             SELECT * FROM messages WHERE roomId = :roomId
+             ORDER BY createdAt DESC, id DESC LIMIT :limit
+           ) ORDER BY createdAt ASC, id ASC"""
+    )
+    fun observeLatestForRoom(roomId: Long, limit: Int): Flow<List<Message>>
+
     @Query("SELECT * FROM messages WHERE id IN (SELECT MAX(id) FROM messages GROUP BY roomId)")
     fun observeLastPerRoom(): Flow<List<Message>>
 
@@ -85,6 +94,14 @@ interface MessageDao {
 
     @Query("SELECT COUNT(*) FROM messages WHERE remoteId = :remoteId")
     suspend fun countByRemoteId(remoteId: String): Int
+
+    /** 수신 dedup 일괄 조회 — 문서마다 쿼리하지 않도록 */
+    @Query("SELECT remoteId FROM messages WHERE remoteId IN (:ids)")
+    suspend fun existingRemoteIds(ids: List<String>): List<String>
+
+    /** 전송 실패(remoteId 미기록) 메시지 — 시작 시 재전송용 아웃박스 */
+    @Query("SELECT * FROM messages WHERE roomId = :roomId AND remoteId IS NULL ORDER BY createdAt ASC, id ASC")
+    suspend fun listUnsent(roomId: Long): List<Message>
 
     @Query("UPDATE messages SET remoteId = :remoteId WHERE id = :id")
     suspend fun setRemoteId(id: Long, remoteId: String)

@@ -68,15 +68,33 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 .build(),
         )
         FirebaseFirestore.getInstance(app!!).apply {
-            // demo- 프로젝트는 로컬 에뮬레이터로 (10.0.2.2 = 에뮬레이터에서 본 호스트 PC)
-            if (isDemo) useEmulator("10.0.2.2", 8080)
+            if (isDemo) {
+                // demo- 프로젝트는 로컬 에뮬레이터로 (10.0.2.2 = 에뮬레이터에서 본 호스트 PC)
+                useEmulator("10.0.2.2", 8080)
+            } else {
+                // 로컬 Room DB가 이미 소스이므로 Firestore 디스크 캐시는 이중 저장 — 메모리 캐시만 사용
+                firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                    .setLocalCacheSettings(
+                        com.google.firebase.firestore.MemoryCacheSettings.newBuilder().build()
+                    )
+                    .build()
+            }
         }
     }
 
-    /** 앱 시작 시 공유된 방들의 수신 리스너를 다시 걸고 FCM 토큰을 등록한다. */
+    /**
+     * 앱 시작 시: 공유된 방들의 수신 리스너 복구 + FCM 토큰 등록 +
+     * 전송에 실패했던 메시지(아웃박스, remoteId 미기록) 재전송.
+     */
     fun start() = scope.launch {
         val synced = db.roomDao().listSynced()
-        synced.forEach { room -> room.remoteId?.let { attach(room.id, it) } }
+        synced.forEach { room ->
+            val remote = room.remoteId ?: return@forEach
+            attach(room.id, remote)
+            runCatching {
+                db.messageDao().listUnsent(room.id).forEach { pushMessage(remote, it) }
+            }
+        }
         if (synced.isNotEmpty()) registerFcmToken()
     }
 
@@ -98,13 +116,23 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 "backgroundKey" to room.backgroundKey.takeIf { it.startsWith("preset_") },
             )
         ).await()
-        // 지금까지의 대화를 백필
-        db.messageDao().listForRoom(roomId).forEach { message ->
-            pushMessage(roomDoc.id, message)
+        // 지금까지의 대화를 백필 — WriteBatch로 왕복 최소화 (배치당 최대 450건)
+        db.messageDao().listForRoom(roomId).chunked(450).forEach { chunk ->
+            val batch = firestore.batch()
+            val refs = chunk.map { message ->
+                val avatarId = message.senderImagePath?.let { path ->
+                    runCatching { ensureAvatarUploaded(roomDoc.id, path) }.getOrNull()
+                }
+                val ref = roomDoc.collection("messages").document()
+                batch.set(ref, SyncMapping.toMap(message, deviceId, avatarId))
+                message.id to ref.id
+            }
+            batch.commit().await()
+            refs.forEach { (localId, remoteId) -> db.messageDao().setRemoteId(localId, remoteId) }
         }
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id)
-        registerFcmToken()
+        registerFcmToken(force = true) // 새 방의 멤버 문서에 등록
         code
     }.getOrNull()
 
@@ -128,7 +156,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
-        registerFcmToken()
+        registerFcmToken(force = true) // 새 방의 멤버 문서에 등록
         roomId
     }.getOrNull()
 
@@ -194,23 +222,31 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 val changes = snapshot?.documentChanges.orEmpty()
                 if (changes.isEmpty()) return@addSnapshotListener
                 scope.launch {
+                    // ADDED dedup은 일괄 조회로 (문서마다 쿼리 방지)
+                    val addedDocs = changes
+                        .filter { it.type == DocumentChange.Type.ADDED }
+                        .map { it.document }
+                        .filter { !it.metadata.hasPendingWrites() && it.getString("authorUid") != deviceId }
+                    val known = if (addedDocs.isEmpty()) emptySet()
+                    else db.messageDao().existingRemoteIds(addedDocs.map { it.id }).toSet()
+
+                    for (doc in addedDocs) {
+                        if (doc.id in known) continue
+                        // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
+                        val avatarPath = doc.getString("avatarId")?.let { avatarId ->
+                            runCatching { resolveAvatar(remoteRoomId, avatarId) }.getOrNull()
+                        }
+                        val message =
+                            SyncMapping.fromMap(doc.id, doc.data ?: emptyMap(), localRoomId)
+                                .copy(senderImagePath = avatarPath)
+                        db.messageDao().insert(message)
+                        onIncomingMessage?.invoke(message)
+                    }
+
                     for (change in changes) {
                         val doc = change.document
-                        if (doc.metadata.hasPendingWrites()) continue // 내 로컬 쓰기 에코
+                        if (doc.metadata.hasPendingWrites()) continue
                         when (change.type) {
-                            DocumentChange.Type.ADDED -> {
-                                if (doc.getString("authorUid") == deviceId) continue
-                                if (db.messageDao().countByRemoteId(doc.id) > 0) continue
-                                // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
-                                val avatarPath = doc.getString("avatarId")?.let { avatarId ->
-                                    runCatching { resolveAvatar(remoteRoomId, avatarId) }.getOrNull()
-                                }
-                                val message =
-                                    SyncMapping.fromMap(doc.id, doc.data ?: emptyMap(), localRoomId)
-                                        .copy(senderImagePath = avatarPath)
-                                db.messageDao().insert(message)
-                                onIncomingMessage?.invoke(message)
-                            }
                             DocumentChange.Type.MODIFIED -> {
                                 db.messageDao().updateBodyByRemoteId(
                                     remoteId = doc.id,
@@ -221,6 +257,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                             DocumentChange.Type.REMOVED -> {
                                 db.messageDao().deleteByRemoteId(doc.id)
                             }
+                            DocumentChange.Type.ADDED -> {} // 위에서 일괄 처리
                         }
                     }
                 }
@@ -265,15 +302,18 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     // Cloud Functions(functions/index.js)가 새 메시지마다 상대 토큰으로
     // 데이터 푸시(본문 비노출, 보낸 이 이름만)를 보낸다.
 
-    /** 현재 토큰을 모든 공유 방의 멤버 문서에 등록 */
-    fun registerFcmToken() {
+    /** 현재 토큰을 모든 공유 방의 멤버 문서에 등록. 토큰이 안 바뀌었으면 건너뛴다. */
+    fun registerFcmToken(force: Boolean = false) {
         if (isDemo) return
         scope.launch {
             runCatching {
                 firestore // Firebase 초기화 보장
                 val token = com.google.firebase.messaging.FirebaseMessaging.getInstance()
                     .token.await()
+                val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+                if (!force && prefs.getString("lastFcmToken", null) == token) return@runCatching
                 uploadFcmTokenInternal(token)
+                prefs.edit().putString("lastFcmToken", token).apply()
             }
         }
     }
@@ -281,7 +321,13 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     /** FcmService.onNewToken에서 호출 — 갱신된 토큰 재등록 */
     fun onNewFcmToken(token: String) {
         if (isDemo) return
-        scope.launch { runCatching { uploadFcmTokenInternal(token) } }
+        scope.launch {
+            runCatching {
+                uploadFcmTokenInternal(token)
+                context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+                    .edit().putString("lastFcmToken", token).apply()
+            }
+        }
     }
 
     private suspend fun uploadFcmTokenInternal(token: String) {
@@ -301,8 +347,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     private val uploadedAvatars = mutableSetOf<String>()
 
+    /** 경로→축소 JPEG 캐시 (lastModified 기준) — 메시지마다 디코딩·해시 재계산 방지 */
+    private val avatarBytesCache = mutableMapOf<String, Pair<Long, ByteArray>>()
+
+    private fun avatarBytes(path: String): ByteArray? {
+        val file = File(path)
+        if (!file.exists()) return null
+        avatarBytesCache[path]?.let { (modified, bytes) ->
+            if (modified == file.lastModified()) return bytes
+        }
+        val bytes = downscaleToJpeg(path) ?: return null
+        avatarBytesCache[path] = file.lastModified() to bytes
+        return bytes
+    }
+
     private suspend fun ensureAvatarUploaded(remoteRoomId: String, imagePath: String): String? {
-        val bytes = downscaleToJpeg(imagePath) ?: return null
+        val bytes = avatarBytes(imagePath) ?: return null
         val hash = md5(bytes)
         val key = "$remoteRoomId/$hash"
         if (key !in uploadedAvatars) {

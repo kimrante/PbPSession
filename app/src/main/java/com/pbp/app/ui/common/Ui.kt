@@ -160,7 +160,31 @@ fun MarkupText(
     fontWeight: FontWeight? = null,
     lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
-    val nodes = remember(text) { PbpMarkup.parse(text) }
+    // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, fontFamily, fontWeight) {
+        buildMarkup(text, fontSize, color, rubyColor, fontFamily, fontWeight)
+    }
+    Text(
+        annotated,
+        modifier = modifier,
+        color = color,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        fontWeight = fontWeight,
+        lineHeight = lineHeight,
+        inlineContent = inline,
+    )
+}
+
+private fun buildMarkup(
+    text: String,
+    fontSize: TextUnit,
+    color: Color,
+    rubyColor: Color,
+    fontFamily: FontFamily?,
+    fontWeight: FontWeight?,
+): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
+    val nodes = PbpMarkup.parse(text)
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated = buildAnnotatedString {
         nodes.forEachIndexed { index, node ->
@@ -208,16 +232,7 @@ fun MarkupText(
             }
         }
     }
-    Text(
-        annotated,
-        modifier = modifier,
-        color = color,
-        fontSize = fontSize,
-        fontFamily = fontFamily,
-        fontWeight = fontWeight,
-        lineHeight = lineHeight,
-        inlineContent = inline,
-    )
+    return annotated to inline
 }
 
 /** 대략적 글자 폭(em) 추정 — CJK/한글 1em, 그 외 0.55em */

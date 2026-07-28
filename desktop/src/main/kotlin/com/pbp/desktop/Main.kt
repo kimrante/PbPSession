@@ -100,14 +100,25 @@ private fun App() {
         config.save()
     }
 
-    // 선택된 방 폴링: 메시지 2.5초, 방 메타(테마/배경) 10초
+    // 선택된 방 폴링: 최초 전체 1회 + 이후 증분(createdAt 기준)만 — read 과금 최소화.
+    // 방 메타(테마/배경)는 10초 주기.
     LaunchedEffect(selected?.remoteId) {
         val room = selected ?: return@LaunchedEffect
         messages = emptyList()
+        var lastCreatedAt = 0L
         var tick = 0
         while (isActive) {
-            val fetched = withContext(Dispatchers.IO) { firestore.listMessages(room.remoteId) }
-            messages = fetched
+            val fetched = withContext(Dispatchers.IO) {
+                firestore.listMessagesSince(room.remoteId, lastCreatedAt)
+            }
+            if (fetched.isNotEmpty()) {
+                val knownIds = messages.map { it.docId }.toSet()
+                val fresh = fetched.filter { it.docId !in knownIds }
+                if (fresh.isNotEmpty()) {
+                    messages = (messages + fresh).sortedBy { it.createdAt }
+                }
+                lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
+            }
             if (tick % 4 == 0) {
                 val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                 if (meta != null &&
@@ -152,7 +163,7 @@ private fun App() {
                     )
                 }
             }
-            messages = firestore.listMessages(room.remoteId)
+            // 화면 반영은 증분 폴링(≤2.5초)이 담당 — 전체 재조회 금지
         }
     }
 
@@ -174,7 +185,6 @@ private fun App() {
                     "isOoc" to false, "senderIsGm" to false, "senderIsBot" to false,
                 ),
             )
-            messages = firestore.listMessages(room.remoteId)
         }
     }
 

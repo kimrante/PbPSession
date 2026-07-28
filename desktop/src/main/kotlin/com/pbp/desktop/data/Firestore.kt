@@ -174,6 +174,26 @@ class FirestoreRest(
     }
 
     // ── 메시지 ────────────────────────────────────────────
+
+    private fun parseMessage(doc: JsonObject) = Message(
+        docId = doc.docId(),
+        type = doc.str("type") ?: "TEXT",
+        body = doc.str("body") ?: "",
+        diceExpr = doc.str("diceExpr"),
+        senderName = doc.str("senderName"),
+        senderEmoji = doc.str("senderEmoji"),
+        senderIsGm = doc.bool("senderIsGm"),
+        senderIsBot = doc.bool("senderIsBot"),
+        senderNameColor = doc.long("senderNameColor"),
+        senderBubbleColor = doc.long("senderBubbleColor"),
+        isOoc = doc.bool("isOoc"),
+        editedAt = doc.long("editedAt"),
+        createdAt = doc.long("createdAt") ?: 0L,
+        authorUid = doc.str("authorUid") ?: "",
+        avatarId = doc.str("avatarId"),
+    )
+
+    /** 전체 목록 — 방 최초 진입 시 1회만 사용 */
     fun listMessages(remoteRoomId: String): List<Message> {
         val out = mutableListOf<Message>()
         var pageToken: String? = null
@@ -181,29 +201,38 @@ class FirestoreRest(
             val url = "$base/rooms/$remoteRoomId/messages?key=$apiKey&pageSize=300&orderBy=createdAt" +
                 (pageToken?.let { "&pageToken=$it" } ?: "")
             val res = get(url) ?: break
-            res.getAsJsonArray("documents")?.forEach { el ->
-                val doc = el.asJsonObject
-                out += Message(
-                    docId = doc.docId(),
-                    type = doc.str("type") ?: "TEXT",
-                    body = doc.str("body") ?: "",
-                    diceExpr = doc.str("diceExpr"),
-                    senderName = doc.str("senderName"),
-                    senderEmoji = doc.str("senderEmoji"),
-                    senderIsGm = doc.bool("senderIsGm"),
-                    senderIsBot = doc.bool("senderIsBot"),
-                    senderNameColor = doc.long("senderNameColor"),
-                    senderBubbleColor = doc.long("senderBubbleColor"),
-                    isOoc = doc.bool("isOoc"),
-                    editedAt = doc.long("editedAt"),
-                    createdAt = doc.long("createdAt") ?: 0L,
-                    authorUid = doc.str("authorUid") ?: "",
-                    avatarId = doc.str("avatarId"),
-                )
-            }
+            res.getAsJsonArray("documents")?.forEach { el -> out += parseMessage(el.asJsonObject) }
             pageToken = res.get("nextPageToken")?.asString
         } while (pageToken != null)
         return out
+    }
+
+    /**
+     * 증분 폴링 — createdAt > since 인 새 메시지만 읽는다.
+     * (전체 재조회는 메시지 수만큼 read 과금이 반복되므로 금물.
+     *  수정/삭제는 증분에 잡히지 않아 방 재진입 시 반영된다.)
+     */
+    fun listMessagesSince(remoteRoomId: String, since: Long): List<Message> {
+        if (since <= 0) return listMessages(remoteRoomId)
+        val query = """
+            {"structuredQuery":{"from":[{"collectionId":"messages"}],
+             "where":{"fieldFilter":{"field":{"fieldPath":"createdAt"},"op":"GREATER_THAN",
+                      "value":{"integerValue":"$since"}}},
+             "orderBy":[{"field":{"fieldPath":"createdAt"},"direction":"ASCENDING"}]}}
+        """.trimIndent()
+        val res = runCatching {
+            val r = http.send(
+                HttpRequest.newBuilder(URI.create("$base/rooms/$remoteRoomId:runQuery?key=$apiKey"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(query, StandardCharsets.UTF_8))
+                    .build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
+            )
+            if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
+        }.getOrNull() ?: return emptyList()
+        return res.mapNotNull { el ->
+            el.asJsonObject.getAsJsonObject("document")?.let { parseMessage(it) }
+        }
     }
 
     fun postMessage(remoteRoomId: String, values: Map<String, Any?>): Boolean =

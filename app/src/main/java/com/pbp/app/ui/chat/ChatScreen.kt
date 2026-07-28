@@ -74,6 +74,7 @@ import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -81,11 +82,24 @@ import kotlinx.coroutines.withContext
 class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewModel() {
     private val repo = app.repository
 
+    companion object {
+        const val PAGE_SIZE = 200
+    }
+
     val room = repo.observeRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val messages = repo.observeMessages(roomId)
+    /** 최근 PAGE_SIZE개부터 점진 로딩 — '이전 대화 불러오기'로 확장 */
+    val limit = kotlinx.coroutines.flow.MutableStateFlow(PAGE_SIZE)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val messages = limit
+        .flatMapLatest { repo.observeLatestMessages(roomId, it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun loadOlder() {
+        limit.value += PAGE_SIZE
+    }
 
     val profiles = repo.observeProfilesForRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -115,7 +129,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
                 val html = LogExporter.buildHtml(
                     roomName = room.value?.name ?: "PbP",
                     roomIcon = room.value?.icon ?: "",
-                    messages = messages.value,
+                    messages = repo.allMessages(roomId), // 내보내기는 화면 페이징과 무관하게 전체
                 )
                 app.contentResolver.openOutputStream(uri)!!.use { it.write(html.toByteArray()) }
             }.isSuccess
@@ -134,16 +148,16 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val tokens = Pbp.colors
     val room by vm.room.collectAsState()
     val messages by vm.messages.collectAsState()
+    val limitValue by vm.limit.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
-    var input by remember { mutableStateOf("") }
-    var oocOn by remember { mutableStateOf(false) }
     var editTarget by remember { mutableStateOf<Message?>(null) }
     var deleteTarget by remember { mutableStateOf<Message?>(null) }
 
-    // 방에 들어와 있는 동안은 읽음 처리 (미확인 배지·푸시 기준)
-    LaunchedEffect(roomId, messages.size) { vm.markRead() }
+    // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
+    val incomingCount = messages.count { it.incoming }
+    LaunchedEffect(roomId, incomingCount) { vm.markRead() }
 
     // 새 메시지가 오면 최신 위치로 스크롤 (reverseLayout에서 index 0 = 최신)
     val listState = rememberLazyListState()
@@ -224,6 +238,23 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             onDelete = { deleteTarget = it },
                         )
                     }
+                    // 페이지가 가득 찼으면 더 오래된 대화가 있을 수 있다 (reverseLayout이라 최상단)
+                    if (messages.size >= limitValue) {
+                        item(key = "load-older") {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    "이전 대화 불러오기",
+                                    fontSize = 12.sp,
+                                    color = tokens.inkDim,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(Color.Black.copy(alpha = .35f))
+                                        .clickable { vm.loadOlder() }
+                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // ── 입력 영역: 프로필 교체 스트립 + 잡담 토글 + 입력줄
@@ -231,17 +262,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     profiles = profiles,
                     activeId = active?.id,
                     themeColor = themeColor,
-                    input = input,
-                    onInputChange = { input = it },
-                    oocOn = oocOn,
-                    onOocToggle = { oocOn = !oocOn },
                     onSwitch = { vm.switchTo(it) },
                     onEditProfile = { nav.navigate("profile/${it.id}") },
                     onAddProfile = { nav.navigate("profile/0") },
-                    onSend = {
-                        vm.send(input, oocOn)
-                        input = ""
-                    },
+                    onSend = { text, ooc -> vm.send(text, ooc) },
                 )
             }
         }
@@ -524,16 +548,17 @@ private fun InputZone(
     profiles: List<CharacterProfile>,
     activeId: Long?,
     themeColor: Color,
-    input: String,
-    onInputChange: (String) -> Unit,
-    oocOn: Boolean,
-    onOocToggle: () -> Unit,
     onSwitch: (CharacterProfile) -> Unit,
     onEditProfile: (CharacterProfile) -> Unit,
     onAddProfile: () -> Unit,
-    onSend: () -> Unit,
+    onSend: (String, Boolean) -> Unit,
 ) {
     val tokens = Pbp.colors
+    // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록
+    var input by remember { mutableStateOf("") }
+    var oocOn by remember { mutableStateOf(false) }
+    val onOocToggle = { oocOn = !oocOn }
+    val onInputChange = { text: String -> input = text }
     Column(
         Modifier
             .fillMaxWidth()
@@ -643,12 +668,16 @@ private fun InputZone(
                 maxLines = 4,
             )
             // 전송 버튼 — 방 테마 컬러 적용 (스펙 5장)
+            val canSend = input.isNotBlank() && activeId != null
             Box(
                 Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(if (input.isNotBlank()) themeColor else themeColor.copy(alpha = .35f))
-                    .clickable(enabled = input.isNotBlank(), onClick = onSend),
+                    .background(if (canSend) themeColor else themeColor.copy(alpha = .35f))
+                    .clickable(enabled = canSend) {
+                        onSend(input, oocOn)
+                        input = ""
+                    },
                 contentAlignment = Alignment.Center,
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
         }

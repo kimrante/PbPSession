@@ -78,8 +78,7 @@ object LogExporter {
                                     mine = false,
                                     time = time,
                                     edited = edited,
-                                    // GM 정체 비노출 — 익명 敍 인장
-                                    avatar = """<span class="ava" style="background:#39445A;color:#FFD972;font-family:'Gowun Batang','Batang',serif">敍</span>""",
+                                    avatar = avatarHtml(message),
                                 )
                             )
                         }

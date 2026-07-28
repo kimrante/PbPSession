@@ -327,7 +327,6 @@ private fun MessageBlock(
                             overrideBody = part.text,
                             overrideName = "???",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
-                            anonymous = true, // GM 정체(프로필 이미지) 비노출 — 익명 敍 아바타
                             onEdit = onEdit,
                             onDelete = onDelete,
                         )
@@ -339,7 +338,7 @@ private fun MessageBlock(
     }
 }
 
-/** GM 서술 문단 — 옐로 낙관(敍)이 찍힌 명조체 블록 */
+/** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만) */
 @Composable
 private fun NarrationBlock(
     message: Message,
@@ -354,10 +353,6 @@ private fun NarrationBlock(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
                 .background(tokens.narrBg)
-                .border(
-                    1.dp, tokens.signature.copy(alpha = .0f),
-                    RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp),
-                )
                 .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
         ) {
             MarkupText(
@@ -387,17 +382,6 @@ private fun NarrationBlock(
                 MiniActions(message, onEdit, onDelete)
             }
         }
-        // 옐로 낙관 + 왼쪽 강조선
-        Box(
-            Modifier
-                .size(20.dp)
-                .align(Alignment.TopStart)
-                .clip(RoundedCornerShape(4.dp))
-                .background(tokens.signature),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("敍", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
-        }
     }
 }
 
@@ -409,7 +393,6 @@ private fun BubbleRow(
     overrideBody: String? = null,
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
-    anonymous: Boolean = false,
     onEdit: (Message) -> Unit,
     onDelete: (Message) -> Unit,
 ) {
@@ -435,7 +418,7 @@ private fun BubbleRow(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             if (!mine) {
-                if (anonymous) AnonymousAvatar() else Avatar(
+                Avatar(
                     emoji = message.senderEmoji,
                     imagePath = message.senderImagePath,
                     size = 38.dp,
@@ -509,25 +492,6 @@ private fun BubbleRow(
                 )
             }
         }
-    }
-}
-
-/** GM 인용("???") 전용 익명 아바타 — GM의 실제 프로필 이미지를 노출하지 않는다 */
-@Composable
-private fun AnonymousAvatar() {
-    Box(
-        Modifier
-            .size(38.dp)
-            .border(1.5.dp, Color.White.copy(alpha = .22f), CircleShape)
-            .clip(CircleShape)
-            .background(
-                androidx.compose.ui.graphics.Brush.linearGradient(
-                    listOf(Color(0xFF39445A), Color(0xFF1C2330))
-                )
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("敍", fontSize = 15.sp, fontFamily = GowunBatang, color = Color(0xFFFFD972))
     }
 }
 

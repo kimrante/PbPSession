@@ -42,6 +42,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val listeners = mutableMapOf<Long, ListenerRegistration>()
+    private val roomListeners = mutableMapOf<Long, ListenerRegistration>()
 
     /** 계정 없이 발신자를 구분하기 위한 기기 고유 ID (앱 설치당 1개) */
     val deviceId: String by lazy {
@@ -51,27 +52,32 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
+    private val projectId: String by lazy { context.getString(R.string.firebase_project_id) }
+
+    /** demo- 프로젝트는 로컬 에뮬레이터 모드 — FCM 등 GMS 기능은 건너뛴다 */
+    private val isDemo: Boolean get() = projectId.startsWith("demo-")
+
     private val firestore: FirebaseFirestore by lazy {
-        val projectId = context.getString(R.string.firebase_project_id)
         val app = FirebaseApp.getApps(context).firstOrNull() ?: FirebaseApp.initializeApp(
             context,
             FirebaseOptions.Builder()
                 .setProjectId(projectId)
                 .setApplicationId(context.getString(R.string.firebase_app_id))
                 .setApiKey(context.getString(R.string.firebase_api_key))
+                .setGcmSenderId(context.getString(R.string.firebase_sender_id))
                 .build(),
         )
         FirebaseFirestore.getInstance(app!!).apply {
             // demo- 프로젝트는 로컬 에뮬레이터로 (10.0.2.2 = 에뮬레이터에서 본 호스트 PC)
-            if (projectId.startsWith("demo-")) useEmulator("10.0.2.2", 8080)
+            if (isDemo) useEmulator("10.0.2.2", 8080)
         }
     }
 
-    /** 앱 시작 시 공유된 방들의 수신 리스너를 다시 건다. */
+    /** 앱 시작 시 공유된 방들의 수신 리스너를 다시 걸고 FCM 토큰을 등록한다. */
     fun start() = scope.launch {
-        db.roomDao().listSynced().forEach { room ->
-            room.remoteId?.let { attach(room.id, it) }
-        }
+        val synced = db.roomDao().listSynced()
+        synced.forEach { room -> room.remoteId?.let { attach(room.id, it) } }
+        if (synced.isNotEmpty()) registerFcmToken()
     }
 
     /** 방을 Firestore에 올리고 초대 코드를 돌려준다. 이미 공유된 방이면 기존 코드. */
@@ -98,6 +104,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id)
+        registerFcmToken()
         code
     }.getOrNull()
 
@@ -121,6 +128,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
+        registerFcmToken()
         roomId
     }.getOrNull()
 
@@ -139,6 +147,21 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .collection("messages").document()
         doc.set(SyncMapping.toMap(message, deviceId, avatarId)).await()
         db.messageDao().setRemoteId(message.id, doc.id)
+    }
+
+    /** 마스터의 테마·배경 변경을 상대에게 전파 (갤러리 이미지는 로컬 파일이라 프리셋만) */
+    fun pushRoomSettings(remoteRoomId: String, themeColor: Long, backgroundKey: String) {
+        scope.launch {
+            runCatching {
+                firestore.collection("rooms").document(remoteRoomId)
+                    .update(
+                        mapOf(
+                            "themeColor" to themeColor,
+                            "backgroundKey" to backgroundKey.takeIf { it.startsWith("preset_") },
+                        )
+                    ).await()
+            }
+        }
     }
 
     /** 내 수정을 상대에게 전파 */
@@ -164,6 +187,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     private fun attach(localRoomId: Long, remoteRoomId: String) {
         if (listeners.containsKey(localRoomId)) return
+        attachRoomDoc(localRoomId, remoteRoomId)
         listeners[localRoomId] = firestore.collection("rooms").document(remoteRoomId)
             .collection("messages").orderBy("createdAt")
             .addSnapshotListener { snapshot, _ ->
@@ -203,13 +227,71 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             }
     }
 
+    /** 방 문서 리스너 — 마스터가 바꾼 테마·배경을 실시간 반영 */
+    private fun attachRoomDoc(localRoomId: Long, remoteRoomId: String) {
+        if (roomListeners.containsKey(localRoomId)) return
+        roomListeners[localRoomId] = firestore.collection("rooms").document(remoteRoomId)
+            .addSnapshotListener { snapshot, _ ->
+                if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                val themeColor = snapshot.getLong("themeColor")
+                val backgroundKey = snapshot.getString("backgroundKey")
+                scope.launch {
+                    val room = db.roomDao().get(localRoomId) ?: return@launch
+                    if (themeColor != null && themeColor != room.themeColor) {
+                        db.roomDao().setThemeColor(localRoomId, themeColor)
+                    }
+                    if (backgroundKey != null && backgroundKey.startsWith("preset_") &&
+                        backgroundKey != room.backgroundKey
+                    ) {
+                        db.roomDao().setBackground(localRoomId, backgroundKey)
+                    }
+                }
+            }
+    }
+
     fun detach(localRoomId: Long) {
         listeners.remove(localRoomId)?.remove()
+        roomListeners.remove(localRoomId)?.remove()
     }
 
     private fun randomCode(): String {
         val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return (1..6).map { alphabet.random() }.joinToString("")
+    }
+
+    // ── FCM 백그라운드 푸시 ──────────────────────────────
+    // 각 기기의 FCM 토큰을 rooms/{id}/members/{deviceId}에 등록해 두면,
+    // Cloud Functions(functions/index.js)가 새 메시지마다 상대 토큰으로
+    // 데이터 푸시(본문 비노출, 보낸 이 이름만)를 보낸다.
+
+    /** 현재 토큰을 모든 공유 방의 멤버 문서에 등록 */
+    fun registerFcmToken() {
+        if (isDemo) return
+        scope.launch {
+            runCatching {
+                firestore // Firebase 초기화 보장
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                    .token.await()
+                uploadFcmTokenInternal(token)
+            }
+        }
+    }
+
+    /** FcmService.onNewToken에서 호출 — 갱신된 토큰 재등록 */
+    fun onNewFcmToken(token: String) {
+        if (isDemo) return
+        scope.launch { runCatching { uploadFcmTokenInternal(token) } }
+    }
+
+    private suspend fun uploadFcmTokenInternal(token: String) {
+        db.roomDao().listSynced().forEach { room ->
+            val remote = room.remoteId ?: return@forEach
+            firestore.collection("rooms").document(remote)
+                .collection("members").document(deviceId)
+                .set(mapOf("fcmToken" to token, "updatedAt" to System.currentTimeMillis()))
+                .await()
+        }
     }
 
     // ── 프로필 이미지 동기화 ──────────────────────────────

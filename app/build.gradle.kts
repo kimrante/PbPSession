@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.messaging)
     implementation(libs.coroutines.play.services)
 
     testImplementation(libs.junit)

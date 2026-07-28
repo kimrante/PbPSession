@@ -21,6 +21,7 @@ class PbpApp : Application() {
 
     /** 앱이 화면에 떠 있는지 — 비활성 상태에서만 푸시를 띄운다 (스펙 7장) */
     private var resumedActivities = 0
+    val isForeground: Boolean get() = resumedActivities > 0
 
     override fun onCreate() {
         super.onCreate()

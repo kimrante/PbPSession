@@ -66,13 +66,21 @@ com.pbp.app
   메시지의 `avatarId`가 해시를 가리키고 수신 측이 파일로 복원·캐시 (`SyncManager` 하단)
 - **GM 익명 인장** — GM 인용("???") 말풍선은 GM의 실제 프로필 이미지 대신 어두운 敍 아바타로 표시 (서술 문단은 원래 아바타 없음)
 
+## 추가 반영 (2026-07-29 2차)
+
+- **GM 렌더링 조정** — 서술 문단은 낙관·아바타 없이 문단만, 인용("???")·일반 말풍선은 GM의 실제 프로필 이미지 표시
+- **테마·배경 실시간 동기화** — 마스터가 변경하면 방 문서 update → 상대 기기의 방 문서 리스너가 즉시 로컬 반영 (`SyncManager.pushRoomSettings`/`attachRoomDoc`)
+- **FCM 백그라운드 푸시** — 클라이언트 완비: firebase-messaging + `notify/FcmService`(본문 비노출 알림, 포그라운드 중복 억제) + 기기 토큰을 `rooms/{id}/members/{deviceId}`에 자동 등록.
+  서버 발송은 `functions/index.js`(Firestore onCreate → 상대 토큰으로 데이터 푸시).
+  **배포만 남음(사용자 작업)**: Firebase 콘솔에서 Blaze 요금제 활성화 후
+  `npx firebase-tools login` → `npx firebase-tools deploy --only functions --project pbp-session-1195c`
+
 ## 남은 과제
 
-1. **테마·배경 변경의 실시간 동기화** — 공유 시점/참여 시점에만 전달. 방 문서 리스너 추가 필요
-2. **미확인 배지 → FCM 푸시** — 현재는 앱 프로세스 생존 시 로컬 알림. 완전한 백그라운드 푸시는 FCM+서버 필요
-3. **화이트 모드 미세 대비 검수** — 토큰은 스펙대로, 실기기에서 화이트 목업과 대조 확인 권장
-4. **커스텀 컬러 피커** — HEX 입력만 제공. HSV 휠은 추후
-5. **Firestore 보안 규칙** — 테스트 모드 30일 만료 전 규칙 갱신 (design.md 스니펫)
+1. **Cloud Functions 배포** — 위 참조 (Blaze 요금제 + 로그인 필요, 코드는 준비됨)
+2. **화이트 모드 미세 대비 검수** — 토큰은 스펙대로, 실기기에서 화이트 목업과 대조 확인 권장
+3. **커스텀 컬러 피커** — HEX 입력만 제공. HSV 휠은 추후
+4. **Firestore 보안 규칙** — 테스트 모드 30일 만료 전 규칙 갱신 (design.md 스니펫)
 
 ## 검증
 

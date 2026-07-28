@@ -36,12 +36,14 @@ class MessageNotifier(private val context: Context) {
             .createNotificationChannel(channel)
     }
 
-    fun notify(message: Message) {
+    fun notify(message: Message) =
+        notify(message.senderName ?: "상대", message.roomId.toInt(), message.senderImagePath)
+
+    fun notify(senderName: String, notificationId: Int, imagePath: String?) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
 
-        val senderName = message.senderName ?: "상대"
         val intent = Intent(context, MainActivity::class.java)
         val pending = PendingIntent.getActivity(
             context, 0, intent,
@@ -53,10 +55,10 @@ class MessageNotifier(private val context: Context) {
             .setContentText("${senderName}님의 메시지가 도착했습니다.")
             .setContentIntent(pending)
             .setAutoCancel(true)
-        circularAvatar(message.senderImagePath)?.let { builder.setLargeIcon(it) }
+        circularAvatar(imagePath)?.let { builder.setLargeIcon(it) }
 
         context.getSystemService(NotificationManager::class.java)
-            .notify(message.roomId.toInt(), builder.build())
+            .notify(notificationId, builder.build())
     }
 
     /** 프로필 이미지는 항상 원형 — 알림 아이콘에서도 유지한다. */

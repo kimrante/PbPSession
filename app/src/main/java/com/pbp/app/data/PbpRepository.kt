@@ -55,11 +55,23 @@ class PbpRepository(private val db: AppDatabase) {
         db.roomDao().delete(room)
     }
 
-    /** 마스터 전용: 방 테마 컬러 변경 */
-    suspend fun setThemeColor(roomId: Long, color: Long) = db.roomDao().setThemeColor(roomId, color)
+    /** 마스터 전용: 방 테마 컬러 변경 — 공유 방이면 상대에게 실시간 전파 */
+    suspend fun setThemeColor(roomId: Long, color: Long) {
+        db.roomDao().setThemeColor(roomId, color)
+        pushRoomSettings(roomId)
+    }
 
-    /** 마스터 전용: 방 배경(프리셋 key 또는 파일 경로) 변경 */
-    suspend fun setBackground(roomId: Long, key: String) = db.roomDao().setBackground(roomId, key)
+    /** 마스터 전용: 방 배경(프리셋 key 또는 파일 경로) 변경 — 공유 방이면 상대에게 실시간 전파 */
+    suspend fun setBackground(roomId: Long, key: String) {
+        db.roomDao().setBackground(roomId, key)
+        pushRoomSettings(roomId)
+    }
+
+    private suspend fun pushRoomSettings(roomId: Long) {
+        val room = db.roomDao().get(roomId) ?: return
+        val remoteId = room.remoteId ?: return
+        syncManager?.pushRoomSettings(remoteId, room.themeColor, room.backgroundKey)
+    }
 
     /** 방에 들어왔을 때 호출 — 미확인 배지·푸시 기준 시각 갱신 */
     suspend fun markRead(roomId: Long) = db.roomDao().setLastReadAt(roomId, System.currentTimeMillis())

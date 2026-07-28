@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 (스펙 7장): 어두운 석판 중앙의 상아색 d10, 뒤에 은은한 옐로 광원 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#29FFD972"
+        android:pathData="M54,58 m-22,0 a22,22 0 1 0 44,0 a22,22 0 1 0 -44,0" />
+    <path
+        android:fillColor="#DDD5C2"
+        android:pathData="M54,29 L34,53 L54,79 L43.5,56 Z" />
+    <path
+        android:fillColor="#E6DFCB"
+        android:pathData="M54,29 L74,53 L54,79 L64.5,56 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#B9AE94"
+        android:strokeWidth="1"
+        android:strokeLineJoin="round"
+        android:pathData="M54,29 L64.5,56 L54,79 L43.5,56 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A89D82"
+        android:strokeWidth="1.4"
+        android:strokeLineJoin="round"
+        android:pathData="M54,29 L74,53 L54,79 L34,53 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2A2620"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M50.5,50 L50.5,60" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2A2620"
+        android:strokeWidth="1.8"
+        android:pathData="M58,50 a3.4,5 0 1 0 0.01,0 Z" />
+</vector>

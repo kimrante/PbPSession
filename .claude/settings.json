@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($env:Path += \";C:\\\\src\\\\flutter\\\\bin\"; cd C:\\\\Users\\\\kimra\\\\git\\\\TodoList; flutter analyze)",
+      "PowerShell($env:Path += \";C:\\\\src\\\\flutter\\\\bin\"; cd C:\\\\Users\\\\kimra\\\\git\\\\TodoList; flutter build windows 2>&1)",
+      "PowerShell($env:Path += \";C:\\\\src\\\\flutter\\\\bin\"; cd C:\\\\Users\\\\kimra\\\\git\\\\TodoList; flutter analyze lib\\\\services\\\\active_window_native.dart 2>&1)"
+    ]
+  }
+}

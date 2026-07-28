@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 1:1 TRPG 채팅 앱 디자인 목업 — 화이트 모드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117;
+  --panel:#161c24;
+  --panel-2:#1d2530;
+  --line:rgba(255,255,255,.08);
+  --ink:#e8ecf2;
+  --ink-dim:#8b95a5;
+  --postit:#ffd972;        /* 시그니처: 포스트잇 옐로 */
+  --theme:#8ec5e8;         /* 방 테마 컬러(마스터 지정, 기본: 새벽 하늘) */
+  --bubble-me:#ffd9a8;     /* 내 캐릭터 말풍선 */
+  --bubble-you:#bfe3f6;    /* 상대 캐릭터 말풍선 */
+  --chatter:rgba(255,255,255,.14); /* 잡담 말풍선 */
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif;
+  line-height:1.6;
+}
+::selection{background:var(--postit);color:#1a1a1a}
+
+/* ─── 페이지 프레임 ─────────────────────────── */
+.wrap{max-width:1240px;margin:0 auto;padding:64px 24px 120px}
+header.page{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  flex-wrap:wrap;gap:24px;margin-bottom:16px;
+}
+.title-block h1{
+  font-family:'Gowun Batang',serif;font-weight:700;
+  font-size:clamp(28px,4vw,44px);letter-spacing:-.01em;line-height:1.25;
+}
+.title-block h1 em{font-style:normal;color:var(--postit)}
+.title-block p{color:var(--ink-dim);margin-top:10px;max-width:560px;font-size:14px}
+.meta{
+  font-size:12px;color:var(--ink-dim);text-align:right;line-height:1.9;
+  border-right:2px solid var(--postit);padding-right:14px;
+}
+.meta b{color:var(--ink);font-weight:700}
+.toc{
+  display:flex;flex-wrap:wrap;gap:8px;margin:28px 0 56px;
+}
+.toc a{
+  color:var(--ink-dim);text-decoration:none;font-size:12.5px;
+  border:1px solid var(--line);border-radius:999px;padding:6px 14px;
+  transition:.18s;
+}
+.toc a:hover,.toc a:focus-visible{color:#1a1a1a;background:var(--postit);border-color:var(--postit);outline:none}
+
+section.spec{margin-bottom:88px}
+.spec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.spec-head .no{
+  font-family:'Gowun Batang',serif;font-size:15px;color:var(--postit);
+  letter-spacing:.08em;
+}
+.spec-head h2{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.spec-desc{color:var(--ink-dim);font-size:13.5px;max-width:720px;margin-bottom:28px}
+.spec-desc code{
+  background:var(--panel-2);border:1px solid var(--line);
+  border-radius:5px;padding:1px 6px;font-size:12px;color:var(--postit);
+}
+.row{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+
+/* 주석 카드 */
+.notes{flex:1;min-width:260px;max-width:420px}
+.note{
+  border-left:2px solid var(--theme);
+  background:linear-gradient(90deg,rgba(142,197,232,.06),transparent 70%);
+  padding:12px 16px;margin-bottom:14px;border-radius:0 8px 8px 0;
+}
+.note h4{font-size:13px;color:var(--theme);margin-bottom:3px;font-weight:700}
+.note p{font-size:12.5px;color:var(--ink-dim)}
+.note.y{border-color:var(--postit);background:linear-gradient(90deg,rgba(255,217,114,.07),transparent 70%)}
+.note.y h4{color:var(--postit)}
+
+/* ─── 폰 프레임 ─────────────────────────────── */
+.phone{
+  width:340px;flex-shrink:0;
+  background:#05070a;border-radius:38px;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 0 0 3px #000;
+  padding:10px;position:relative;
+}
+.screen{
+  border-radius:29px;overflow:hidden;position:relative;
+  background:var(--panel);height:704px;
+  display:flex;flex-direction:column;
+}
+.statusbar{
+  height:34px;flex-shrink:0;display:flex;align-items:center;
+  justify-content:space-between;padding:0 22px;font-size:11px;
+  color:rgba(255,255,255,.85);font-weight:500;position:relative;z-index:5;
+}
+.statusbar .cam{
+  position:absolute;left:50%;top:9px;transform:translateX(-50%);
+  width:78px;height:18px;background:#000;border-radius:999px;
+}
+.sb-icons{display:flex;gap:5px;align-items:center}
+.sb-icons i{display:block;width:14px;height:9px;border-radius:2px;background:rgba(255,255,255,.7)}
+.sb-icons i.sig{clip-path:polygon(0 100%,100% 0,100% 100%)}
+.phone-label{
+  text-align:center;margin-top:16px;font-size:12.5px;color:var(--ink-dim);
+  letter-spacing:.04em;
+}
+.phone-label b{color:var(--ink);font-weight:500}
+
+/* ─── 공통 UI 부품 ──────────────────────────── */
+.avatar{
+  border-radius:50%;object-fit:cover;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#10151c;overflow:hidden;
+}
+.icnbtn{
+  width:32px;height:32px;border-radius:9px;display:flex;
+  align-items:center;justify-content:center;color:rgba(255,255,255,.75);
+  background:rgba(255,255,255,.06);
+}
+.icnbtn svg{width:16px;height:16px}
+svg{display:block}
+
+/* ══════════════════════════════════════════════
+   SCREEN 1 · 방 목록
+══════════════════════════════════════════════ */
+.home{background:linear-gradient(180deg,#10151d, #0c1016)}
+.home-head{padding:16px 20px 6px}
+.home-head .brand{display:flex;align-items:center;gap:10px}
+.appicon-mini{
+  width:34px;height:34px;border-radius:9px;position:relative;flex-shrink:0;
+  background:linear-gradient(145deg,#2a3340,#171d26);
+  border:1px solid rgba(255,255,255,.1);overflow:hidden;
+}
+.appicon-mini .d10{
+  position:absolute;inset:4px;
+  background:linear-gradient(155deg,#ffffff 0%,#efe8d6 45%,#ddd5c2 100%);
+  clip-path:polygon(50% 0,94% 47%,50% 100%,6% 47%);
+}
+.home-head h3{font-family:'Gowun Batang',serif;font-size:18px;font-weight:700}
+.home-head h3 span{color:var(--postit)}
+.home-head p{font-size:11px;color:var(--ink-dim);margin-top:2px}
+.roomlist{padding:14px 14px 0;flex:1;overflow:hidden}
+.roomcard{
+  display:flex;gap:12px;align-items:center;padding:13px 12px;
+  border-radius:16px;margin-bottom:8px;background:rgba(255,255,255,.035);
+  border:1px solid var(--line);position:relative;
+}
+.roomcard.active{
+  background:linear-gradient(120deg,rgba(142,197,232,.12),rgba(255,255,255,.03));
+  border-color:rgba(142,197,232,.35);
+}
+.room-thumb{
+  width:48px;height:48px;border-radius:14px;flex-shrink:0;position:relative;overflow:hidden;
+}
+.room-thumb .dot{
+  position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:50%;
+  border:3px solid #10151d;
+}
+.roomcard h5{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.roomcard .last{font-size:11.5px;color:var(--ink-dim);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:172px}
+.roomcard .side{margin-left:auto;text-align:right;flex-shrink:0}
+.roomcard .time{font-size:10px;color:var(--ink-dim)}
+.badge-n{
+  display:inline-flex;min-width:18px;height:18px;border-radius:999px;
+  background:var(--postit);color:#1a1a1a;font-size:10px;font-weight:700;
+  align-items:center;justify-content:center;padding:0 5px;margin-top:4px;
+}
+.fab{
+  position:absolute;right:18px;bottom:24px;width:54px;height:54px;border-radius:18px;
+  background:var(--postit);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 26px rgba(255,217,114,.35);transform:rotate(-4deg);
+}
+.fab svg{width:24px;height:24px}
+
+/* ══════════════════════════════════════════════
+   SCREEN 2 · 채팅방 (핵심 화면)
+══════════════════════════════════════════════ */
+.chat-screen{position:relative}
+.chat-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(340px 200px at 82% 12%, rgba(236,244,255,.20), transparent 62%),
+    radial-gradient(500px 340px at 20% 108%, rgba(58,94,132,.55), transparent 70%),
+    linear-gradient(178deg,#26374d 0%, #1a2739 42%, #101a28 100%);
+}
+.chat-bg::before{ /* 등대 실루엣 */
+  content:"";position:absolute;right:64px;bottom:158px;width:26px;height:120px;
+  background:linear-gradient(180deg,#0b111a,#131d2b);
+  clip-path:polygon(28% 0,72% 0,100% 100%,0 100%);
+}
+.chat-bg::after{ /* 등대 불빛 */
+  content:"";position:absolute;right:47px;bottom:268px;width:60px;height:22px;
+  background:radial-gradient(closest-side,rgba(255,224,138,.9),transparent);
+  filter:blur(2px);
+}
+.chat-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,20,.62),rgba(10,14,20,.28) 30%,rgba(10,14,20,.62))}
+.chat-col{position:relative;z-index:2;display:flex;flex-direction:column;height:100%}
+
+.chat-top{
+  display:flex;align-items:center;gap:10px;padding:8px 14px 10px;
+  background:linear-gradient(180deg,rgba(8,11,16,.72),rgba(8,11,16,.25));
+  backdrop-filter:blur(6px);
+}
+.chat-top .back{color:rgba(255,255,255,.8);width:22px}
+.roomname{min-width:0}
+.roomname h4{font-family:'Gowun Batang',serif;font-size:15.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+.roomname small{display:flex;gap:6px;align-items:center;font-size:10px;color:rgba(255,255,255,.55)}
+.tag-theme{
+  display:inline-block;width:8px;height:8px;border-radius:3px;background:var(--theme);
+}
+.chat-top .tools{margin-left:auto;display:flex;gap:7px}
+
+.msgs{flex:1;overflow:hidden;padding:14px 12px 8px;display:flex;flex-direction:column;gap:13px}
+.daybreak{
+  align-self:center;font-size:10px;color:rgba(255,255,255,.55);
+  background:rgba(0,0,0,.35);border-radius:999px;padding:3px 12px;
+}
+
+/* 서술자(GM) 문단 — 시그니처 */
+.narr{
+  position:relative;margin:2px 8px;padding:10px 14px 10px 16px;
+  font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;
+  color:#f0ead8;background:rgba(6,9,14,.45);border-radius:4px 14px 14px 4px;
+  border-left:2px solid var(--postit);
+}
+.narr::before{
+  content:"敍";position:absolute;top:-8px;left:-9px;width:20px;height:20px;
+  background:var(--postit);color:#1a1a1a;border-radius:4px;transform:rotate(-8deg);
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  font-family:'Noto Sans KR';box-shadow:0 2px 6px rgba(0,0,0,.4);
+}
+.narr .nmeta{display:flex;gap:6px;align-items:baseline;font-family:'Noto Sans KR';margin-top:7px}
+.narr .nmeta b{font-size:10px;color:var(--postit);font-weight:700}
+.narr .nmeta time{font-size:9px;color:rgba(255,255,255,.4)}
+.narr rt{font-size:8px;color:var(--postit);letter-spacing:.08em}
+.narr strong{color:#fff}
+
+/* 말풍선 공통 */
+.mrow{display:flex;gap:9px;align-items:flex-start;max-width:100%}
+.mrow.me{flex-direction:row-reverse}
+.mrow .avatar{width:38px;height:38px;font-size:14px;border:2px solid rgba(255,255,255,.25)}
+.mbody{max-width:200px;min-width:0}
+.mrow.me .mbody{display:flex;flex-direction:column;align-items:flex-end}
+.mname{font-size:11px;font-weight:700;margin-bottom:3px;letter-spacing:.01em;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.bubble{
+  position:relative;border-radius:4px 15px 15px 15px;padding:8px 12px;
+  font-size:12.5px;line-height:1.55;color:#10151c;font-weight:500;
+  box-shadow:0 3px 10px rgba(0,0,0,.25);
+}
+.mrow.me .bubble{border-radius:15px 4px 15px 15px}
+.bubble rt{font-size:8px;color:rgba(16,21,28,.65);letter-spacing:.06em;font-weight:700}
+.bubble em{font-style:italic}
+.bubble strong{font-weight:800}
+.bubble del{opacity:.55}
+.bfoot{display:flex;gap:6px;align-items:center;margin-top:3px}
+.mrow.me .bfoot{flex-direction:row-reverse}
+.bfoot time{font-size:9px;color:rgba(255,255,255,.5)}
+.mini-act{display:flex;gap:3px;opacity:.85}
+.mini-act button{
+  width:17px;height:17px;border:none;border-radius:5px;cursor:pointer;
+  background:rgba(0,0,0,.38);color:rgba(255,255,255,.75);
+  display:flex;align-items:center;justify-content:center;padding:0;
+}
+.mini-act svg{width:9px;height:9px}
+
+/* 잡담 말풍선 */
+.mrow.chatter .bubble{
+  background:var(--chatter);color:rgba(255,255,255,.62);font-weight:400;
+  box-shadow:none;border:1px dashed rgba(255,255,255,.18);
+}
+.mrow.chatter .mname{color:rgba(255,255,255,.5)!important}
+.mrow.chatter .avatar{opacity:.55;filter:grayscale(.6)}
+.chip-chatter{
+  display:inline-block;font-size:8.5px;border:1px solid rgba(255,255,255,.25);
+  border-radius:999px;padding:0 6px;margin-right:5px;vertical-align:1px;
+  color:rgba(255,255,255,.55);
+}
+
+/* 다이스 결과 */
+.diceline{
+  align-self:center;display:flex;gap:8px;align-items:center;
+  background:rgba(0,0,0,.5);border:1px solid rgba(255,217,114,.35);
+  border-radius:12px;padding:6px 14px;font-size:11px;color:#ffe9ae;
+}
+.diceline .d20{width:16px;height:16px}
+
+/* 입력 영역 */
+.inputzone{
+  flex-shrink:0;background:rgba(9,12,17,.88);backdrop-filter:blur(8px);
+  border-top:1px solid rgba(255,255,255,.07);padding:8px 10px 12px;
+}
+.profswap{display:flex;align-items:center;gap:8px;padding:0 4px 8px;overflow:hidden}
+.profswap .lbl{font-size:9px;color:var(--ink-dim);flex-shrink:0;writing-mode:vertical-rl;letter-spacing:.2em;border-right:1px solid var(--line);padding-right:6px;height:34px;display:flex;align-items:center}
+.pf{
+  display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;
+  width:44px;position:relative;
+}
+.pf .avatar{width:34px;height:34px;font-size:12px;border:2px solid transparent;transition:.15s}
+.pf span{font-size:8.5px;color:var(--ink-dim);white-space:nowrap}
+.pf.on .avatar{border-color:var(--postit);box-shadow:0 0 0 2px rgba(255,217,114,.25)}
+.pf.on span{color:var(--postit);font-weight:700}
+.pf.on::after{content:"";position:absolute;top:-2px;right:2px;width:7px;height:7px;border-radius:50%;background:var(--postit)}
+.pf.add .avatar{background:transparent;border:1.5px dashed rgba(255,255,255,.3);color:rgba(255,255,255,.4);font-size:15px}
+.inputrow{display:flex;gap:7px;align-items:center}
+.toggle-chatter{
+  display:flex;align-items:center;gap:5px;flex-shrink:0;
+  border-radius:999px;padding:5px 9px;font-size:10px;font-weight:700;
+  background:rgba(255,255,255,.07);color:var(--ink-dim);border:1px solid var(--line);
+}
+.toggle-chatter .sw{width:22px;height:12px;border-radius:999px;background:rgba(255,255,255,.2);position:relative}
+.toggle-chatter .sw::after{content:"";position:absolute;left:2px;top:2px;width:8px;height:8px;border-radius:50%;background:#fff;transition:.15s}
+.toggle-chatter.on{background:rgba(255,217,114,.14);color:var(--postit);border-color:rgba(255,217,114,.4)}
+.toggle-chatter.on .sw{background:var(--postit)}
+.toggle-chatter.on .sw::after{left:12px;background:#1a1a1a}
+.field{
+  flex:1;background:rgba(255,255,255,.08);border:1px solid var(--line);
+  border-radius:14px;padding:8px 12px;font-size:12px;color:var(--ink-dim);
+  min-width:0;white-space:nowrap;overflow:hidden;
+}
+.field b{color:var(--ink);font-weight:500}
+.send{
+  width:38px;height:38px;border-radius:13px;background:var(--theme);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:#0d1420;
+}
+.send svg{width:17px;height:17px}
+
+/* ══════════════════════════════════════════════
+   SCREEN 3 · 프로필 편집
+══════════════════════════════════════════════ */
+.edit{background:linear-gradient(180deg,#141a23,#0e1219)}
+.edit-top{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.edit-top h4{font-size:15px;font-weight:700}
+.edit-top .save{
+  margin-left:auto;background:var(--postit);color:#1a1a1a;font-size:12px;
+  font-weight:700;border-radius:999px;padding:6px 16px;
+}
+.edit-body{padding:20px 20px 0;overflow:hidden;flex:1}
+.edit-photo{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:22px}
+.edit-photo .avatar{width:92px;height:92px;font-size:34px;border:3px solid var(--postit);box-shadow:0 0 0 5px rgba(255,217,114,.14)}
+.edit-photo .cambtn{
+  margin-top:-26px;margin-left:66px;width:28px;height:28px;border-radius:50%;
+  background:#fff;color:#1a1a1a;display:flex;align-items:center;justify-content:center;
+  border:3px solid #141a23;
+}
+.edit-photo .cambtn svg{width:13px;height:13px}
+.edit-photo small{font-size:10.5px;color:var(--ink-dim)}
+.f-group{margin-bottom:18px}
+.f-group label{display:block;font-size:11px;font-weight:700;color:var(--ink-dim);letter-spacing:.06em;margin-bottom:7px}
+.f-input{
+  background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;
+  padding:11px 14px;font-size:14px;font-weight:700;
+}
+.swatches{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sw-dot{
+  width:30px;height:30px;border-radius:50%;position:relative;flex-shrink:0;
+  border:2px solid transparent;
+}
+.sw-dot.sel{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.18)}
+.sw-dot.sel::after{content:"✓";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#10151c}
+.sw-dot.custom{
+  background:conic-gradient(#f66,#fc6,#6d6,#6cf,#c6f,#f66);
+  display:flex;align-items:center;justify-content:center;
+}
+.sw-dot.custom::before{content:"+";color:#fff;font-weight:900;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.preview-card{
+  border:1px dashed rgba(255,255,255,.2);border-radius:16px;padding:14px 12px 10px;
+  background:
+    radial-gradient(220px 120px at 80% 0%, rgba(236,244,255,.10), transparent 60%),
+    linear-gradient(170deg,#233248,#141d2b);
+}
+.preview-card .cap{font-size:9px;letter-spacing:.2em;color:var(--ink-dim);margin-bottom:10px}
+
+/* ══════════════════════════════════════════════
+   SCREEN 4 · 방 설정 (테마/배경, 마스터)
+══════════════════════════════════════════════ */
+.setting{background:linear-gradient(180deg,#141a23,#0e1219)}
+.master-band{
+  display:flex;gap:8px;align-items:center;margin:14px 16px 4px;
+  background:rgba(255,217,114,.1);border:1px solid rgba(255,217,114,.35);
+  border-radius:12px;padding:9px 12px;font-size:11px;color:#ffe9ae;
+}
+.master-band b{color:var(--postit)}
+.set-sec{padding:16px 16px 0}
+.set-sec h5{font-size:12px;font-weight:700;color:var(--ink-dim);letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+.set-sec h5::after{content:"";flex:1;height:1px;background:var(--line)}
+.themegrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.themecell{
+  border-radius:12px;padding:8px 6px 7px;text-align:center;
+  border:1.5px solid var(--line);background:rgba(255,255,255,.03);
+}
+.themecell .tc{width:100%;height:26px;border-radius:8px;margin-bottom:5px}
+.themecell span{font-size:9px;color:var(--ink-dim)}
+.themecell.sel{border-color:var(--theme);background:rgba(142,197,232,.1)}
+.themecell.sel span{color:var(--theme);font-weight:700}
+.bggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bgcell{height:76px;border-radius:12px;position:relative;overflow:hidden;border:1.5px solid var(--line)}
+.bgcell.sel{border-color:var(--postit)}
+.bgcell.sel::after{
+  content:"사용 중";position:absolute;left:6px;bottom:6px;background:var(--postit);
+  color:#1a1a1a;font-size:8.5px;font-weight:700;border-radius:5px;padding:1px 6px;
+}
+.bgcell.upload{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--ink-dim);font-size:9.5px;border-style:dashed}
+.set-row{
+  display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line);
+}
+.set-row .txt h6{font-size:13px;font-weight:500}
+.set-row .txt p{font-size:10.5px;color:var(--ink-dim)}
+.set-row .arr{margin-left:auto;color:var(--ink-dim)}
+
+/* ══════════════════════════════════════════════
+   SCREEN 5 · 로그 내보내기 (HTML 미리보기)
+══════════════════════════════════════════════ */
+.export{background:#e9e4d8}
+.export .statusbar{color:rgba(0,0,0,.7)}
+.export .sb-icons i{background:rgba(0,0,0,.55)}
+.exp-top{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:#fdfbf5;border-bottom:1px solid rgba(0,0,0,.08);color:#2a2620;
+}
+.exp-top h4{font-size:14px;font-weight:700}
+.exp-top small{font-size:10px;color:#8b8474}
+.exp-top .dl{
+  margin-left:auto;display:flex;gap:5px;align-items:center;background:#2a2620;color:#ffd972;
+  border-radius:999px;font-size:11px;font-weight:700;padding:6px 13px;
+}
+.exp-top .dl svg{width:12px;height:12px}
+.logdoc{flex:1;overflow:hidden;padding:16px 14px;color:#2a2620;font-size:12px}
+.logdoc .doc-h{
+  font-family:'Gowun Batang',serif;text-align:center;border-bottom:2px solid #2a2620;
+  padding-bottom:10px;margin-bottom:14px;
+}
+.logdoc .doc-h h5{font-size:16px;font-weight:700}
+.logdoc .doc-h p{font-size:9.5px;color:#8b8474;margin-top:2px}
+.lrow{display:flex;gap:8px;margin-bottom:11px}
+.lrow .avatar{width:30px;height:30px;font-size:11px}
+.lrow .lname{font-size:10.5px;font-weight:700}
+.lrow time{font-size:9px;color:#a39a86;font-weight:400;margin-left:5px}
+.lbubble{
+  display:inline-block;border-radius:3px 12px 12px 12px;padding:6px 10px;
+  font-size:11.5px;margin-top:3px;color:#10151c;line-height:1.5;
+}
+.lnarr{
+  font-family:'Gowun Batang',serif;font-size:11.5px;line-height:1.8;color:#3d3628;
+  border-left:2px solid #c9a227;padding:2px 0 2px 12px;margin:4px 4px 12px;
+}
+.lchat{background:#e3ded2!important;color:#8b8474!important;border:1px dashed #c5bda9}
+
+/* ══════════════════════════════════════════════
+   SCREEN 6 · 알림 (잠금 화면)
+══════════════════════════════════════════════ */
+.lock{
+  background:
+    radial-gradient(300px 200px at 70% 20%, rgba(142,197,232,.25), transparent 60%),
+    linear-gradient(170deg,#1c2735,#0b0f16 70%);
+}
+.lock-time{text-align:center;margin-top:64px}
+.lock-time h2{font-size:56px;font-weight:300;letter-spacing:-.02em;line-height:1}
+.lock-time p{font-size:13px;color:rgba(255,255,255,.6);margin-top:6px}
+.notif{
+  margin:36px 14px 0;background:rgba(28,34,44,.85);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:13px 14px;
+}
+.notif .n-head{display:flex;gap:6px;align-items:center;font-size:10px;color:var(--ink-dim);margin-bottom:9px}
+.notif .n-head .appicon-mini{width:16px;height:16px;border-radius:4px}
+.notif .n-head .appicon-mini .d10{inset:2px}
+.notif .n-body{display:flex;gap:11px;align-items:center}
+.notif .avatar{width:42px;height:42px;font-size:15px}
+.notif .n-txt b{font-size:13px;display:block}
+.notif .n-txt p{font-size:12px;color:var(--ink-dim);margin-top:1px}
+.notif.dim{opacity:.55;transform:scale(.97)}
+
+/* ══════════════════════════════════════════════
+   앱 아이콘 쇼케이스
+══════════════════════════════════════════════ */
+.icon-stage{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
+  background:
+    radial-gradient(260px 260px at 50% 42%, rgba(255,217,114,.09), transparent 70%),
+    linear-gradient(180deg,#141a23,#0c1016);
+}
+.appicon-big{
+  width:148px;height:148px;border-radius:34px;position:relative;
+  background:linear-gradient(150deg,#2e3846 0%,#1a2230 55%,#12161f 100%);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.12);
+  overflow:hidden;
+}
+.appicon-big::before{ /* 광택 */
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(160deg,rgba(255,255,255,.1),transparent 45%);
+}
+.appicon-big::after{ /* 다이스 아래 은은한 옐로 광원 */
+  content:"";position:absolute;inset:0;
+  background:radial-gradient(96px 96px at 50% 56%, rgba(255,217,114,.16), transparent 72%);
+}
+.big-d10{
+  position:absolute;inset:0;margin:auto;width:88px;height:104px;z-index:1;
+  filter:drop-shadow(0 10px 16px rgba(0,0,0,.5));
+}
+.icon-row{display:flex;gap:22px;align-items:flex-end}
+.icon-sm{transform:scale(.42);transform-origin:bottom;margin:0 -40px}
+.icon-round .appicon-big{border-radius:50%}
+.icon-cap{font-size:10px;color:var(--ink-dim);text-align:center;margin-top:8px}
+
+/* 반응형 */
+@media (max-width:760px){
+  .row{gap:28px}
+  .meta{display:none}
+}
+</style>
+<style>
+/* ═══════════ 화이트 모드(다크모드 OFF) 오버라이드 ═══════════ */
+:root{
+  --bg:#f4f2ec;
+  --panel:#ffffff;
+  --panel-2:#efeade;
+  --line:rgba(20,25,32,.10);
+  --ink:#23272e;
+  --ink-dim:#6d7480;
+  --postit:#ffd05c;
+  --theme:#5f9ec7;
+  --chatter:rgba(20,25,32,.06);
+}
+::selection{background:#ffd05c;color:#1a1a1a}
+.title-block h1 em{color:#23272e}
+.home-head h3 span{color:#23272e}
+.meta{border-right-color:#e0b13e}
+.spec-desc code{background:#f3edda;border-color:rgba(20,25,32,.1);color:#8a6d1c}
+.note{border-left-color:#5f9ec7;background:linear-gradient(90deg,rgba(95,158,199,.10),transparent 70%)}
+.note h4{color:#33719c}
+.note.y{border-left-color:#e0b13e;background:linear-gradient(90deg,rgba(224,177,62,.12),transparent 70%)}
+.note.y h4{color:#a3781a}
+.toc a:hover,.toc a:focus-visible{background:#ffd05c;border-color:#ffd05c}
+
+/* 폰 공통 — 베젤은 유지, 화면만 라이트 */
+.statusbar{color:rgba(20,25,32,.8)}
+.sb-icons i{background:rgba(20,25,32,.6)}
+.icnbtn{background:rgba(20,25,32,.06);color:rgba(20,25,32,.65)}
+.phone{box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000}
+
+/* 01 방 목록 */
+.home{background:linear-gradient(180deg,#fbf9f4,#f0ede5)}
+.roomcard{background:rgba(20,25,32,.035);border-color:var(--line)}
+.roomcard.active{background:linear-gradient(120deg,rgba(95,158,199,.14),rgba(20,25,32,.02));border-color:rgba(95,158,199,.45)}
+.room-thumb .dot{border-color:#fbf9f4}
+.badge-n{background:#ffd05c}
+.fab{box-shadow:0 10px 24px rgba(224,177,62,.45)}
+
+/* 02 채팅방 — 아침 안개 버전 배경 */
+.chat-bg{
+  background:
+    radial-gradient(340px 200px at 82% 12%, rgba(255,238,190,.75), transparent 62%),
+    radial-gradient(500px 340px at 20% 108%, rgba(148,186,214,.55), transparent 70%),
+    linear-gradient(178deg,#b9d2e4 0%, #d6e4ee 45%, #eef3f6 100%);
+}
+.chat-bg::before{background:linear-gradient(180deg,#8d9caa,#68798b)}
+.chat-bg::after{background:radial-gradient(closest-side,rgba(255,205,110,.75),transparent)}
+.chat-veil{background:linear-gradient(180deg,rgba(249,251,253,.6),rgba(249,251,253,.22) 30%,rgba(249,251,253,.62))}
+.chat-top{background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.35))}
+.chat-top .back{color:rgba(20,25,32,.7)}
+.roomname h4{color:#23272e}
+.roomname small{color:rgba(20,25,32,.55)}
+.daybreak{background:rgba(255,255,255,.75);color:rgba(20,25,32,.55);border:1px solid rgba(20,25,32,.07)}
+.narr{
+  background:rgba(255,255,255,.78);color:#3c3526;
+  border-left-color:#e0b13e;box-shadow:0 3px 12px rgba(60,70,85,.12);
+}
+.narr strong{color:#191510}
+.narr rt{color:#a3781a}
+.narr .nmeta b{color:#a3781a}
+.narr .nmeta time{color:rgba(20,25,32,.42)}
+.narr::before{background:#ffd05c}
+.mname{text-shadow:0 1px 3px rgba(255,255,255,.8)}
+.mname[style*="#ffc46b"]{color:#c07b1f!important}
+.mname[style*="#8ec5e8"]{color:#33719c!important}
+.mname[style*="#ffd972"]{color:#8a6d1c!important}
+.mrow .avatar{border-color:rgba(255,255,255,.85)}
+.bfoot time{color:rgba(20,25,32,.5)}
+.mini-act button{background:rgba(20,25,32,.10);color:rgba(20,25,32,.6)}
+.mrow.chatter .bubble{background:var(--chatter);color:rgba(20,25,32,.5);border-color:rgba(20,25,32,.22)}
+.mrow.chatter .mname{color:rgba(20,25,32,.45)!important}
+.chip-chatter{border-color:rgba(20,25,32,.3);color:rgba(20,25,32,.5)}
+.diceline{background:rgba(255,255,255,.85);border-color:rgba(200,158,52,.5);color:#7a5b12}
+.inputzone{background:rgba(255,255,255,.92);border-top-color:rgba(20,25,32,.08)}
+.profswap .lbl{border-right-color:var(--line)}
+.pf.on span{color:#a3781a}
+.pf.on .avatar{border-color:#e0b13e;box-shadow:0 0 0 2px rgba(224,177,62,.28)}
+.pf.on::after{background:#e0b13e}
+.pf.add .avatar{border-color:rgba(20,25,32,.28);color:rgba(20,25,32,.4)}
+.toggle-chatter{background:rgba(20,25,32,.05);border-color:var(--line)}
+.toggle-chatter .sw{background:rgba(20,25,32,.22)}
+.toggle-chatter.on{background:rgba(255,208,92,.28);color:#7a5b12;border-color:rgba(200,158,52,.55)}
+.toggle-chatter.on .sw{background:#e0b13e}
+.field{background:rgba(20,25,32,.05);border-color:var(--line)}
+.send{color:#ffffff}
+
+/* 03 프로필 편집 · 04 방 설정 */
+.edit,.setting{background:linear-gradient(180deg,#fbf9f4,#f0ede5)}
+.edit-photo .avatar{border-color:#e0b13e;box-shadow:0 0 0 5px rgba(224,177,62,.16)}
+.edit-photo .cambtn{border-color:#fbf9f4;background:#23272e;color:#fff}
+.f-input{background:rgba(20,25,32,.04);border-color:var(--line)}
+.f-input[style*="#ffc46b"]{color:#c07b1f!important}
+.sw-dot.sel{border-color:#23272e;box-shadow:0 0 0 3px rgba(20,25,32,.10)}
+.preview-card{
+  border-color:rgba(20,25,32,.2);
+  background:
+    radial-gradient(220px 120px at 80% 0%, rgba(255,238,190,.6), transparent 60%),
+    linear-gradient(170deg,#c3d8e8,#e9f0f5);
+}
+.preview-card .cap{color:rgba(20,25,32,.5)}
+.preview-card .mname{text-shadow:0 1px 3px rgba(255,255,255,.8)}
+.master-band{background:rgba(255,208,92,.2);border-color:rgba(200,158,52,.5);color:#7a5b12}
+.master-band b{color:#8a6d1c}
+.master-band svg{fill:#c8963a}
+.set-sec h5::after{background:var(--line)}
+.themecell{border-color:var(--line);background:rgba(20,25,32,.02)}
+.themecell.sel{border-color:#33719c;background:rgba(95,158,199,.12)}
+.themecell.sel span{color:#33719c}
+.bgcell{border-color:var(--line)}
+.bgcell.sel{border-color:#e0b13e}
+.bgcell.sel::after{background:#ffd05c}
+.set-row{border-bottom-color:var(--line)}
+
+/* 06 잠금 화면 알림 */
+.lock{
+  background:
+    radial-gradient(300px 200px at 70% 20%, rgba(148,186,214,.4), transparent 60%),
+    linear-gradient(170deg,#e3ebf2,#f4f6f9 70%);
+}
+.lock-time h2{color:#23272e}
+.lock-time p{color:rgba(20,25,32,.55)}
+.notif{background:rgba(255,255,255,.9);border-color:rgba(20,25,32,.1);box-shadow:0 8px 24px rgba(50,60,75,.12)}
+.notif .n-txt b{color:var(--ink)}
+
+/* 07 아이콘 스테이지 — 아이콘 자산 자체(다크 석판)는 모드와 무관하게 유지 */
+.icon-stage{
+  background:
+    radial-gradient(260px 260px at 50% 42%, rgba(224,177,62,.14), transparent 70%),
+    linear-gradient(180deg,#f7f4ed,#ebe7dd);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <div class="title-block">
+    <h1><em>PbP</em><br>1:1 TRPG 채팅 앱 · 디자인 목업 · 화이트 모드</h1>
+    <p>둘이서 조용히 굴리는 온라인 TRPG. 코코포리아(ccfolia)의 모바일 무드 — 배경 위에 떠 있는 반투명 패널과 어두운 극장 톤 — 을 바탕으로, 서술과 대사를 한 화면에서 구분해 읽을 수 있게 설계했습니다. 이 문서는 <b style="color:#a3781a">다크모드 OFF(화이트 모드)</b> 상태의 목업으로, 채팅방 배경은 같은 등대 장면의 아침 안개 버전으로 예시했습니다.</p>
+  </div>
+  <div class="meta">
+    Android · 1:1 전용<br>
+    라이트 베이스 <b>#F4F2EC</b> / 시그니처 <b>옐로 #FFD05C</b><br>
+    서술 <b>Gowun Batang(명조)</b> · 대사 <b>Noto Sans KR</b> · UTF-8
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s1">01 방 목록</a>
+  <a href="#s2">02 채팅방(핵심)</a>
+  <a href="#s3">03 캐릭터 프로필 편집</a>
+  <a href="#s4">04 방 설정 · 테마/배경</a>
+  <a href="#s5">05 HTML 로그 내보내기</a>
+  <a href="#s6">06 푸시 알림</a>
+  <a href="#s7">07 앱 아이콘</a>
+  <a href="trpg-app-mockup.html" style="margin-left:auto;border-style:dashed">◐ 다크 모드 버전 보기</a>
+</nav>
+
+<!-- ════════ 01 방 목록 ════════ -->
+<section class="spec" id="s1">
+  <div class="spec-head"><span class="no">01</span><h2>방 목록</h2></div>
+  <p class="spec-desc">1:1 전용이므로 방 카드에는 상대 1명과 세션 상태만 보여줍니다. 각 방 썸네일은 그 방의 <code>배경 이미지</code>와 <code>테마 컬러</code>를 그대로 물려받아, 목록에서도 세션의 분위기가 이어집니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen home">
+        <div class="statusbar"><span>21:04</span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+        <div class="home-head">
+          <div class="brand">
+            <div class="appicon-mini"><div class="d10"></div></div>
+            <div><h3><span>PbP</span></h3><p>진행 중인 세션 3</p></div>
+          </div>
+        </div>
+        <div class="roomlist">
+          <div class="roomcard active">
+            <div class="room-thumb" style="background:linear-gradient(160deg,#2c3f58,#141d2b)"><div class="dot" style="background:#8ec5e8"></div></div>
+            <div><h5>잿빛 등대의 밤</h5><div class="last">GM · 파도 소리가 한층 가까워진다…</div></div>
+            <div class="side"><div class="time">방금</div><div class="badge-n">2</div></div>
+          </div>
+          <div class="roomcard">
+            <div class="room-thumb" style="background:linear-gradient(160deg,#4b3350,#1d1524)"><div class="dot" style="background:#c9a7e8"></div></div>
+            <div><h5>자정 서점 괴담</h5><div class="last">유하 · "책장이 또 움직였어."</div></div>
+            <div class="side"><div class="time">어제</div></div>
+          </div>
+          <div class="roomcard">
+            <div class="room-thumb" style="background:linear-gradient(160deg,#4f4a2c,#211d12)"><div class="dot" style="background:#e8d48e"></div></div>
+            <div><h5>사막 열차 007편</h5><div class="last">잡담 · 다음 세션 토요일 어때?</div></div>
+            <div class="side"><div class="time">3일 전</div></div>
+          </div>
+        </div>
+        <div class="fab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="phone-label" style="display:none"></div>
+    <div class="notes">
+      <div class="note y"><h4>방 생성 = GM 프로필 자동 생성</h4><p>우측 하단 옐로 FAB로 방을 만들면, 만든 사람에게 서술자(GM) 특수 프로필과 권한이 자동 부여됩니다.</p></div>
+      <div class="note"><h4>테마 컬러 인디케이터</h4><p>썸네일 모서리의 작은 점이 각 방의 마스터가 지정한 테마 컬러입니다.</p></div>
+      <div class="note"><h4>미확인 배지</h4><p>읽지 않은 메시지 수는 옐로 배지로 표시 — 이 수가 남아 있으면 앱 비활성 시 푸시 알림(06)이 발송됩니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 02 채팅방 ════════ -->
+<section class="spec" id="s2">
+  <div class="spec-head"><span class="no">02</span><h2>채팅방 — 핵심 화면</h2></div>
+  <p class="spec-desc">배경 이미지 위 어두운 베일, 그 위로 서술 문단과 말풍선이 흐릅니다. 서술자(GM) 발화는 <code>명조체 문단</code>으로, GM 발화 중 <code>" "</code> 안의 대사만 분리되어 말풍선으로 출력됩니다. 마크다운(<code>**굵게**</code> 등)과 루비 문자(<code>|한자《독음》</code>)를 모두 지원합니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen chat-screen">
+        <div class="chat-bg"></div><div class="chat-veil"></div>
+        <div class="chat-col">
+          <div class="statusbar"><span>21:04</span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+
+          <div class="chat-top">
+            <svg class="back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+            <div class="roomname">
+              <h4>잿빛 등대의 밤</h4>
+              <small><span class="tag-theme"></span>테마 · 새벽 하늘 &nbsp;|&nbsp; GM 서리</small>
+            </div>
+            <div class="tools">
+              <div class="icnbtn" title="로그 내보내기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              </div>
+              <div class="icnbtn" title="방 설정">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 01-.1 1.2l2 1.5-2 3.4-2.3-.9a7 7 0 01-2 1.2L14 21h-4l-.5-2.6a7 7 0 01-2-1.2l-2.4.9-2-3.4 2-1.5A7 7 0 015 12c0-.4 0-.8.1-1.2l-2-1.5 2-3.4 2.3.9a7 7 0 012-1.2L10 3h4l.5 2.6a7 7 0 012 1.2l2.4-.9 2 3.4-2 1.5c.1.4.1.8.1 1.2z"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="msgs">
+            <div class="daybreak">2026년 7월 28일 · 세션 4</div>
+
+            <div class="narr">
+              밤안개가 방파제를 덮는다. <strong>등대의 불</strong>은 세 번 깜빡이고, 이내 <ruby>침묵<rt>しじま</rt></ruby>만이 남았다.
+              <div class="nmeta"><b>GM 서리 · 서술</b><time>21:02</time></div>
+            </div>
+
+            <div class="mrow me">
+              <div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c)">단</div>
+              <div class="mbody">
+                <div class="mname" style="color:#ffc46b">이단</div>
+                <div class="bubble" style="background:var(--bubble-me)">여기서 기다리자. **불빛이 꺼진 순간**을 노리는 거야.</div>
+                <div class="bfoot"><time>21:03</time>
+                  <div class="mini-act">
+                    <button title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20l4-1L20 7l-3-3L5 16l-1 4z"/></svg></button>
+                    <button title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mrow">
+              <div class="avatar" style="background:linear-gradient(150deg,#bfe3f6,#7fb2d6)">린</div>
+              <div class="mbody">
+                <div class="mname" style="color:#8ec5e8">은서린</div>
+                <div class="bubble" style="background:var(--bubble-you)">그 전에 <ruby>탐지<rt>Spot Hidden</rt></ruby> 굴릴게. *조용히.*</div>
+                <div class="bfoot"><time>21:03</time>
+                  <div class="mini-act">
+                    <button title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20l4-1L20 7l-3-3L5 16l-1 4z"/></svg></button>
+                    <button title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="diceline">
+              <svg class="d20" viewBox="0 0 24 26"><polygon points="12,1 23,7.5 23,18.5 12,25 1,18.5 1,7.5" fill="#ffd972"/><polygon points="12,1 23,7.5 12,12.5 1,7.5" fill="#ffe9ae"/><text x="12" y="19" text-anchor="middle" font-size="8" font-weight="900" fill="#1a1a1a">17</text></svg>
+              <span>은서린 · 1d100 → <b>17 / 성공</b></span>
+            </div>
+
+            <div class="narr">
+              굴린 값이 낮게 떨어진다 — 안개 너머, 젖은 발소리 하나.
+              <div class="nmeta"><b>GM 서리 · 서술</b><time>21:04</time></div>
+            </div>
+
+            <div class="mrow">
+              <div class="avatar" style="background:linear-gradient(150deg,#39445a,#1c2330);color:#ffd972;font-family:'Gowun Batang',serif">敍</div>
+              <div class="mbody">
+                <div class="mname" style="color:#ffd972">???  <span style="font-weight:400;color:rgba(255,255,255,.45);font-size:9px">— GM 발화 중 " " 부분</span></div>
+                <div class="bubble" style="background:#e7e2d4">"…거기 있는 거, 알아."</div>
+                <div class="bfoot"><time>21:04</time>
+                  <div class="mini-act">
+                    <button title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20l4-1L20 7l-3-3L5 16l-1 4z"/></svg></button>
+                    <button title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mrow chatter me">
+              <div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c)">단</div>
+              <div class="mbody">
+                <div class="mname">이단</div>
+                <div class="bubble"><span class="chip-chatter">잡담</span>와 소름… 오늘 분위기 미쳤다</div>
+                <div class="bfoot"><time>21:05</time>
+                  <div class="mini-act">
+                    <button title="수정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 20l4-1L20 7l-3-3L5 16l-1 4z"/></svg></button>
+                    <button title="삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="inputzone">
+            <div class="profswap">
+              <span class="lbl">발화</span>
+              <div class="pf"><div class="avatar" style="background:linear-gradient(150deg,#39445a,#1c2330);color:#ffd972;font-family:'Gowun Batang',serif">敍</div><span>GM 서리</span></div>
+              <div class="pf on"><div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c)">단</div><span>이단</span></div>
+              <div class="pf"><div class="avatar" style="background:linear-gradient(150deg,#c9a7e8,#9576c4)">묘</div><span>검은 묘</span></div>
+              <div class="pf add"><div class="avatar">＋</div><span>추가</span></div>
+            </div>
+            <div class="inputrow">
+              <div class="toggle-chatter on"><span class="sw"></span>잡담</div>
+              <div class="field"><b>|等臺《등대》</b> 쪽으로 …</div>
+              <div class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>서술자(GM) 출력 규칙</h4><p>GM 프로필 발화는 옐로 낙관이 찍힌 명조체 서술 문단으로 렌더링됩니다. 발화 중 <b>" " 안의 문장만</b> 별도의 말풍선(위 "???" 예시)으로 분리 출력됩니다.</p></div>
+      <div class="note"><h4>좌상단 룸명 + 우상단 내보내기</h4><p>상단 바 왼쪽에 룸명·테마 표시, 오른쪽에 로그 내보내기(↓)와 방 설정 아이콘이 상주합니다.</p></div>
+      <div class="note"><h4>말풍선 = 프로필 컬러</h4><p>말풍선 색과 이름 색은 캐릭터 프로필에서 각각 지정한 값(03 화면)을 그대로 사용합니다. 프로필 이미지는 항상 원형입니다.</p></div>
+      <div class="note"><h4>수정 · 삭제</h4><p>모든 채팅은 자유롭게 수정/삭제 가능하며, 시각마다 말풍선 곁에 연필·휴지통 마이크로 버튼이 붙습니다.</p></div>
+      <div class="note"><h4>입력창 위 프로필 교체 스트립</h4><p>입력창 바로 위에서 발화 프로필을 탭 한 번으로 교체합니다. 활성 프로필은 옐로 링으로 표시됩니다.</p></div>
+      <div class="note"><h4>잡담 토글</h4><p>입력줄 왼쪽의 잡담 스위치가 켜진 상태로 보내면, 내용과 무관하게 옅은 회색의 비강조 점선 말풍선으로 출력됩니다.</p></div>
+      <div class="note"><h4>마크다운 · 루비 · UTF-8</h4><p><b>**굵게**</b>, *기울임* 등 마크다운과 <b>|等臺《등대》</b> 형식의 루비 문법을 지원하며, 모든 텍스트는 UTF-8로 저장·표시됩니다(일문 루비 しじま 예시 포함).</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 03 프로필 편집 ════════ -->
+<section class="spec" id="s3">
+  <div class="spec-head"><span class="no">03</span><h2>캐릭터 프로필 편집</h2></div>
+  <p class="spec-desc">캐릭터별로 <code>말풍선 색</code>과 <code>이름 색</code>을 따로 지정합니다. 하단 미리보기에서 실제 채팅방 배경 위 조합을 즉시 확인할 수 있습니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen edit">
+        <div class="statusbar"><span>21:04</span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+        <div class="edit-top">
+          <svg width="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+          <h4>프로필 편집</h4>
+          <div class="save">저장</div>
+        </div>
+        <div class="edit-body">
+          <div class="edit-photo">
+            <div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c)">단</div>
+            <div class="cambtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg></div>
+            <small>프로필 이미지는 원형으로 잘려 표시됩니다</small>
+          </div>
+          <div class="f-group">
+            <label>캐릭터 이름</label>
+            <div class="f-input" style="color:#ffc46b">이단</div>
+          </div>
+          <div class="f-group">
+            <label>이름 색</label>
+            <div class="swatches">
+              <div class="sw-dot sel" style="background:#ffc46b"></div>
+              <div class="sw-dot" style="background:#8ec5e8"></div>
+              <div class="sw-dot" style="background:#c9a7e8"></div>
+              <div class="sw-dot" style="background:#9fe0b8"></div>
+              <div class="sw-dot" style="background:#f2a1a8"></div>
+              <div class="sw-dot custom"></div>
+            </div>
+          </div>
+          <div class="f-group">
+            <label>말풍선 색</label>
+            <div class="swatches">
+              <div class="sw-dot sel" style="background:#ffd9a8"></div>
+              <div class="sw-dot" style="background:#bfe3f6"></div>
+              <div class="sw-dot" style="background:#e3d2f2"></div>
+              <div class="sw-dot" style="background:#cdeed9"></div>
+              <div class="sw-dot" style="background:#f6d3d6"></div>
+              <div class="sw-dot custom"></div>
+            </div>
+          </div>
+          <div class="preview-card">
+            <div class="cap">미 리 보 기 — 방 배경 위</div>
+            <div class="mrow me">
+              <div class="avatar" style="width:34px;height:34px;font-size:13px;background:linear-gradient(150deg,#ffd9a8,#e8a95c);border:2px solid rgba(255,255,255,.25)">단</div>
+              <div class="mbody">
+                <div class="mname" style="color:#ffc46b">이단</div>
+                <div class="bubble" style="background:#ffd9a8">이 색으로 말하게 됩니다.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h4>색 지정의 분리</h4><p>이름 색과 말풍선 색은 독립적으로 선택합니다. 프리셋 5색 + 커스텀(＋) 컬러 피커를 제공합니다.</p></div>
+      <div class="note"><h4>즉시 미리보기</h4><p>미리보기 카드는 현재 입장한 방의 실제 배경·베일을 그대로 사용해, 가독성 문제를 저장 전에 발견할 수 있게 합니다.</p></div>
+      <div class="note y"><h4>1인 다(多)프로필</h4><p>한 사용자가 여러 캐릭터 프로필을 소유할 수 있고(NPC 등), 02 화면의 입력창 위 스트립에서 교체합니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 04 방 설정 ════════ -->
+<section class="spec" id="s4">
+  <div class="spec-head"><span class="no">04</span><h2>방 설정 — 테마 컬러 &amp; 배경 이미지</h2></div>
+  <p class="spec-desc">방의 <code>마스터(GM)</code>만 테마 컬러와 배경 이미지를 변경할 수 있습니다. 테마 컬러는 전송 버튼, 강조선, 방 목록의 인디케이터 등 방 전체의 포인트 컬러에 적용됩니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen setting">
+        <div class="statusbar"><span>21:04</span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+        <div class="edit-top">
+          <svg width="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>
+          <h4>방 설정 · 잿빛 등대의 밤</h4>
+        </div>
+        <div class="master-band">
+          <svg width="14" viewBox="0 0 24 24" fill="#ffd972"><path d="M5 16l-1-9 5 4 3-6 3 6 5-4-1 9H5zm0 2h14v2H5v-2z"/></svg>
+          <span><b>마스터 권한</b> — 이 방을 만든 사람(GM 서리)만 수정할 수 있습니다.</span>
+        </div>
+        <div class="set-sec">
+          <h5>테마 컬러</h5>
+          <div class="themegrid">
+            <div class="themecell sel"><div class="tc" style="background:#8ec5e8"></div><span>새벽 하늘</span></div>
+            <div class="themecell"><div class="tc" style="background:#c9a7e8"></div><span>라일락</span></div>
+            <div class="themecell"><div class="tc" style="background:#e8b48e"></div><span>호박등</span></div>
+            <div class="themecell"><div class="tc" style="background:#9fe0b8"></div><span>이끼</span></div>
+            <div class="themecell"><div class="tc" style="background:#f2a1a8"></div><span>동백</span></div>
+            <div class="themecell"><div class="tc" style="background:#e8d48e"></div><span>사금</span></div>
+            <div class="themecell"><div class="tc" style="background:#a8b4c8"></div><span>잿빛</span></div>
+            <div class="themecell"><div class="tc" style="background:conic-gradient(#f66,#fc6,#6d6,#6cf,#c6f,#f66)"></div><span>커스텀</span></div>
+          </div>
+        </div>
+        <div class="set-sec">
+          <h5>배경 이미지</h5>
+          <div class="bggrid">
+            <div class="bgcell sel" style="background:radial-gradient(60px 40px at 78% 18%,rgba(255,238,190,.7),transparent 60%),linear-gradient(178deg,#b9d2e4,#eef3f6)"></div>
+            <div class="bgcell" style="background:radial-gradient(50px 50px at 30% 30%,rgba(201,167,232,.35),transparent),linear-gradient(170deg,#33253f,#141020)"></div>
+            <div class="bgcell" style="background:linear-gradient(180deg,#4f4a2c 0%,#211d12 80%)"></div>
+            <div class="bgcell" style="background:linear-gradient(200deg,#173226,#0a120e)"></div>
+            <div class="bgcell" style="background:linear-gradient(160deg,#3a1f22,#140b0c)"></div>
+            <div class="bgcell upload">
+              <svg width="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              갤러리에서 선택
+            </div>
+          </div>
+        </div>
+        <div class="set-sec">
+          <div class="set-row">
+            <div class="txt"><h6>채팅 로그 내보내기</h6><p>HTML · 말풍선/서술 형태 보존</p></div>
+            <svg class="arr" width="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>
+          </div>
+          <div class="set-row" style="border-bottom:none">
+            <div class="txt"><h6>알림</h6><p>미확인 메시지 도착 시 푸시</p></div>
+            <div class="toggle-chatter on" style="margin-left:auto"><span class="sw"></span>ON</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h4>테마 컬러의 적용 범위</h4><p>전송 버튼(02), 방 목록 점(01), 강조선 등 포인트 UI 전반. 말풍선 색은 캐릭터 프로필 소관이라 서로 침범하지 않습니다.</p></div>
+      <div class="note"><h4>배경 이미지</h4><p>프리셋 + 갤러리 업로드. 어떤 이미지든 어두운 베일이 자동으로 덮여 텍스트 가독성이 유지됩니다.</p></div>
+      <div class="note y"><h4>권한 밴드</h4><p>마스터가 아닌 참여자에게는 이 화면이 읽기 전용으로 표시되고, 상단 밴드가 그 이유를 설명합니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 05 로그 내보내기 ════════ -->
+<section class="spec" id="s5">
+  <div class="spec-head"><span class="no">05</span><h2>HTML 로그 내보내기 미리보기</h2></div>
+  <p class="spec-desc">내보낸 HTML 파일은 밝은 종이 톤의 문서로 렌더링되되, <code>프로필 인장(원형) · 이름 색 · 시간 · 말풍선 색/형태 · 서술 문단 · 잡담 처리</code>가 모두 보존됩니다. UTF-8 인코딩으로 저장됩니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen export">
+        <div class="statusbar"><span>21:04</span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+        <div class="exp-top">
+          <div>
+            <h4>잿빛_등대의_밤_log.html</h4>
+            <small>UTF-8 · 세션 1–4 · 312개 메시지</small>
+          </div>
+          <div class="dl">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+            저장
+          </div>
+        </div>
+        <div class="logdoc">
+          <div class="doc-h">
+            <h5>잿빛 등대의 밤</h5>
+            <p>GM 서리 × 이단 · 2026.07.28 내보냄</p>
+          </div>
+
+          <div class="lnarr">밤안개가 방파제를 덮는다. <b>등대의 불</b>은 세 번 깜빡이고, 이내 <ruby>침묵<rt style="font-size:7px;color:#c9a227">しじま</rt></ruby>만이 남았다.<br><span style="font-family:'Noto Sans KR';font-size:8.5px;color:#a39a86">GM 서리 · 서술 — 21:02</span></div>
+
+          <div class="lrow" style="flex-direction:row-reverse;text-align:right">
+            <div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c)">단</div>
+            <div>
+              <div class="lname" style="color:#c07b1f">이단<time>21:03</time></div>
+              <div class="lbubble" style="background:#ffd9a8;border-radius:12px 3px 12px 12px">여기서 기다리자. <b>불빛이 꺼진 순간</b>을 노리는 거야.</div>
+            </div>
+          </div>
+
+          <div class="lrow">
+            <div class="avatar" style="background:linear-gradient(150deg,#bfe3f6,#7fb2d6)">린</div>
+            <div>
+              <div class="lname" style="color:#3d7ba3">은서린<time>21:03</time></div>
+              <div class="lbubble" style="background:#cfe8f6">그 전에 <ruby>탐지<rt style="font-size:7px;color:#3d7ba3">Spot Hidden</rt></ruby> 굴릴게. <i>조용히.</i></div>
+            </div>
+          </div>
+
+          <div class="lnarr">굴린 값이 낮게 떨어진다 — 안개 너머, 젖은 발소리 하나.<br><span style="font-family:'Noto Sans KR';font-size:8.5px;color:#a39a86">GM 서리 · 서술 — 21:04</span></div>
+
+          <div class="lrow">
+            <div class="avatar" style="background:linear-gradient(150deg,#39445a,#1c2330);color:#ffd972;font-family:'Gowun Batang',serif">敍</div>
+            <div>
+              <div class="lname" style="color:#8a6d1c">???<time>21:04</time></div>
+              <div class="lbubble" style="background:#efe9d8">"…거기 있는 거, 알아."</div>
+            </div>
+          </div>
+
+          <div class="lrow" style="flex-direction:row-reverse;text-align:right;opacity:.85">
+            <div class="avatar" style="background:linear-gradient(150deg,#ffd9a8,#e8a95c);filter:grayscale(.5);opacity:.7">단</div>
+            <div>
+              <div class="lname" style="color:#a39a86">이단<time>21:05</time></div>
+              <div class="lbubble lchat" style="border-radius:12px 3px 12px 12px">〔잡담〕 와 소름… 오늘 분위기 미쳤다</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h4>형태 보존 원칙</h4><p>앱 내 렌더링과 동일한 규칙(원형 인장, 좌/우 정렬, 말풍선 색, 서술 문단, 잡담의 회색 처리)을 정적 HTML로 재현합니다. 배경만 인쇄·열람에 적합한 종이 톤으로 치환합니다.</p></div>
+      <div class="note"><h4>진입 지점</h4><p>02 채팅방 우상단의 ↓ 아이콘, 04 방 설정의 "채팅 로그 내보내기" 두 곳에서 진입 가능합니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 06 알림 ════════ -->
+<section class="spec" id="s6">
+  <div class="spec-head"><span class="no">06</span><h2>푸시 알림 — 잠금 화면</h2></div>
+  <p class="spec-desc">앱이 비활성 상태에서 미확인 메시지가 생기면 알림을 띄웁니다. 형식은 <code>보낸 이 프로필 아이콘 + 이름 + "~님의 메시지가 도착했습니다."</code>로 통일하며, 메시지 본문은 절대 노출하지 않습니다(스포일러 &amp; 프라이버시 보호).</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen lock">
+        <div class="statusbar"><span></span><div class="cam"></div><div class="sb-icons"><i class="sig"></i><i></i></div></div>
+        <div class="lock-time">
+          <h2>21:04</h2>
+          <p>7월 28일 화요일</p>
+        </div>
+        <div class="notif">
+          <div class="n-head">
+            <div class="appicon-mini"><div class="d10"></div></div>
+            PbP · 지금
+          </div>
+          <div class="n-body">
+            <div class="avatar" style="background:linear-gradient(150deg,#bfe3f6,#7fb2d6)">린</div>
+            <div class="n-txt">
+              <b>은서린</b>
+              <p>은서린님의 메시지가 도착했습니다.</p>
+            </div>
+          </div>
+        </div>
+        <div class="notif dim">
+          <div class="n-head">
+            <div class="appicon-mini"><div class="d10"></div></div>
+            PbP · 4분 전
+          </div>
+          <div class="n-body">
+            <div class="avatar" style="background:linear-gradient(150deg,#39445a,#1c2330);color:#ffd972;font-family:'Gowun Batang',serif">敍</div>
+            <div class="n-txt">
+              <b>GM 서리</b>
+              <p>GM 서리님의 메시지가 도착했습니다.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note"><h4>본문 비노출</h4><p>어떤 경우에도 채팅 내용은 알림에 표시되지 않습니다. GM의 서술도 동일하게 "GM ○○님의 메시지가 도착했습니다."로만 표기됩니다.</p></div>
+      <div class="note"><h4>보낸 이 = 캐릭터 프로필</h4><p>알림의 원형 아이콘과 이름은 발화에 사용된 캐릭터 프로필 기준입니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ 07 앱 아이콘 ════════ -->
+<section class="spec" id="s7">
+  <div class="spec-head"><span class="no">07</span><h2>앱 아이콘 — 10면체 다이스(d10)</h2></div>
+  <p class="spec-desc">어두운 석판 중앙에 상아색 <code>d10</code> 하나. 장식을 걷어내고 판정의 순간만 남긴 구성으로, 다이스 뒤에서 시그니처 옐로가 은은하게 배어 나옵니다.</p>
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="icon-stage">
+          <div>
+            <div class="appicon-big">
+              <svg class="big-d10" viewBox="0 0 84 100">
+                <polygon points="42,2 4,48 42,98 22,54" fill="#ddd5c2"/>
+                <polygon points="42,2 80,48 42,98 62,54" fill="#e6dfcb"/>
+                <polygon points="42,2 62,54 42,98 22,54" fill="#ffffff" stroke="#b9ae94" stroke-width="1.6" stroke-linejoin="round"/>
+                <line x1="4" y1="48" x2="22" y2="54" stroke="#b9ae94" stroke-width="1.4"/>
+                <line x1="80" y1="48" x2="62" y2="54" stroke="#b9ae94" stroke-width="1.4"/>
+                <polygon points="42,2 80,48 42,98 4,48" fill="none" stroke="#a89d82" stroke-width="1.8" stroke-linejoin="round"/>
+                <text x="42" y="56" text-anchor="middle" font-size="22" font-weight="900" fill="#2a2620" font-family="'Noto Sans KR'">10</text>
+              </svg>
+            </div>
+            <div class="icon-cap">기본 · 512×512</div>
+          </div>
+          <div class="icon-row">
+            <div class="icon-sm">
+              <div class="appicon-big">
+                <svg class="big-d10" viewBox="0 0 84 100">
+                  <polygon points="42,2 4,48 42,98 22,54" fill="#ddd5c2"/>
+                  <polygon points="42,2 80,48 42,98 62,54" fill="#e6dfcb"/>
+                  <polygon points="42,2 62,54 42,98 22,54" fill="#ffffff" stroke="#b9ae94" stroke-width="1.6" stroke-linejoin="round"/>
+                  <text x="42" y="56" text-anchor="middle" font-size="22" font-weight="900" fill="#2a2620">10</text>
+                </svg>
+              </div>
+              <div class="icon-cap">홈 화면</div>
+            </div>
+            <div class="icon-sm icon-round">
+              <div class="appicon-big">
+                <svg class="big-d10" viewBox="0 0 84 100">
+                  <polygon points="42,2 4,48 42,98 22,54" fill="#ddd5c2"/>
+                  <polygon points="42,2 80,48 42,98 62,54" fill="#e6dfcb"/>
+                  <polygon points="42,2 62,54 42,98 22,54" fill="#ffffff" stroke="#b9ae94" stroke-width="1.6" stroke-linejoin="round"/>
+                  <text x="42" y="56" text-anchor="middle" font-size="22" font-weight="900" fill="#2a2620">10</text>
+                </svg>
+              </div>
+              <div class="icon-cap">원형 마스크</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note y"><h4>모티프의 의미</h4><p>d10 하나 = PbP(Play by Post) 세션에서 이야기의 방향을 가르는 판정의 순간. 중앙 단독 배치라 작은 크기(알림·홈)에서도 실루엣이 또렷하게 남습니다.</p></div>
+      <div class="note"><h4>어댑티브 아이콘 대응</h4><p>Android 어댑티브 아이콘 규격에 맞춰 사각/원형 마스크 모두에서 다이스가 잘리지 않도록 중앙 안전 영역 안에 배치했습니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer style="border-top:1px solid var(--line);padding-top:28px;color:var(--ink-dim);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <span>PbP — 1:1 TRPG 채팅 앱 디자인 목업 v1 · 화이트 모드</span>
+  <span>Palette · 베이스 #F4F2EC / 패널 #FFFFFF / 시그니처 옐로 #FFD05C / 테마(가변) #5F9EC7</span>
+</footer>
+
+</div>
+</body>
+</html>

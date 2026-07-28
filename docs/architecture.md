@@ -1,5 +1,15 @@
 # PbP 프로젝트 구조 — 디자인 스펙 ↔ 코드 매핑
 
+## 모듈
+
+- `:app` — Android 앱 (Jetpack Compose + Room + Firestore SDK)
+- `:desktop` — **PC 버전** (Compose Multiplatform Desktop). 같은 디자인 토큰·목업 형태의
+  2판 레이아웃(방 목록+채팅). 공식 SDK가 없어 Firestore REST + 폴링(2.5초)으로
+  같은 프로젝트에 동기화 — 모바일과 실시간 대화 가능. 실행: `gradlew :desktop:run`,
+  배포판: `gradlew :desktop:packageDistributionForCurrentOS`.
+  로컬 설정: `~/.pbp-desktop/config.json` (기기 ID·프로필·참여한 방).
+  순수 로직(DiceBot/PbpMarkup/GmSpeech)은 복제본 — KMP `:shared` 추출이 장기 과제.
+
 기준 문서: [PbP-design-spec.md](PbP-design-spec.md) · 목업 [다크](trpg-app-mockup.html) / [화이트](trpg-app-mockup-light.html)
 
 ## 패키지 구조

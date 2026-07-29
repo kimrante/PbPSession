@@ -3,6 +3,8 @@ package com.pbp.desktop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,10 +54,14 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -1359,6 +1365,8 @@ private fun ProfileOverlay(onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
     var emoji by remember { mutableStateOf("") }
     var nameColor by remember { mutableStateOf(Tokens.namePresets.first()) }
     var bubbleColor by remember { mutableStateOf(Tokens.bubblePresets.first()) }
+    var nameCustomOpen by remember { mutableStateOf(false) }
+    var bubbleCustomOpen by remember { mutableStateOf(false) }
     OverlayScaffold("새 캐릭터", onDismiss) {
         OverlayField(name, { name = it }, "캐릭터 이름")
         Spacer(Modifier.height(10.dp))
@@ -1366,11 +1374,29 @@ private fun ProfileOverlay(onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
         Spacer(Modifier.height(14.dp))
         Text("이름 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
-        SwatchRow(Tokens.namePresets, nameColor) { nameColor = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(Tokens.namePresets, nameColor) { nameColor = it; nameCustomOpen = false }
+            CustomSwatch(on = nameColor !in Tokens.namePresets) {
+                nameCustomOpen = !nameCustomOpen
+            }
+        }
+        if (nameCustomOpen) {
+            Spacer(Modifier.height(8.dp))
+            ColorPalettePicker(nameColor) { nameColor = it }
+        }
         Spacer(Modifier.height(14.dp))
         Text("말풍선 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
-        SwatchRow(Tokens.bubblePresets, bubbleColor) { bubbleColor = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(Tokens.bubblePresets, bubbleColor) { bubbleColor = it; bubbleCustomOpen = false }
+            CustomSwatch(on = bubbleColor !in Tokens.bubblePresets) {
+                bubbleCustomOpen = !bubbleCustomOpen
+            }
+        }
+        if (bubbleCustomOpen) {
+            Spacer(Modifier.height(8.dp))
+            ColorPalettePicker(bubbleColor) { bubbleColor = it }
+        }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("저장", Modifier.weight(1f)) {
@@ -1432,11 +1458,6 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
     var hexOpen by remember {
         mutableStateOf(Tokens.themePresets.none { it.first == room.themeColor })
     }
-    var hex by remember { mutableStateOf("") }
-    // 모바일 HexColorDialog와 동일 규칙 — 6자리 HEX만 유효
-    val hexParsed = hex.trim().removePrefix("#").let {
-        if (it.length == 6) it.toLongOrNull(16)?.or(0xFF000000) else null
-    }
     OverlayScaffold("방 설정 · ${room.name}", onDismiss) {
         Text("테마 컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
@@ -1446,39 +1467,13 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
                 hexOpen = false
             }
             // 커스텀 — 무지개 스와치, 프리셋 밖의 색이 선택되어 있으면 선택 표시 (모바일과 동일)
-            val customOn = Tokens.themePresets.none { it.first == theme }
-            Box(
-                Modifier.size(32.dp)
-                    .border(2.dp, if (customOn) Tokens.Ink else Color.Transparent, CircleShape)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.sweepGradient(
-                            listOf(
-                                Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
-                                Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
-                            )
-                        )
-                    )
-                    .clickable { hexOpen = !hexOpen },
-            )
+            CustomSwatch(on = Tokens.themePresets.none { it.first == theme }) {
+                hexOpen = !hexOpen
+            }
         }
         if (hexOpen) {
             Spacer(Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.weight(1f)) {
-                    OverlayField(hex, { hex = it }, "HEX 색상 (예: 8EC5E8)")
-                }
-                hexParsed?.let { color ->
-                    Box(
-                        Modifier.size(width = 40.dp, height = 24.dp)
-                            .clip(RoundedCornerShape(6.dp)).background(Color(color))
-                    )
-                    YellowButton("적용") { theme = color }
-                }
-            }
+            ColorPalettePicker(theme) { theme = it }
         }
         Spacer(Modifier.height(14.dp))
         Text("배경", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
@@ -1538,6 +1533,180 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }
+}
+
+/** 커스텀 컬러 진입용 무지개 스와치 — on이면 프리셋 밖의 색이 선택된 상태 */
+@Composable
+private fun CustomSwatch(on: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(32.dp)
+            .border(2.dp, if (on) Tokens.Ink else Color.Transparent, CircleShape)
+            .clip(CircleShape)
+            .background(
+                Brush.sweepGradient(
+                    listOf(
+                        Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
+                        Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
+                    )
+                )
+            )
+            .clickable(onClick = onClick),
+    )
+}
+
+/**
+ * 드래그 컬러 팔레트 — SV 박스(채도·명도) + 색상 띠 + HEX 입력.
+ * 모바일 HexColorDialog의 팔레트와 동일 동작. 변경 즉시 onChange로 전달된다.
+ */
+@Composable
+private fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
+    val seedHsv = remember { argbToHsv(initial) }
+    var hue by remember { mutableStateOf(seedHsv.first) }
+    var sat by remember { mutableStateOf(seedHsv.second) }
+    var bri by remember { mutableStateOf(seedHsv.third) }
+    var hex by remember { mutableStateOf("%06X".format(initial and 0xFFFFFF)) }
+    val current = hsvToArgb(hue, sat, bri)
+
+    fun push() {
+        val c = hsvToArgb(hue, sat, bri)
+        hex = "%06X".format(c and 0xFFFFFF)
+        onChange(c)
+    }
+
+    Column {
+        var svSize by remember { mutableStateOf(IntSize.Zero) }
+        fun pickSv(x: Float, y: Float) {
+            if (svSize == IntSize.Zero) return
+            sat = (x / svSize.width).coerceIn(0f, 1f)
+            bri = 1f - (y / svSize.height).coerceIn(0f, 1f)
+            push()
+        }
+        Box(
+            Modifier.fillMaxWidth().height(140.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    Brush.horizontalGradient(listOf(Color.White, Color(hsvToArgb(hue, 1f, 1f))))
+                )
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+                .onSizeChanged { svSize = it }
+                .pointerInput(Unit) { detectTapGestures { p -> pickSv(p.x, p.y) } }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, _ ->
+                        change.consume()
+                        pickSv(change.position.x, change.position.y)
+                    }
+                }
+        ) {
+            Box(
+                Modifier.offset {
+                    IntOffset(
+                        (sat * svSize.width).toInt() - 8.dp.roundToPx(),
+                        ((1f - bri) * svSize.height).toInt() - 8.dp.roundToPx(),
+                    )
+                }
+                    .size(16.dp)
+                    .border(2.dp, Color.White, CircleShape)
+                    .clip(CircleShape)
+                    .background(Color(current))
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        var hueSize by remember { mutableStateOf(IntSize.Zero) }
+        fun pickHue(x: Float) {
+            if (hueSize == IntSize.Zero) return
+            hue = (x / hueSize.width).coerceIn(0f, 1f) * 359.9f
+            push()
+        }
+        Box(
+            Modifier.fillMaxWidth().height(16.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                            Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF),
+                            Color(0xFFFF0000),
+                        )
+                    )
+                )
+                .onSizeChanged { hueSize = it }
+                .pointerInput(Unit) { detectTapGestures { p -> pickHue(p.x) } }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, _ ->
+                        change.consume()
+                        pickHue(change.position.x)
+                    }
+                }
+        ) {
+            Box(
+                Modifier.offset {
+                    IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
+                }
+                    .size(16.dp)
+                    .border(2.dp, Color.White, CircleShape)
+                    .clip(CircleShape)
+                    .background(Color(hsvToArgb(hue, 1f, 1f)))
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(width = 40.dp, height = 26.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(current))
+                    .border(1.dp, Tokens.Line, RoundedCornerShape(6.dp))
+            )
+            Box(Modifier.weight(1f)) {
+                OverlayField(hex, { typed ->
+                    hex = typed
+                    typed.trim().removePrefix("#")
+                        .takeIf { it.length == 6 }?.toLongOrNull(16)?.or(0xFF000000)
+                        ?.let { color ->
+                            val (h, s, v) = argbToHsv(color)
+                            hue = h; sat = s; bri = v
+                            onChange(color)
+                        }
+                }, "HEX (예: 8EC5E8)")
+            }
+        }
+    }
+}
+
+/** HSV(h 0–360, s/v 0–1) → 0xFFRRGGBB — 모바일 Ui.kt와 동일 변환 */
+private fun hsvToArgb(h: Float, s: Float, v: Float): Long {
+    val c = v * s
+    val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+    val m = v - c
+    val (r, g, b) = when {
+        h < 60f -> Triple(c, x, 0f)
+        h < 120f -> Triple(x, c, 0f)
+        h < 180f -> Triple(0f, c, x)
+        h < 240f -> Triple(0f, x, c)
+        h < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    fun ch(f: Float) = ((f + m) * 255f + 0.5f).toInt().coerceIn(0, 255).toLong()
+    return 0xFF000000 or (ch(r) shl 16) or (ch(g) shl 8) or ch(b)
+}
+
+private fun argbToHsv(argb: Long): Triple<Float, Float, Float> {
+    val r = (argb shr 16 and 0xFF) / 255f
+    val g = (argb shr 8 and 0xFF) / 255f
+    val b = (argb and 0xFF) / 255f
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val d = max - min
+    val h = when {
+        d == 0f -> 0f
+        max == r -> 60f * (((g - b) / d) % 6f)
+        max == g -> 60f * ((b - r) / d + 2f)
+        else -> 60f * ((r - g) / d + 4f)
+    }.let { if (it < 0f) it + 360f else it }
+    val s = if (max == 0f) 0f else d / max
+    return Triple(h, s, max)
 }
 
 /** OS 파일 선택창으로 배경 이미지를 골라 설정 폴더에 복사, 복사본 경로를 돌려준다 */

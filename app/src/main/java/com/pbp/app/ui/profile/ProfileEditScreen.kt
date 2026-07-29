@@ -451,6 +451,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 if (target == "name") nameColor = color else bubbleColor = color
                 customTarget = null
             },
+            initial = if (target == "name") nameColor else bubbleColor,
         )
     }
 }

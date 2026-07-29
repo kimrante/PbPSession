@@ -309,6 +309,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 vm.setThemeColor(color)
                 showCustomTheme = false
             },
+            initial = room?.themeColor,
         )
     }
 

@@ -2,12 +2,20 @@ package com.pbp.app.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
@@ -31,7 +39,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
@@ -43,6 +53,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -266,37 +278,188 @@ private fun textUnits(text: String): Float =
 
 /** 커스텀 색 입력 다이얼로그 (테마/이름/말풍선 색의 '커스텀' 선택지) */
 @Composable
-fun HexColorDialog(title: String, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
-    var hex by remember { mutableStateOf("") }
-    val parsed = hex.trim().removePrefix("#").let {
-        if (it.length == 6) it.toLongOrNull(16)?.or(0xFF000000) else null
+fun HexColorDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    onPick: (Long) -> Unit,
+    initial: Long? = null,
+) {
+    val seed = initial ?: 0xFF8EC5E8
+    val seedHsv = remember { argbToHsv(seed) }
+    var hue by remember { mutableStateOf(seedHsv.first) }
+    var sat by remember { mutableStateOf(seedHsv.second) }
+    var bri by remember { mutableStateOf(seedHsv.third) }
+    var hex by remember { mutableStateOf("%06X".format(seed and 0xFFFFFF)) }
+    val current = hsvToArgb(hue, sat, bri)
+
+    // 드래그 → HEX 표기 동기화. HEX 입력 → 팔레트 동기화 (onValueChange에서)
+    fun syncHex() {
+        hex = "%06X".format(hsvToArgb(hue, sat, bri) and 0xFFFFFF)
     }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column {
-                OutlinedTextField(
-                    value = hex,
-                    onValueChange = { hex = it },
-                    label = { Text("HEX 색상 (예: 8EC5E8)") },
-                    singleLine = true,
-                )
-                if (parsed != null) {
+                // 채도(가로)·명도(세로) 팔레트 — 드래그/탭으로 선택
+                var svSize by remember { mutableStateOf(IntSize.Zero) }
+                fun pickSv(x: Float, y: Float) {
+                    if (svSize == IntSize.Zero) return
+                    sat = (x / svSize.width).coerceIn(0f, 1f)
+                    bri = 1f - (y / svSize.height).coerceIn(0f, 1f)
+                    syncHex()
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.White, Color(hsvToArgb(hue, 1f, 1f)))
+                            )
+                        )
+                        .background(
+                            Brush.verticalGradient(listOf(Color.Transparent, Color.Black))
+                        )
+                        .onSizeChanged { svSize = it }
+                        .pointerInput(Unit) {
+                            detectTapGestures { p -> pickSv(p.x, p.y) }
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, _ ->
+                                change.consume()
+                                pickSv(change.position.x, change.position.y)
+                            }
+                        }
+                ) {
                     Box(
                         Modifier
-                            .size(60.dp, 24.dp)
+                            .offset {
+                                IntOffset(
+                                    (sat * svSize.width).toInt() - 8.dp.roundToPx(),
+                                    ((1f - bri) * svSize.height).toInt() - 8.dp.roundToPx(),
+                                )
+                            }
+                            .size(16.dp)
+                            .border(2.dp, Color.White, CircleShape)
+                            .clip(CircleShape)
+                            .background(Color(current))
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                // 색상(Hue) 띠
+                var hueSize by remember { mutableStateOf(IntSize.Zero) }
+                fun pickHue(x: Float) {
+                    if (hueSize == IntSize.Zero) return
+                    hue = (x / hueSize.width).coerceIn(0f, 1f) * 359.9f
+                    syncHex()
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    Color(0xFFFF0000), Color(0xFFFFFF00), Color(0xFF00FF00),
+                                    Color(0xFF00FFFF), Color(0xFF0000FF), Color(0xFFFF00FF),
+                                    Color(0xFFFF0000),
+                                )
+                            )
+                        )
+                        .onSizeChanged { hueSize = it }
+                        .pointerInput(Unit) {
+                            detectTapGestures { p -> pickHue(p.x) }
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, _ ->
+                                change.consume()
+                                pickHue(change.position.x)
+                            }
+                        }
+                ) {
+                    Box(
+                        Modifier
+                            .offset {
+                                IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
+                            }
+                            .size(16.dp, 18.dp)
+                            .border(2.dp, Color.White, CircleShape)
+                            .clip(CircleShape)
+                            .background(Color(hsvToArgb(hue, 1f, 1f)))
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(40.dp, 28.dp)
                             .clip(RoundedCornerShape(6.dp))
-                            .background(Color(parsed))
+                            .background(Color(current))
+                            .border(1.dp, Pbp.colors.line, RoundedCornerShape(6.dp))
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    OutlinedTextField(
+                        value = hex,
+                        onValueChange = { typed ->
+                            hex = typed
+                            typed.trim().removePrefix("#")
+                                .takeIf { it.length == 6 }?.toLongOrNull(16)
+                                ?.or(0xFF000000)
+                                ?.let { color ->
+                                    val (h, s, v) = argbToHsv(color)
+                                    hue = h; sat = s; bri = v
+                                }
+                        },
+                        label = { Text("HEX (예: 8EC5E8)") },
+                        singleLine = true,
                     )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { parsed?.let(onPick) }, enabled = parsed != null) { Text("적용") }
+            TextButton(onClick = { onPick(current) }) { Text("적용") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+}
+
+/** HSV(h 0–360, s/v 0–1) → 0xFFRRGGBB — 팔레트 드래그 선택용 순수 변환 */
+fun hsvToArgb(h: Float, s: Float, v: Float): Long {
+    val c = v * s
+    val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+    val m = v - c
+    val (r, g, b) = when {
+        h < 60f -> Triple(c, x, 0f)
+        h < 120f -> Triple(x, c, 0f)
+        h < 180f -> Triple(0f, c, x)
+        h < 240f -> Triple(0f, x, c)
+        h < 300f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    fun ch(f: Float) = ((f + m) * 255f + 0.5f).toInt().coerceIn(0, 255).toLong()
+    return 0xFF000000 or (ch(r) shl 16) or (ch(g) shl 8) or ch(b)
+}
+
+/** 0xFFRRGGBB → HSV — HEX 입력·초기색을 팔레트 위치로 되돌릴 때 */
+fun argbToHsv(argb: Long): Triple<Float, Float, Float> {
+    val r = (argb shr 16 and 0xFF) / 255f
+    val g = (argb shr 8 and 0xFF) / 255f
+    val b = (argb and 0xFF) / 255f
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val d = max - min
+    val h = when {
+        d == 0f -> 0f
+        max == r -> 60f * (((g - b) / d) % 6f)
+        max == g -> 60f * ((b - r) / d + 2f)
+        else -> 60f * ((r - g) / d + 4f)
+    }.let { if (it < 0f) it + 360f else it }
+    val s = if (max == 0f) 0f else d / max
+    return Triple(h, s, max)
 }
 
 fun formatTime(millis: Long): String =

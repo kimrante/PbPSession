@@ -24,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -274,66 +275,86 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 )
                 Spacer(Modifier.height(PbpDimens.sp5))
 
-                FieldLabel("캐릭터 값 — 메시지에 {값이름}을 쓰면 값으로 바뀝니다")
-                stats.forEachIndexed { _, statEntry ->
-                    val (statName, statValue) = statEntry
+                FieldLabel("캐릭터 값")
+                // 값 목록은 패널 카드로 묶는다 (목업 mockup-profile-values)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(PbpDimens.rCard))
+                        .background(tokens.panel)
+                        .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
+                        .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp2),
+                ) {
+                    stats.forEachIndexed { _, statEntry ->
+                        val (statName, statValue) = statEntry
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = PbpDimens.sp3),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "{$statName}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF3B82F6),
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(statValue, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+                            Spacer(Modifier.width(PbpDimens.sp2))
+                            Box(
+                                Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(tokens.panel2)
+                                    // index 캡처는 연타 시 stale — 항목 자체로 제거 (P3-6)
+                                    .clickable { stats.remove(statEntry) },
+                                contentAlignment = Alignment.Center,
+                            ) { Text("✕", fontSize = 11.sp, color = tokens.inkDim) }
+                        }
+                        HorizontalDivider(thickness = 1.dp, color = tokens.line)
+                    }
                     Row(
-                        Modifier.fillMaxWidth().padding(bottom = PbpDimens.sp2),
+                        Modifier.padding(vertical = PbpDimens.sp2),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "{$statName}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF3B82F6),
-                            modifier = Modifier.weight(1f),
+                        OutlinedTextField(
+                            value = newStatName,
+                            onValueChange = { newStatName = it },
+                            modifier = Modifier.weight(1.2f),
+                            label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
+                            singleLine = true,
                         )
-                        Text(statValue, fontSize = 13.sp, color = tokens.ink)
                         Spacer(Modifier.width(PbpDimens.sp2))
-                        Box(
-                            Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = .08f))
-                                // index 캡처는 연타 시 stale — 항목 자체로 제거 (P3-6)
-                                .clickable { stats.remove(statEntry) },
-                            contentAlignment = Alignment.Center,
-                        ) { Text("✕", fontSize = 11.sp, color = tokens.inkDim) }
+                        OutlinedTextField(
+                            value = newStatValue,
+                            onValueChange = { newStatValue = it },
+                            modifier = Modifier.weight(0.8f),
+                            label = { Text("값 (예: 50)", fontSize = 10.sp) },
+                            singleLine = true,
+                        )
+                        Spacer(Modifier.width(PbpDimens.sp2))
+                        TextButton(
+                            onClick = {
+                                val statName = newStatName.trim()
+                                // 같은 이름이 있으면 값을 교체 — 중복 항목 방지 (P1-8)
+                                val existingIdx = stats.indexOfFirst { it.first == statName }
+                                if (existingIdx >= 0) {
+                                    stats[existingIdx] = statName to newStatValue.trim()
+                                } else {
+                                    stats.add(statName to newStatValue.trim())
+                                }
+                                newStatName = ""
+                                newStatValue = ""
+                            },
+                            enabled = newStatName.isNotBlank(),
+                        ) { Text("추가", fontSize = 11.sp, color = tokens.signatureInk) }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = newStatName,
-                        onValueChange = { newStatName = it },
-                        modifier = Modifier.weight(1.2f),
-                        label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
-                        singleLine = true,
-                    )
-                    Spacer(Modifier.width(PbpDimens.sp2))
-                    OutlinedTextField(
-                        value = newStatValue,
-                        onValueChange = { newStatValue = it },
-                        modifier = Modifier.weight(0.8f),
-                        label = { Text("값 (예: 50)", fontSize = 10.sp) },
-                        singleLine = true,
-                    )
-                    Spacer(Modifier.width(PbpDimens.sp2))
-                    TextButton(
-                        onClick = {
-                            val statName = newStatName.trim()
-                            // 같은 이름이 있으면 값을 교체 — 중복 항목 방지 (P1-8)
-                            val existingIdx = stats.indexOfFirst { it.first == statName }
-                            if (existingIdx >= 0) {
-                                stats[existingIdx] = statName to newStatValue.trim()
-                            } else {
-                                stats.add(statName to newStatValue.trim())
-                            }
-                            newStatName = ""
-                            newStatValue = ""
-                        },
-                        enabled = newStatName.isNotBlank(),
-                    ) { Text("추가", fontSize = 11.sp, color = tokens.signature) }
-                }
+                Text(
+                    "메시지에 {값이름}을 쓰면 값으로 바뀌고, 입력창에 값 이름을 입력하면 판정 매크로가 추천됩니다",
+                    fontSize = 10.sp,
+                    color = tokens.inkDim,
+                    modifier = Modifier.padding(top = PbpDimens.sp2),
+                )
                 Spacer(Modifier.height(PbpDimens.sp5))
 
                 // 실시간 미리보기 — 방 배경 위 조합 확인 (스펙 3장 화면3)
@@ -398,7 +419,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     TextButton(
                         onClick = { vm.delete(existing!!) { nav.popBackStack() } },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
-                    ) { Text("캐릭터 삭제", color = tokens.signature, fontSize = 13.sp) }
+                    ) { Text("캐릭터 삭제", color = tokens.signatureInk, fontSize = 13.sp) }
                 }
                 Spacer(Modifier.height(PbpDimens.sp6))
             }

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 목업 — 메시지 편집·삭제 팝업 (화이트 모드)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* 디자인 토큰 — trpg-app-mockup-light.html 화이트 모드 + v2 스페이싱 */
+:root{
+  --bg:#f4f2ec; --panel:#ffffff; --panel-2:#efeade;
+  --line:rgba(20,25,32,.10); --ink:#23272e; --ink-dim:#6d7480;
+  --postit:#ffd05c; --accent:#e0b13e; --accent-ink:#a3781a;
+  --theme:#5f9ec7; --fail:#c94f4f;
+  --bubble-me:#ffd9a8; --bubble-you:#bfe3f6; --bubble-ink:#10151c;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-pill:999px;
+  --appbar-h:56px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#e9e5db;color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
+  display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px;
+}
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px}
+.screen{border-radius:29px;overflow:hidden;background:var(--bg);height:704px;display:flex;flex-direction:column;position:relative}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700;position:relative;z-index:1}
+
+/* 채팅 배경 — 아침 안개의 등대 (라이트 목업 02장) + 밝은 가독성 베일 */
+.chat-bg{
+  flex:1;display:flex;flex-direction:column;min-height:0;position:relative;
+  background:
+    radial-gradient(340px 200px at 82% 12%, rgba(255,238,190,.75), transparent 62%),
+    radial-gradient(500px 340px at 20% 108%, rgba(148,186,214,.55), transparent 70%),
+    linear-gradient(178deg,#b9d2e4 0%, #d6e4ee 45%, #eef3f6 100%);
+}
+.chat-bg::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(249,251,253,.6),rgba(249,251,253,.22) 30%,rgba(249,251,253,.62));pointer-events:none}
+.chat-bg>*{position:relative}
+.appbar{height:var(--appbar-h);flex-shrink:0;display:flex;align-items:center;padding:0 var(--sp-2);gap:2px;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.35))}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:17px;color:rgba(20,25,32,.7)}
+.grow{flex:1;min-width:0}
+.bar-title{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-sub{font-size:10px;color:rgba(20,25,32,.55);display:flex;align-items:center;gap:5px}
+
+.msgs{flex:1;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);overflow:hidden}
+.narr{background:rgba(255,255,255,.78);border-radius:4px var(--r-card) var(--r-card) 4px;padding:var(--sp-3) var(--sp-4);box-shadow:0 3px 12px rgba(60,70,85,.12)}
+.narr p{font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;color:#3c3526}
+.narr .sig{display:flex;gap:6px;margin-top:var(--sp-2);align-items:center}
+.narr .sig b{font-size:10px;color:var(--accent-ink)}
+.narr .sig span{font-size:10px;color:rgba(20,25,32,.42)}
+.mrow{display:flex;gap:var(--sp-2);align-items:flex-end}
+.mrow.me{justify-content:flex-end}
+.avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--panel-2);border:1px solid rgba(255,255,255,.85);align-self:flex-start}
+.mcol{display:flex;flex-direction:column;max-width:210px}
+.mrow.me .mcol{align-items:flex-end}
+.mname{font-size:11px;font-weight:700;margin-bottom:var(--sp-1);text-shadow:0 1px 3px rgba(255,255,255,.8)}
+.bubble{border-radius:4px var(--r-card) var(--r-card) var(--r-card);padding:var(--sp-2) var(--sp-3);font-size:13px;line-height:1.5;color:var(--bubble-ink);font-weight:500;width:fit-content;box-shadow:0 2px 8px rgba(60,70,85,.10)}
+.mrow.me .bubble{border-radius:var(--r-card) 4px var(--r-card) var(--r-card)}
+.mtime{font-size:10px;color:rgba(20,25,32,.5);flex-shrink:0;padding-bottom:2px}
+
+/* ── 롱프레스 액션 팝업 ── */
+.dim{position:absolute;inset:0;background:rgba(30,35,45,.38);z-index:2;display:flex;flex-direction:column;justify-content:center;padding:0 var(--sp-5);backdrop-filter:blur(2px)}
+/* 길게 누른 대상 말풍선 — 원래 위치감을 살려 팝업 위에 띄운다 */
+.target{display:flex;justify-content:flex-end;margin-bottom:var(--sp-3)}
+.target .wrap{display:flex;flex-direction:column;align-items:flex-end}
+.target .mname{color:#fff!important;text-shadow:0 1px 4px rgba(20,25,32,.6)}
+.target .bubble{box-shadow:0 0 0 2px var(--accent), 0 14px 34px rgba(30,40,55,.35)}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sheet);padding:var(--sp-5) var(--sp-5) var(--sp-4);box-shadow:0 24px 60px rgba(30,40,55,.35)}
+.dlg h3{font-size:15px;font-weight:700;margin-bottom:var(--sp-3);color:var(--ink)}
+.opt{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell)}
+.opt.hover{background:rgba(20,25,32,.04)}
+.opt .ic{width:34px;height:34px;border-radius:var(--r-cell);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.opt.edit .ic{background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5)}
+.opt.danger .ic{background:rgba(201,79,79,.10);border:1px solid rgba(201,79,79,.3)}
+.opt b{display:block;font-size:13px;color:var(--accent-ink);font-weight:700}
+.opt.danger b{color:var(--fail)}
+.opt span{font-size:11px;color:var(--ink-dim);display:block;line-height:1.5}
+.acts{display:flex;justify-content:flex-end;margin-top:var(--sp-2)}
+.acts i{font-style:normal;font-size:13px;font-weight:700;color:var(--ink-dim);padding:8px 12px;border-radius:var(--r-pill)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+    <div class="chat-bg">
+      <div class="appbar">
+        <div class="icon-btn">←</div>
+        <div class="grow">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub"><i style="width:8px;height:8px;border-radius:3px;background:var(--theme);display:inline-block"></i> 마스터</div>
+        </div>
+        <div class="icon-btn">↓</div>
+        <div class="icon-btn">⚙</div>
+      </div>
+      <div class="msgs">
+        <div class="narr">
+          <p>아침 아홉 시의 등대는 안개에 잠겨 윤곽만 남아 있었다. 계단을 오르는 발소리만이 탑 안쪽을 천천히 울렸다.</p>
+          <div class="sig"><b>GM 세라 · 서술</b><span>21:02</span></div>
+        </div>
+        <div class="mrow">
+          <div class="avatar">🌊</div>
+          <div class="mcol">
+            <div class="mname" style="color:#33719c">카야</div>
+            <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+          </div>
+          <div class="mtime">21:03</div>
+        </div>
+        <div class="mrow me">
+          <div class="mtime">21:05</div>
+          <div class="mcol">
+            <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+            <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지. 어젯밤 난파선 얘기, 듣고 싶지 않소?</div>
+          </div>
+          <div class="avatar">🌙</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 롱프레스 → 딤 + 대상 말풍선 하이라이트 + 액션 팝업 -->
+    <div class="dim">
+      <div class="target">
+        <div class="wrap">
+          <div class="mname">밤샘꾼 · 21:05</div>
+          <div class="bubble" style="background:var(--bubble-me);border-radius:var(--r-card) 4px var(--r-card) var(--r-card)">값은 이야기로 치르지. 어젯밤 난파선 얘기, 듣고 싶지 않소?</div>
+        </div>
+      </div>
+      <div class="dlg">
+        <h3>메시지</h3>
+        <div class="opt edit hover">
+          <div class="ic">✏️</div>
+          <div><b>편집</b><span>본문을 고치면 (수정됨) 표시가 남습니다</span></div>
+        </div>
+        <div class="opt danger">
+          <div class="ic">🗑️</div>
+          <div><b>삭제</b><span>공유된 방이면 상대 화면에서도 사라집니다</span></div>
+        </div>
+        <div class="acts"><i>취소</i></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

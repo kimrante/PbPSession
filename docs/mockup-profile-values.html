@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 목업 — 프로필 편집 + 캐릭터 값</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* 디자인 토큰 — trpg-app-mockup-v2.html 0장과 동일 */
+:root{
+  --bg:#0d1117; --panel:#161c24; --panel-2:#1d2530;
+  --line:rgba(255,255,255,.08); --ink:#e8ecf2; --ink-dim:#8b95a5;
+  --postit:#ffd972; --value:#3b82f6; --bubble-ink:#10151c;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-pill:999px;
+  --appbar-h:56px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
+  display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px;
+}
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 0 0 3px #000;padding:10px}
+.screen{border-radius:29px;overflow:hidden;background:var(--bg);height:704px;display:flex;flex-direction:column}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:var(--ink-dim);font-weight:700}
+
+.appbar{height:var(--appbar-h);flex-shrink:0;display:flex;align-items:center;padding:0 var(--sp-2);gap:2px}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink)}
+.bar-title{font-size:15px;font-weight:700;flex:1}
+.savepill{background:var(--postit);color:#1a1a1a;font-size:11px;font-weight:700;border-radius:var(--r-pill);padding:8px 16px;margin-right:var(--sp-2)}
+
+.body16{padding:0 var(--sp-4);flex:1;overflow:hidden}
+
+.photo{display:flex;flex-direction:column;align-items:center;gap:6px;padding:var(--sp-2) 0 0}
+.avatar-lg{width:72px;height:72px;border-radius:50%;border:3px solid var(--postit);background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:32px}
+.pickbtn{border:1px solid rgba(255,255,255,.25);border-radius:var(--r-pill);padding:5px 12px;font-size:11px;font-weight:700}
+.hint{font-size:10px;color:var(--ink-dim)}
+
+.sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--ink-dim);margin:var(--sp-4) 0 var(--sp-2)}
+.input{border:1px solid rgba(255,255,255,.18);border-radius:var(--r-cell);padding:10px 14px;font-size:13px;color:var(--ink)}
+
+.swrow{display:flex;gap:6px}
+.swc{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:var(--bubble-ink)}
+.swc.sel{outline:2px solid #fff;outline-offset:2px}
+.swc.rainbow{background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666);color:#fff}
+
+/* 캐릭터 값 — 이 화면의 핵심 요소 */
+.value-card{border:1px solid var(--line);border-radius:var(--r-card);background:rgba(255,255,255,.03);padding:var(--sp-2) var(--sp-4)}
+.statrow{display:flex;align-items:center;gap:var(--sp-2);padding:10px 0;border-bottom:1px solid var(--line)}
+.statrow:last-of-type{border-bottom:none}
+.statrow b{color:var(--value);font-size:13px;flex:1;font-weight:700}
+.statrow .v{font-size:13px;font-weight:700}
+.statrow .judge{font-size:10px;color:var(--postit);background:rgba(255,217,114,.12);border:1px solid rgba(255,217,114,.35);border-radius:var(--r-pill);padding:2px 8px}
+.statrow .del{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--ink-dim);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.addrow{display:flex;gap:var(--sp-2);align-items:center;padding-top:var(--sp-2)}
+.addrow .input{margin:0;color:var(--ink-dim);font-size:11px}
+.addrow .f1{flex:1.2}.addrow .f2{flex:.8}
+.addrow .go{color:var(--postit);font-size:11px;font-weight:700;padding:8px 4px}
+.value-hint{font-size:10px;color:var(--ink-dim);line-height:1.7;margin-top:var(--sp-2)}
+.value-hint code{background:var(--panel-2);border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--postit);font-size:10px;white-space:nowrap}
+.value-hint b{color:var(--value)}
+
+.footer-del{text-align:center;color:var(--postit);font-size:13px;font-weight:700;padding:var(--sp-4) 0 var(--sp-2)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar"><span>21:52</span><span>▲ ● ▮</span></div>
+    <div class="appbar">
+      <div class="icon-btn">←</div>
+      <div class="bar-title">프로필 편집</div>
+      <div class="savepill">저장</div>
+    </div>
+    <div class="body16">
+      <div class="photo">
+        <div class="avatar-lg">🗡️</div>
+        <div class="pickbtn">이미지 선택</div>
+        <div class="hint">프로필 이미지는 원형으로 잘려 표시됩니다</div>
+      </div>
+
+      <div class="sec-label">캐릭터 이름</div>
+      <div class="input">리안</div>
+
+      <div style="display:flex;gap:var(--sp-4)">
+        <div style="flex:1">
+          <div class="sec-label">이름 색</div>
+          <div class="swrow">
+            <div class="swc sel" style="background:#ffc46b">✓</div>
+            <div class="swc" style="background:#8ec5e8"></div>
+            <div class="swc" style="background:#c9a7e8"></div>
+            <div class="swc rainbow">＋</div>
+          </div>
+        </div>
+        <div style="flex:1">
+          <div class="sec-label">말풍선 색</div>
+          <div class="swrow">
+            <div class="swc sel" style="background:#ffd9a8">✓</div>
+            <div class="swc" style="background:#bfe3f6"></div>
+            <div class="swc" style="background:#cdeed9"></div>
+            <div class="swc rainbow">＋</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-label">캐릭터 값 <span style="letter-spacing:0;font-weight:400">— 판정 매크로 · 치환의 원천</span></div>
+      <div class="value-card">
+        <div class="statrow"><b>{근력}</b><span class="judge">1d100≤60 판정</span><span class="v">60</span><div class="del">✕</div></div>
+        <div class="statrow"><b>{은신}</b><span class="judge">1d100≤50 판정</span><span class="v">50</span><div class="del">✕</div></div>
+        <div class="statrow"><b>{매력}</b><span class="judge">1d100≤65 판정</span><span class="v">65</span><div class="del">✕</div></div>
+        <div class="addrow">
+          <div class="input f1">값 이름 (예: 회피)</div>
+          <div class="input f2">값 (예: 50)</div>
+          <div class="go">추가</div>
+        </div>
+      </div>
+      <p class="value-hint">
+        메시지의 <code>{은신}</code>은 <b>50</b>으로 치환 · 값 이름 입력 시 <code>은신 판정</code> 추천 칩 · ccfolia 코드 자동 등록
+      </p>
+
+      <div class="footer-del">캐릭터 삭제</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

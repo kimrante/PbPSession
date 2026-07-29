@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.coil.compose)
+    implementation(libs.gson) // ccfolia 캐릭터 코드(JSON) 파싱
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.messaging)

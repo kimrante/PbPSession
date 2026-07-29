@@ -129,6 +129,16 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     fun delete(message: Message) = viewModelScope.launch { repo.deleteMessage(message) }
 
+    /** 클립보드의 ccfolia식 캐릭터 코드로 새 캐릭터 생성 */
+    fun createFromCode(imported: com.pbp.app.data.CharacterCodec.Imported) = viewModelScope.launch {
+        repo.saveProfile(
+            CharacterProfile(
+                name = imported.name,
+                stats = com.pbp.app.data.ProfileStats.encode(imported.stats),
+            )
+        )
+    }
+
     fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
         val ok = withContext(Dispatchers.IO) {
             runCatching {
@@ -160,6 +170,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     var editTarget by remember { mutableStateOf<Message?>(null) }
     var deleteTarget by remember { mutableStateOf<Message?>(null) }
+    var showAddProfile by remember { mutableStateOf(false) }
 
     // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
     val incomingCount = messages.count { it.incoming }
@@ -279,11 +290,42 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     themeColor = themeColor,
                     onSwitch = { vm.switchTo(it) },
                     onEditProfile = { nav.navigate("profile/${it.id}") },
-                    onAddProfile = { nav.navigate("profile/0") },
+                    onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc -> vm.send(text, ooc) },
                 )
             }
         }
+    }
+
+    if (showAddProfile) {
+        AddProfileDialog(
+            onDismiss = { showAddProfile = false },
+            onEmpty = {
+                showAddProfile = false
+                nav.navigate("profile/0")
+            },
+            onClipboard = {
+                showAddProfile = false
+                val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager)
+                    .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                val imported = clip?.let { com.pbp.app.data.CharacterCodec.parse(it) }
+                if (imported != null) {
+                    vm.createFromCode(imported)
+                    Toast.makeText(
+                        context,
+                        "'${imported.name}' 캐릭터를 만들었습니다 (값 ${imported.stats.size}개)",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        context,
+                        "클립보드에서 캐릭터 코드를 찾지 못했습니다",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
+        )
     }
 
     editTarget?.let { target ->
@@ -789,6 +831,49 @@ private fun InputZone(
                 contentAlignment = Alignment.Center,
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
         }
+    }
+}
+
+/** 캐릭터 추가 방식 선택 — 클립보드의 ccfolia식 캐릭터 코드 또는 빈 캐릭터 */
+@Composable
+private fun AddProfileDialog(
+    onDismiss: () -> Unit,
+    onEmpty: () -> Unit,
+    onClipboard: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("캐릭터 추가") },
+        text = {
+            Column {
+                AddOptionRow(
+                    title = "클립보드 코드로 생성",
+                    subtitle = "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
+                    onClick = onClipboard,
+                )
+                AddOptionRow(
+                    title = "빈 캐릭터 생성",
+                    subtitle = "이름과 색만 정해 새로 만들기",
+                    onClick = onEmpty,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
+}
+
+@Composable
+private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
+    val tokens = Pbp.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+    ) {
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
+        Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
     }
 }
 

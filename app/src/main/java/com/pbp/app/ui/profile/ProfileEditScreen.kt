@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -138,7 +139,13 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     if (!loaded) return
 
     Scaffold(containerColor = tokens.bg) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        // Scaffold가 적용한 인셋을 소비해 imePadding 이중 적용(키보드 위 틈) 방지
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .consumeWindowInsets(padding)
+        ) {
             // 상단 바
             Row(
                 Modifier

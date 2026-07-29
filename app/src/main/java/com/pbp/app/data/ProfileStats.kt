@@ -27,6 +27,23 @@ object ProfileStats {
             }
 
     /**
+     * 채팅 팔레트 추천: 입력 중인 짧은 텍스트가 값 이름과 부분 일치하면
+     * `1d100<={이름}` 판정 매크로 후보를 돌려준다. 숫자 값만 판정 대상.
+     * 앞부분 일치를 우선하고 최대 6개.
+     */
+    fun paletteSuggestions(query: String, stats: List<Pair<String, String>>): List<String> {
+        val q = query.trim()
+        if (q.isEmpty() || q.length > 12 || q.any { it.isWhitespace() }) return emptyList()
+        return stats
+            .filter { (name, value) ->
+                value.trim().toIntOrNull() != null && name.contains(q, ignoreCase = true)
+            }
+            .sortedByDescending { it.first.startsWith(q, ignoreCase = true) }
+            .map { it.first }
+            .take(6)
+    }
+
+    /**
      * `{값이름}`을 값으로 바꾼다. 등록되지 않은 이름은 그대로 둔다.
      * @return plain(다이스 파싱용 순수 값) to marked(화면 저장용 `{{값}}` 마커 포함)
      */

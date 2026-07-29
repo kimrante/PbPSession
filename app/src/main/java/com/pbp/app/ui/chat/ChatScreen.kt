@@ -692,6 +692,14 @@ private fun InputZone(
     // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
+    // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
+    val activeStats = remember(profiles, activeId) {
+        profiles.find { it.id == activeId }
+            ?.let { com.pbp.app.data.ProfileStats.decode(it.stats) } ?: emptyList()
+    }
+    val suggestions = remember(input, activeStats) {
+        com.pbp.app.data.ProfileStats.paletteSuggestions(input, activeStats)
+    }
     val onOocToggle = { oocOn = !oocOn }
     val onInputChange = { text: String -> input = text }
     Column(
@@ -744,6 +752,28 @@ private fun InputZone(
             }
         }
         Spacer(Modifier.height(8.dp))
+        if (suggestions.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(suggestions, key = { it }) { name ->
+                    Text(
+                        "$name 판정",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = tokens.signature,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(tokens.signature.copy(alpha = .14f))
+                            .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
+                            .clickable {
+                                onSend("1d100<={$name}", false)
+                                input = ""
+                            }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(7.dp))
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             // 잡담 토글
             Row(

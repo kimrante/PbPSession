@@ -35,6 +35,24 @@ class ProfileStatsTest {
     }
 
     @Test
+    fun `팔레트 추천 - 부분 일치하는 숫자 값만, 앞부분 일치 우선`() {
+        val stats = listOf(
+            "LUK" to "50", "LUKmax" to "99", "SAN" to "50",
+            "피해 보너스" to "1D4", "memo" to "긴 소개글",
+        )
+        assertEquals(listOf("LUK", "LUKmax"), ProfileStats.paletteSuggestions("L", stats))
+        assertEquals(listOf("LUK", "LUKmax"), ProfileStats.paletteSuggestions("luk", stats))
+        assertEquals(listOf("SAN"), ProfileStats.paletteSuggestions("SAN", stats))
+        // 숫자가 아닌 값(1D4, memo)은 판정 후보가 아니다
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("피해", stats))
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("memo", stats))
+        // 빈 입력·공백 포함·긴 문장은 추천하지 않는다
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("", stats))
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("LUK 판정", stats))
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("아주아주아주아주긴입력이다", stats))
+    }
+
+    @Test
     fun `다이스 비교식에 값을 쓸 수 있다 - plain은 순수 숫자`() {
         val (plain, _) = ProfileStats.substitute("1d100<={은신} 판정", mapOf("은신" to "50"))
         assertEquals("1d100<=50 판정", plain)

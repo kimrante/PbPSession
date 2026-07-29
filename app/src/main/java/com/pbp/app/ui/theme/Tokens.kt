@@ -3,6 +3,7 @@ package com.pbp.app.ui.theme
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 /**
  * 디자인 토큰 (docs/PbP-design-spec.md 2장).
@@ -70,6 +71,32 @@ val PbpLightColors = PbpColors(
 )
 
 val LocalPbpColors = staticCompositionLocalOf { PbpDarkColors }
+
+/**
+ * 통일 스페이싱·반경 토큰 (docs/trpg-app-mockup-v2.html 0장).
+ * 여백은 4dp 그리드 6단계, 반경은 4단계만 사용한다 — 이 밖의 매직 넘버 금지.
+ * 글자 크기는 18/15/13/11/10sp 5단계(+배지 한정 9sp)를 리터럴로 쓴다.
+ */
+object PbpDimens {
+    // 여백 스케일
+    val sp1 = 4.dp   // 밀착: 이름↔말풍선, 연속 말풍선 간격
+    val sp2 = 8.dp   // 요소 기본 간격, 라벨↔필드
+    val sp3 = 12.dp  // 카드 사이, 메시지 그룹 사이
+    val sp4 = 16.dp  // ★ 모든 화면 가장자리, 카드 내부
+    val sp5 = 24.dp  // 섹션 사이
+    val sp6 = 32.dp  // 화면 하단 여유
+
+    // 반경 스케일 (pill은 999.dp 리터럴 유지)
+    val rCell = 12.dp  // 그리드 셀, 입력 필드, 썸네일
+    val rCard = 16.dp  // 카드, 말풍선, 패널
+    val rSheet = 20.dp // 다이얼로그, 시트
+
+    // 고정 규격
+    val appBarHeight = 56.dp // 상단 바 — 전 화면 동일
+    val touchTarget = 40.dp  // 아이콘·전송 버튼
+    val avatarChat = 38.dp   // 채팅 말풍선 아바타
+    val avatarStrip = 36.dp  // 프로필 교체 스트립 아바타
+}
 
 /** 프리셋 팔레트 (목업 03·04 화면) */
 object PbpPalette {

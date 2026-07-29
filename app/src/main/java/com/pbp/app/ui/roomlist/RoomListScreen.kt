@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,6 +59,7 @@ import com.pbp.app.dice.Rules
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
@@ -118,19 +120,19 @@ fun RoomListScreen(nav: NavController) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // 헤더: 미니 앱 아이콘 + PbP 타이틀
+            // 헤더: 미니 앱 아이콘 + PbP 타이틀 — 상단 바 규격(56dp), 좌우는 화면 가장자리와 동일
             Row(
-                Modifier.padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 8.dp),
+                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.sp4),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(9.dp))
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Brush.linearGradient(listOf(Color(0xFF2A3340), Color(0xFF171D26)))),
                     contentAlignment = Alignment.Center,
                 ) { Text("⬦", color = Color(0xFFEFE8D6), fontSize = 18.sp) }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(PbpDimens.sp3))
                 Column {
                     Text(
                         "PbP",
@@ -143,10 +145,10 @@ fun RoomListScreen(nav: NavController) {
                 }
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = { showFont = true }) {
-                    Text("Aa", color = tokens.inkDim, fontSize = 13.sp)
+                    Text("Aa", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
                 TextButton(onClick = { showJoin = true }) {
-                    Text("참여", color = tokens.inkDim, fontSize = 13.sp)
+                    Text("참여", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -162,9 +164,9 @@ fun RoomListScreen(nav: NavController) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 14.dp, end = 14.dp, bottom = 90.dp,
+                        start = PbpDimens.sp4, end = PbpDimens.sp4, bottom = 88.dp, // FAB 높이 + 여백×2
                     ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
                 ) {
                     items(rooms, key = { it.id }) { room ->
                         RoomCard(
@@ -242,11 +244,11 @@ private fun RoomCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(PbpDimens.rCard))
             .background(if (tokens.isDark) Color(0x09FFFFFF) else tokens.panel)
-            .border(1.dp, tokens.line, RoundedCornerShape(16.dp))
+            .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 12.dp, vertical = 13.dp),
+            .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 썸네일: 방 배경(프리셋 그라데이션 또는 갤러리 이미지 크롭) + 테마 컬러 점
@@ -255,7 +257,7 @@ private fun RoomCard(
             Box(
                 Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(PbpDimens.rCell))
                     .then(
                         if (preset != null) {
                             Modifier.background(
@@ -286,12 +288,12 @@ private fun RoomCard(
                     .background(Color(room.themeColor))
             )
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(PbpDimens.sp3))
         Column(Modifier.weight(1f)) {
-            Text(room.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+            Text(room.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
             Text(
                 previewText(preview),
-                fontSize = 11.5.sp,
+                fontSize = 11.sp,
                 color = tokens.inkDim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -349,11 +351,11 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
                             .combinedClickable(onClick = {
                                 com.pbp.app.ui.theme.AppFonts.set(context, value)
                             })
-                            .padding(horizontal = 10.dp, vertical = 11.dp),
+                            .padding(PbpDimens.sp3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -361,10 +363,10 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
                             color = if (selected) tokens.signature else tokens.inkDim,
                             fontSize = 13.sp,
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(PbpDimens.sp2))
                         Text(
                             label,
-                            fontSize = 14.sp,
+                            fontSize = 13.sp,
                             fontFamily = if (value == com.pbp.app.ui.theme.AppFonts.GOWUN) GowunBatang else null,
                         )
                     }
@@ -386,7 +388,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, S
         onDismissRequest = onDismiss,
         title = { Text("새 세션") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -404,10 +406,10 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, S
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.dp, tokens.line, RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
+                            .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCell))
                             .combinedClickable(onClick = { ruleMenuOpen = true })
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                            .padding(PbpDimens.sp3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -433,7 +435,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, S
                 }
                 Text(
                     "방을 만들면 서술자(GM) 프로필과 마스터 권한이 자동 부여됩니다.",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = Pbp.colors.inkDim,
                 )
             }
@@ -450,7 +452,7 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String) -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("초대 코드로 참여") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
@@ -459,7 +461,7 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String) -> Unit) {
                 )
                 Text(
                     "상대가 방 설정의 '방 공유'에서 받은 코드를 입력하세요.",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = Pbp.colors.inkDim,
                 )
             }

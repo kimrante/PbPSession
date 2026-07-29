@@ -56,6 +56,7 @@ import com.pbp.app.PbpApp
 import com.pbp.app.data.Images
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -107,7 +108,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 .verticalScroll(rememberScrollState()),
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.sp2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { nav.popBackStack() }) {
@@ -125,9 +126,9 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             SectionTitle("테마 컬러")
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                modifier = Modifier.padding(horizontal = 16.dp).height(150.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = PbpDimens.sp4).height(150.dp),
+                horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
                 userScrollEnabled = false,
             ) {
                 items(PbpPalette.themePresets) { (color, label) ->
@@ -170,10 +171,10 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .height((76 * bgRows + 8 * (bgRows - 1) + 2).dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(horizontal = PbpDimens.sp4)
+                    .height((72 * bgRows + 8 * (bgRows - 1) + 2).dp),
+                horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
                 userScrollEnabled = false,
             ) {
                 items(PbpPalette.backgroundPresets.keys.toList()) { key ->
@@ -181,15 +182,15 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     val sel = room?.backgroundKey == key
                     Box(
                         Modifier
-                            .height(76.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .height(72.dp)
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
                             .background(
                                 Brush.verticalGradient(listOf(Color(preset.first), Color(preset.second)))
                             )
                             .border(
                                 1.5.dp,
                                 if (sel) tokens.signature else tokens.line,
-                                RoundedCornerShape(12.dp),
+                                RoundedCornerShape(PbpDimens.rCell),
                             )
                             .clickable { vm.setBackground(key) },
                         contentAlignment = Alignment.BottomStart,
@@ -202,9 +203,9 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         // 현재 커스텀 배경 미리보기 — 어떤 이미지인지 바로 보인다
                         Box(
                             Modifier
-                                .height(76.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .border(1.5.dp, tokens.signature, RoundedCornerShape(12.dp)),
+                                .height(72.dp)
+                                .clip(RoundedCornerShape(PbpDimens.rCell))
+                                .border(1.5.dp, tokens.signature, RoundedCornerShape(PbpDimens.rCell)),
                             contentAlignment = Alignment.BottomStart,
                         ) {
                             coil3.compose.AsyncImage(
@@ -220,7 +221,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 item {
                     Box(
                         Modifier
-                            .height(76.dp)
+                            .height(72.dp)
                             .dashedCell(tokens.line)
                             .clickable {
                                 bgPicker.launch(
@@ -231,7 +232,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     ) {
                         Text(
                             "갤러리에서\n선택",
-                            fontSize = 9.5.sp,
+                            fontSize = 10.sp,
                             color = tokens.inkDim,
                             textAlign = TextAlign.Center,
                         )
@@ -258,7 +259,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 title = "알림",
                 subtitle = "미확인 메시지 도착 시 푸시 · 본문은 표시되지 않습니다",
             ) { }
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(PbpDimens.sp6))
         }
     }
 
@@ -305,7 +306,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
 private fun UsingBadge(label: String = "사용 중") {
     Text(
         label,
-        fontSize = 8.5.sp,
+        fontSize = 9.sp,
         fontWeight = FontWeight.Bold,
         color = Color(0xFF1A1A1A),
         modifier = Modifier
@@ -326,16 +327,16 @@ private fun ThemeCell(
     val tokens = Pbp.colors
     Column(
         Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(PbpDimens.rCell))
             // 선택 표시는 배경 그리드와 동일하게 시그니처 옐로로 통일
             .background(if (selected) tokens.signature.copy(alpha = .12f) else Color(0x08FFFFFF))
             .border(
                 1.5.dp,
                 if (selected) tokens.signature else tokens.line,
-                RoundedCornerShape(12.dp),
+                RoundedCornerShape(PbpDimens.rCell),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 8.dp),
+            .padding(PbpDimens.sp2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         swatch(
@@ -344,10 +345,10 @@ private fun ThemeCell(
                 .height(26.dp)
                 .clip(RoundedCornerShape(8.dp))
         )
-        Spacer(Modifier.height(5.dp))
+        Spacer(Modifier.height(PbpDimens.sp1))
         Text(
             label,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             color = if (selected) tokens.signature else tokens.inkDim,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
@@ -358,11 +359,11 @@ private fun ThemeCell(
 private fun SectionTitle(text: String) {
     Text(
         text,
-        fontSize = 12.sp,
+        fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp,
         color = Pbp.colors.inkDim,
-        modifier = Modifier.padding(start = 18.dp, top = 18.dp, bottom = 10.dp),
+        modifier = Modifier.padding(start = PbpDimens.sp4, top = PbpDimens.sp5, bottom = PbpDimens.sp2),
     )
 }
 
@@ -373,17 +374,17 @@ private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 13.dp),
+            .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 13.sp, color = tokens.ink)
-            Text(subtitle, fontSize = 10.5.sp, color = tokens.inkDim)
+            Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
         }
         Text("›", fontSize = 16.sp, color = tokens.inkDim)
     }
 }
 
 private fun Modifier.dashedCell(color: Color): Modifier = this
-    .clip(RoundedCornerShape(12.dp))
-    .border(1.5.dp, color, RoundedCornerShape(12.dp))
+    .clip(RoundedCornerShape(PbpDimens.rCell))
+    .border(1.5.dp, color, RoundedCornerShape(PbpDimens.rCell))

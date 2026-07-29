@@ -122,7 +122,7 @@ fun ImageCropDialog(
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "드래그로 이동 · 두 손가락으로 확대/축소",
-                        fontSize = 11.5.sp,
+                        fontSize = 11.sp,
                         color = tokens.inkDim,
                     )
                 }

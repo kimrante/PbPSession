@@ -78,6 +78,7 @@ import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -210,8 +211,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .height(PbpDimens.appBarHeight)
                         .background(Color.Black.copy(alpha = if (tokens.isDark) 0.45f else 0.06f))
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = PbpDimens.sp2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = { nav.popBackStack() }) {
@@ -222,7 +224,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             room?.name ?: "",
                             fontFamily = GowunBatang,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.5.sp,
+                            fontSize = 15.sp,
                             color = tokens.ink,
                             maxLines = 1,
                         )
@@ -255,13 +257,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     reverseLayout = true,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                    contentPadding = PaddingValues(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
                 ) {
                     items(reversed.size, key = { reversed[it].id }) { revIdx ->
                         val message = reversed[revIdx]
                         // 같은 인물의 연속 메시지는 아바타·이름을 생략하고 간격을 좁힌다
                         val grouped = isContinuation(reversed.getOrNull(revIdx + 1), message)
-                        Box(Modifier.padding(top = if (grouped) 2.dp else 12.dp)) {
+                        Box(Modifier.padding(top = if (grouped) PbpDimens.sp1 else PbpDimens.sp3)) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
@@ -273,12 +275,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     if (messages.size >= limitValue) {
                         item(key = "load-older") {
                             Box(
-                                Modifier.fillMaxWidth().padding(top = 12.dp),
+                                Modifier.fillMaxWidth().padding(top = PbpDimens.sp3),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     "이전 대화 불러오기",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     color = tokens.inkDim,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(999.dp))
@@ -346,31 +348,31 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 Column {
                     Text(
                         "편집",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Pbp.colors.signature,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
                             .clickable {
                                 editTarget = target
                                 actionTarget = null
                             }
-                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                            .padding(PbpDimens.sp3),
                     )
                     Text(
                         "삭제",
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFF6B6B),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
                             .clickable {
                                 deleteTarget = target
                                 actionTarget = null
                             }
-                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                            .padding(PbpDimens.sp3),
                     )
                 }
             },
@@ -502,17 +504,25 @@ private fun NarrationBlock(
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
-    Box(Modifier.padding(horizontal = 8.dp)) {
+    // 좌우 여백은 메시지 목록의 contentPadding(16dp)에 맡긴다 — 별도 들여쓰기 없음
+    Box {
         Column(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 4.dp,
+                        topEnd = PbpDimens.rCard,
+                        bottomEnd = PbpDimens.rCard,
+                        bottomStart = 4.dp,
+                    )
+                )
                 .background(tokens.narrBg)
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { if (!message.incoming) onLongPress(message) },
                 )
-                .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
+                .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
         ) {
             MarkupText(
                 text = text,
@@ -522,7 +532,7 @@ private fun NarrationBlock(
                 fontFamily = GowunBatang,
                 lineHeight = 24.sp,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 7.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = PbpDimens.sp2)) {
                 val gmLabel = message.senderName
                     ?.let { if (it.startsWith("GM")) it else "GM $it" } ?: "GM"
                 Text(
@@ -532,10 +542,10 @@ private fun NarrationBlock(
                     color = tokens.signature,
                 )
                 Spacer(Modifier.width(6.dp))
-                Text(formatTime(message.createdAt), fontSize = 9.sp, color = tokens.inkDim)
+                Text(formatTime(message.createdAt), fontSize = 10.sp, color = tokens.inkDim)
                 if (message.editedAt != null) {
                     Spacer(Modifier.width(4.dp))
-                    Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+                    Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
             }
@@ -574,7 +584,7 @@ private fun BubbleRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
                 TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
@@ -584,11 +594,11 @@ private fun BubbleRow(
                     Avatar(
                         emoji = message.senderEmoji,
                         imagePath = message.senderImagePath,
-                        size = 38.dp,
+                        size = PbpDimens.avatarChat,
                         dimmed = message.isOoc,
                     )
                 } else {
-                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
+                    Box(Modifier.size(PbpDimens.avatarChat)) // 연속 메시지 — 자리만 유지
                 }
             }
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
@@ -599,12 +609,13 @@ private fun BubbleRow(
                         fontWeight = FontWeight.Bold,
                         color = nameColor,
                     )
-                    Spacer(Modifier.height(3.dp))
+                    Spacer(Modifier.height(PbpDimens.sp1))
                 }
+                val r = PbpDimens.rCard
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = 15.dp, topEnd = 4.dp, bottomEnd = 15.dp, bottomStart = 15.dp)
+                    RoundedCornerShape(topStart = r, topEnd = 4.dp, bottomEnd = r, bottomStart = r)
                 } else {
-                    RoundedCornerShape(topStart = 4.dp, topEnd = 15.dp, bottomEnd = 15.dp, bottomStart = 15.dp)
+                    RoundedCornerShape(topStart = 4.dp, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
                 val bubbleModifier = Modifier
                     .widthIn(max = 240.dp)
@@ -612,20 +623,20 @@ private fun BubbleRow(
                     .background(bubbleColor)
                     .then(
                         if (message.isOoc) {
-                            Modifier.dashedBorder(Color.White.copy(alpha = .18f), 15.dp)
+                            Modifier.dashedBorder(Color.White.copy(alpha = .18f), PbpDimens.rCard)
                         } else Modifier
                     )
                     .combinedClickable(
                         onClick = {},
                         onLongClick = { if (!message.incoming) onLongPress(message) },
                     )
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2)
                 Box(bubbleModifier) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (message.isOoc) {
                             Text(
                                 "잡담",
-                                fontSize = 8.5.sp,
+                                fontSize = 9.sp,
                                 color = inkColor,
                                 modifier = Modifier
                                     .padding(end = 5.dp)
@@ -635,10 +646,10 @@ private fun BubbleRow(
                         }
                         MarkupText(
                             text = body,
-                            fontSize = 12.5.sp,
+                            fontSize = 13.sp,
                             color = inkColor,
                             rubyColor = inkColor.copy(alpha = .65f),
-                            lineHeight = 19.sp,
+                            lineHeight = 20.sp,
                             fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
                         )
                     }
@@ -653,11 +664,11 @@ private fun BubbleRow(
                     Avatar(
                         emoji = message.senderEmoji,
                         imagePath = message.senderImagePath,
-                        size = 38.dp,
+                        size = PbpDimens.avatarChat,
                         dimmed = message.isOoc,
                     )
                 } else {
-                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
+                    Box(Modifier.size(PbpDimens.avatarChat)) // 연속 메시지 — 자리만 유지
                 }
             }
         }
@@ -670,9 +681,9 @@ private fun TimeStamp(message: Message, alignEnd: Boolean, modifier: Modifier = 
     val tokens = Pbp.colors
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         if (message.editedAt != null) {
-            Text("(수정됨)", fontSize = 8.5.sp, color = tokens.inkDim)
+            Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
         }
-        Text(formatTime(message.createdAt), fontSize = 9.sp, color = tokens.inkDim)
+        Text(formatTime(message.createdAt), fontSize = 10.sp, color = tokens.inkDim)
     }
 }
 
@@ -706,11 +717,11 @@ private fun InputZone(
         Modifier
             .fillMaxWidth()
             .background(if (tokens.isDark) Color(0xE0090C11) else tokens.panel.copy(alpha = .93f))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(start = PbpDimens.sp4, end = PbpDimens.sp4, top = PbpDimens.sp2, bottom = PbpDimens.sp3),
     ) {
         // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
             verticalAlignment = Alignment.Top,
         ) {
             items(profiles, key = { it.id }) { profile ->
@@ -725,12 +736,12 @@ private fun InputZone(
                     Avatar(
                         emoji = profile.emoji,
                         imagePath = profile.imagePath,
-                        size = 34.dp,
+                        size = PbpDimens.avatarStrip,
                         ringColor = if (on) tokens.signature else null,
                     )
                     Text(
                         profile.name,
-                        fontSize = 8.5.sp,
+                        fontSize = 10.sp,
                         color = if (on) tokens.signature else tokens.inkDim,
                         fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
@@ -741,19 +752,19 @@ private fun InputZone(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         Modifier
-                            .size(34.dp)
-                            .dashedBorder(Color.White.copy(alpha = .3f), 17.dp)
+                            .size(PbpDimens.avatarStrip)
+                            .dashedBorder(Color.White.copy(alpha = .3f), PbpDimens.avatarStrip / 2)
                             .clip(CircleShape)
                             .clickable(onClick = onAddProfile),
                         contentAlignment = Alignment.Center,
                     ) { Text("＋", color = tokens.inkDim, fontSize = 15.sp) }
-                    Text("추가", fontSize = 8.5.sp, color = tokens.inkDim)
+                    Text("추가", fontSize = 10.sp, color = tokens.inkDim)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(PbpDimens.sp2))
         if (suggestions.isNotEmpty()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
                 items(suggestions, key = { it }) { name ->
                     Text(
                         "$name 판정",
@@ -770,13 +781,13 @@ private fun InputZone(
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .padding(horizontal = PbpDimens.sp3, vertical = 5.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(PbpDimens.sp2))
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
             // 잡담 토글
             Row(
                 Modifier
@@ -788,7 +799,7 @@ private fun InputZone(
                         RoundedCornerShape(999.dp),
                     )
                     .clickable(onClick = onOocToggle)
-                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -850,14 +861,14 @@ private fun InputZone(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(PbpDimens.rCell),
                 maxLines = 4,
             )
             // 전송 버튼 — 방 테마 컬러 적용 (스펙 5장)
             Box(
                 Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    .size(PbpDimens.touchTarget)
+                    .clip(RoundedCornerShape(PbpDimens.rCell))
                     .background(if (canSend) themeColor else themeColor.copy(alpha = .35f))
                     .clickable(enabled = canSend, onClick = doSend),
                 contentAlignment = Alignment.Center,
@@ -900,11 +911,11 @@ private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(PbpDimens.rCell))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
+            .padding(PbpDimens.sp3),
     ) {
-        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
         Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
     }
 }

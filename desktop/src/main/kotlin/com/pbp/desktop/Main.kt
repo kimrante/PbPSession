@@ -401,9 +401,22 @@ private fun App() {
                 // 같은 인스턴스의 var를 고치면 Compose가 변화를 모른다 —
                 // 새 인스턴스로 교체해야 배경·테마가 즉시 화면에 반영된다 (버그 수정)
                 val updated = room.copy(themeColor = theme, backgroundKey = background)
+                val oldBackground = room.backgroundKey
                 rooms = rooms.map { if (it.remoteId == room.remoteId) updated else it }
                 selected = updated
                 persist()
+                // 교체된 커스텀 배경 파일은 다른 방이 안 쓰면 삭제 — 폴더 무한 누적 방지 (L3-1)
+                if (oldBackground != background && !oldBackground.startsWith("preset_") &&
+                    rooms.none { it.backgroundKey == oldBackground }
+                ) {
+                    scope.launch(Dispatchers.IO) {
+                        runCatching {
+                            val f = java.io.File(oldBackground)
+                            val bgDir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/backgrounds")
+                            if (f.parentFile?.canonicalFile == bgDir.canonicalFile) f.delete()
+                        }
+                    }
+                }
                 // PATCH가 서버에 착지하기 전 폴링이 옛 값을 다시 덮지 않도록 유예 (P3-14)
                 metaFreezeUntil = System.currentTimeMillis() + 15_000
                 scope.launch(Dispatchers.IO) {
@@ -1531,14 +1544,20 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
                     BackgroundLayer(background, Modifier.fillMaxSize())
                 }
             }
-            // 파일에서 선택 — 이미지를 ~/.pbp-desktop/backgrounds/에 복사해 경로를 보관
+            // 파일에서 선택 — 이미지를 ~/.pbp-desktop/backgrounds/에 저장해 경로를 보관
+            var picking by remember { mutableStateOf(false) }
             Box(
                 Modifier.size(width = 64.dp, height = 44.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .border(1.dp, Tokens.Line, RoundedCornerShape(10.dp))
-                    .clickable {
+                    .clickable(enabled = !picking) {
+                        picking = true
                         scope.launch(Dispatchers.IO) {
-                            pickBackgroundFile()?.let { background = it }
+                            try {
+                                pickBackgroundFile()?.let { background = it }
+                            } finally {
+                                picking = false
+                            }
                         }
                     },
                 contentAlignment = Alignment.Center,
@@ -1732,7 +1751,11 @@ private fun argbToHsv(argb: Long): Triple<Float, Float, Float> {
     return Triple(h, s, max)
 }
 
-/** OS 파일 선택창으로 배경 이미지를 골라 설정 폴더에 복사, 복사본 경로를 돌려준다 */
+/**
+ * OS 파일 선택창으로 배경 이미지를 골라 설정 폴더에 저장, 저장본 경로를 돌려준다.
+ * 원본이 크면 최대 1600px로 줄여 JPEG로 저장 — 모바일 Images.kt와 동일 정책
+ * (매 실행 풀사이즈 디코딩으로 인한 메모리·시작 지연 방지).
+ */
 private fun pickBackgroundFile(): String? {
     val fd = java.awt.FileDialog(null as java.awt.Frame?, "배경 이미지 선택", java.awt.FileDialog.LOAD)
     fd.setFilenameFilter { _, name ->
@@ -1745,10 +1768,30 @@ private fun pickBackgroundFile(): String? {
     val destDir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/backgrounds")
     return runCatching {
         destDir.mkdirs()
-        val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.${src.extension.ifEmpty { "img" }}")
-        src.copyTo(dest, overwrite = true)
-        dest.absolutePath
-    }.onFailure { System.err.println("배경 이미지 복사 실패: $it") }.getOrNull()
+        val image = org.jetbrains.skia.Image.makeFromEncoded(src.readBytes())
+        val maxDim = maxOf(image.width, image.height)
+        if (maxDim <= 1600) {
+            val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.${src.extension.ifEmpty { "img" }}")
+            src.copyTo(dest, overwrite = true)
+            dest.absolutePath
+        } else {
+            val scale = 1600f / maxDim
+            val w = (image.width * scale).toInt().coerceAtLeast(1)
+            val h = (image.height * scale).toInt().coerceAtLeast(1)
+            val surface = org.jetbrains.skia.Surface.makeRasterN32Premul(w, h)
+            surface.canvas.drawImageRect(
+                image,
+                org.jetbrains.skia.Rect.makeWH(image.width.toFloat(), image.height.toFloat()),
+                org.jetbrains.skia.Rect.makeWH(w.toFloat(), h.toFloat()),
+            )
+            val jpeg = surface.makeImageSnapshot()
+                .encodeToData(org.jetbrains.skia.EncodedImageFormat.JPEG, 85)
+                ?: error("배경 이미지 인코딩 실패")
+            val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.jpg")
+            dest.writeBytes(jpeg.bytes)
+            dest.absolutePath
+        }
+    }.onFailure { System.err.println("배경 이미지 저장 실패: $it") }.getOrNull()
 }
 
 /** 앱 전체 글꼴 선택 — 모바일 FontSettingDialog와 동일 선택지, 즉시 반영·config.json 유지 */

@@ -160,7 +160,7 @@ interface MessageDao {
     @Query(
         """SELECT m.roomId AS roomId, COUNT(*) AS count FROM messages m
            JOIN rooms r ON r.id = m.roomId
-           WHERE m.incoming = 1 AND m.createdAt > r.lastReadAt
+           WHERE m.incoming = 1 AND m.createdAt > r.lastReadAt AND m.type != 'SYSTEM'
            GROUP BY m.roomId"""
     )
     fun observeUnreadCounts(): Flow<List<UnreadCount>>

@@ -407,7 +407,10 @@ class FirestoreRest(
             // 파싱 예외도 오류로 — 기형 응답 1건이 폴링을 영구 정지시키지 않게 (C2)
             val res = get(url) ?: return null
             runCatching {
-                res.getAsJsonArray("documents")?.forEach { el -> out += parseMessage(el.asJsonObject) }
+                res.getAsJsonArray("documents")?.forEach { el ->
+                    // docId가 비면(기형 name) LazyColumn 키 충돌·dedup 오염 — 버린다
+                    parseMessage(el.asJsonObject).takeIf { it.docId.isNotEmpty() }?.let { out += it }
+                }
                 pageToken = res.get("nextPageToken")?.takeIf { it.isJsonPrimitive }?.asString
             }.getOrElse { return null }
         } while (pageToken != null)
@@ -444,6 +447,7 @@ class FirestoreRest(
         return runCatching {
             res.mapNotNull { el ->
                 el.asJsonObject.getAsJsonObject("document")?.let { parseMessage(it) }
+                    ?.takeIf { it.docId.isNotEmpty() } // 기형 문서 방어 — 위 listMessages와 동일
             }
         }.getOrNull()
     }

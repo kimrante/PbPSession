@@ -22,6 +22,8 @@ exports.notifyNewMessage = onDocumentCreated(
   async (event) => {
     const data = event.data && event.data.data();
     if (!data) return;
+    // 프로필 전환 등 SYSTEM 안내는 대화가 아니다 — 푸시 제외 (L2-1)
+    if (data.type === "SYSTEM") return;
 
     const senderName = data.senderName || "상대";
     const authorUid = data.authorUid || "";

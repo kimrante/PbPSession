@@ -53,7 +53,8 @@ class PbpApp : Application() {
         repository // 배선 후 공유된 방들의 수신 리스너 복구
         syncManager.onIncomingMessage = { message, remoteRoomId ->
             // 알림 ID는 FCM 경로와 같은 기준(원격 방 ID 해시) — 이중 알림이 하나로 합쳐진다 (P2-2)
-            if (!isForeground) {
+            // 프로필 전환 등 SYSTEM 안내는 대화가 아니다 — 알림 제외 (L2-1)
+            if (!isForeground && message.type != com.pbp.app.data.MessageType.SYSTEM) {
                 notifier.notify(
                     message.senderName ?: "상대",
                     remoteRoomId.hashCode(),

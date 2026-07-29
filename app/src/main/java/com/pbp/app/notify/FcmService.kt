@@ -23,9 +23,11 @@ class FcmService : FirebaseMessagingService() {
         val app = application as PbpApp
         // 앱이 화면에 떠 있으면 Firestore 리스너가 이미 처리하므로 중복 알림을 막는다
         if (app.isForeground) return
-        // 프로세스가 살아 있고 이 방의 리스너가 붙어 있으면 리스너 경로가 알림을 담당 (P2-2)
+        // 백그라운드에서는 리스너가 붙어 있어도 알림을 띄운다 — OS가 백그라운드 앱의
+        // 네트워크를 끊고 곧 프로세스를 얼려(cached app freezer) 리스너가 메시지를
+        // 전달하지 못하는 것을 실측으로 확인 (구 P2-2 가정 폐기). 리스너 경로와
+        // 겹쳐도 알림 ID가 같아(방 해시) 하나로 교체될 뿐 중복 표시는 없다.
         val remoteRoomId = message.data["roomId"]
-        if (remoteRoomId != null && app.syncManager.isAttached(remoteRoomId)) return
         val senderName = message.data["senderName"] ?: "상대"
         notifier.notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null)
     }

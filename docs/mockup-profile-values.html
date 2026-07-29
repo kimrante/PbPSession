@@ -55,7 +55,6 @@ body{
 .statrow:last-of-type{border-bottom:none}
 .statrow b{color:var(--value);font-size:13px;flex:1;font-weight:700}
 .statrow .v{font-size:13px;font-weight:700}
-.statrow .judge{font-size:10px;color:#7a5b12;background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5);border-radius:var(--r-pill);padding:2px 8px}
 .statrow .del{width:24px;height:24px;border-radius:50%;background:rgba(20,25,32,.06);color:var(--ink-dim);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .addrow{display:flex;gap:var(--sp-2);align-items:center;padding-top:var(--sp-2)}
 .addrow .input{margin:0;color:var(--ink-dim);font-size:11px}
@@ -110,9 +109,9 @@ body{
 
       <div class="sec-label">캐릭터 값 <span style="letter-spacing:0;font-weight:400">— 판정 매크로 · 치환의 원천</span></div>
       <div class="value-card">
-        <div class="statrow"><b>{근력}</b><span class="judge">1d100≤60 판정</span><span class="v">60</span><div class="del">✕</div></div>
-        <div class="statrow"><b>{은신}</b><span class="judge">1d100≤50 판정</span><span class="v">50</span><div class="del">✕</div></div>
-        <div class="statrow"><b>{매력}</b><span class="judge">1d100≤65 판정</span><span class="v">65</span><div class="del">✕</div></div>
+        <div class="statrow"><b>{근력}</b><span class="v">60</span><div class="del">✕</div></div>
+        <div class="statrow"><b>{은신}</b><span class="v">50</span><div class="del">✕</div></div>
+        <div class="statrow"><b>{매력}</b><span class="v">65</span><div class="del">✕</div></div>
         <div class="addrow">
           <div class="input f1">값 이름 (예: 회피)</div>
           <div class="input f2">값 (예: 50)</div>

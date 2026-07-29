@@ -19,6 +19,8 @@ data class PbpColors(
     val ink: Color,           // 본문 잉크
     val inkDim: Color,        // 보조 텍스트
     val signature: Color,     // 시그니처 옐로 (앱 타이틀 강조는 titleAccent)
+    val signatureInk: Color,  // 밝은 배경 위 옐로 '텍스트'용 — 화이트 모드에선 진한 골드
+    val danger: Color,        // 파괴적 동작 (삭제)
     val titleAccent: Color,   // "PbP" 강조색 — 화이트 모드에선 잉크 블랙
     val themeDefault: Color,  // 방 테마 컬러 기본값(새벽 하늘)
     val chatterBubble: Color, // 잡담 말풍선
@@ -39,6 +41,8 @@ val PbpDarkColors = PbpColors(
     ink = Color(0xFFE8ECF2),
     inkDim = Color(0xFF8B95A5),
     signature = Color(0xFFFFD972),
+    signatureInk = Color(0xFFFFD972),
+    danger = Color(0xFFFF6B6B),
     titleAccent = Color(0xFFFFD972),
     themeDefault = Color(0xFF8EC5E8),
     chatterBubble = Color(0x24FFFFFF),
@@ -59,6 +63,8 @@ val PbpLightColors = PbpColors(
     ink = Color(0xFF23272E),
     inkDim = Color(0xFF6E7683),
     signature = Color(0xFFFFD05C),
+    signatureInk = Color(0xFFA3781A),
+    danger = Color(0xFFC94F4F),
     titleAccent = Color(0xFF23272E),
     themeDefault = Color(0xFF5F9EC7),
     chatterBubble = Color(0x0F141920),

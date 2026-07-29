@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -349,42 +350,17 @@ fun ChatScreen(nav: NavController, roomId: Long) {
 
     // 길게 누른 메시지의 편집·삭제 메뉴 (발신자 본인만 진입 가능)
     actionTarget?.let { target ->
-        AlertDialog(
-            onDismissRequest = { actionTarget = null },
-            title = { Text("메시지") },
-            text = {
-                Column {
-                    Text(
-                        "편집",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Pbp.colors.signature,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(PbpDimens.rCell))
-                            .clickable {
-                                editTarget = target
-                                actionTarget = null
-                            }
-                            .padding(PbpDimens.sp3),
-                    )
-                    Text(
-                        "삭제",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFF6B6B),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(PbpDimens.rCell))
-                            .clickable {
-                                deleteTarget = target
-                                actionTarget = null
-                            }
-                            .padding(PbpDimens.sp3),
-                    )
-                }
+        MessageActionDialog(
+            message = target,
+            onEdit = {
+                editTarget = target
+                actionTarget = null
             },
-            confirmButton = { TextButton(onClick = { actionTarget = null }) { Text("취소") } },
+            onDelete = {
+                deleteTarget = target
+                actionTarget = null
+            },
+            onDismiss = { actionTarget = null },
         )
     }
 
@@ -882,6 +858,119 @@ private fun InputZone(
                     .clickable(enabled = canSend, onClick = doSend),
                 contentAlignment = Alignment.Center,
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
+        }
+    }
+}
+
+/**
+ * 길게 누른 메시지의 액션 팝업 (목업 mockup-message-actions).
+ * 대상 말풍선 미리보기(옐로 링)를 시트 위에 띄워 무엇을 다루는지 보여준다.
+ */
+@Composable
+private fun MessageActionDialog(
+    message: Message,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val tokens = Pbp.colors
+    val bubbleShape = RoundedCornerShape(
+        topStart = PbpDimens.rCard,
+        topEnd = 4.dp,
+        bottomEnd = PbpDimens.rCard,
+        bottomStart = PbpDimens.rCard,
+    )
+    Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Box(
+                    Modifier
+                        .clip(bubbleShape)
+                        .background(Color(message.senderBubbleColor ?: PbpPalette.bubblePresets.first()))
+                        .border(2.dp, tokens.signature, bubbleShape)
+                        .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2),
+                ) {
+                    Text(
+                        message.body,
+                        fontSize = 13.sp,
+                        color = tokens.bubbleInk,
+                        maxLines = 3,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.height(PbpDimens.sp3))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(PbpDimens.rSheet))
+                    .background(tokens.panel)
+                    .padding(PbpDimens.sp4),
+            ) {
+                Text("메시지", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+                Spacer(Modifier.height(PbpDimens.sp2))
+                MessageActionRow(
+                    icon = "✏️",
+                    tileColor = tokens.signature,
+                    title = "편집",
+                    titleColor = tokens.signatureInk,
+                    subtitle = "본문을 고치면 (수정됨) 표시가 남습니다",
+                    onClick = onEdit,
+                )
+                MessageActionRow(
+                    icon = "🗑️",
+                    tileColor = tokens.danger,
+                    title = "삭제",
+                    titleColor = tokens.danger,
+                    subtitle = "공유된 방이면 상대 화면에서도 사라집니다",
+                    onClick = onDelete,
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Text(
+                        "취소",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = tokens.inkDim,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .clickable(onClick = onDismiss)
+                            .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageActionRow(
+    icon: String,
+    tileColor: Color,
+    title: String,
+    titleColor: Color,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(PbpDimens.rCell))
+            .clickable(onClick = onClick)
+            .padding(PbpDimens.sp3),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
+    ) {
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(PbpDimens.rCell))
+                .background(tileColor.copy(alpha = .14f))
+                .border(1.dp, tileColor.copy(alpha = .4f), RoundedCornerShape(PbpDimens.rCell)),
+            contentAlignment = Alignment.Center,
+        ) { Text(icon, fontSize = 15.sp) }
+        Column {
+            Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = titleColor)
+            Text(subtitle, fontSize = 11.sp, color = Pbp.colors.inkDim)
         }
     }
 }

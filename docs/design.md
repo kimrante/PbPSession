@@ -4,6 +4,8 @@
 캐릭터 프로필을 갈아입으며 대화하고, 방마다 하나뿐인 GM과 다이스봇이 세션을 진행한다.
 
 - UI 목업: [ui-mockup.html](ui-mockup.html) (아티팩트: https://claude.ai/code/artifact/2d4fa924-e388-406b-9c22-7d5e07f9ca7c)
+- **기본 디자인은 항상 라이트(화이트) 모드** (확정, 2026-07-29) — 기준: [trpg-app-mockup-light.html](trpg-app-mockup-light.html),
+  PC는 [trpg-app-mockup-pc-light.html](trpg-app-mockup-pc-light.html). 다크 모드는 토큰 스왑 파생
 - 통신 방식: **2인 실시간 통신** (확정, 2026-07-27) — 동기화는 3단계에서 Firebase로 구현
 
 ## 요구사항

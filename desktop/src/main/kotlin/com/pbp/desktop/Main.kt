@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -165,13 +166,18 @@ private fun App() {
                 }
                 if (tick % 4 == 0 && System.currentTimeMillis() > metaFreezeUntil) {
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
-                    if (meta != null &&
-                        (meta.themeColor != room.themeColor || meta.backgroundKey != room.backgroundKey || meta.name != room.name)
+                    // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
+                    val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
+                    if (meta != null && cur != null &&
+                        (meta.themeColor != cur.themeColor || meta.backgroundKey != cur.backgroundKey || meta.name != cur.name)
                     ) {
-                        room.themeColor = meta.themeColor
-                        room.backgroundKey = meta.backgroundKey
-                        room.name = meta.name
-                        rooms = rooms.toList() // 재구성 트리거
+                        val updated = cur.copy(
+                            themeColor = meta.themeColor,
+                            backgroundKey = meta.backgroundKey,
+                            name = meta.name,
+                        )
+                        rooms = rooms.map { if (it.remoteId == cur.remoteId) updated else it }
+                        if (selected?.remoteId == cur.remoteId) selected = updated
                         persist()
                     }
                 }
@@ -225,8 +231,9 @@ private fun App() {
     fun switchProfile(index: Int) {
         val room = selected ?: return
         if (room.activeProfileIndex == index) return
-        room.activeProfileIndex = index
-        rooms = rooms.toList()
+        val updated = room.copy(activeProfileIndex = index)
+        rooms = rooms.map { if (it.remoteId == room.remoteId) updated else it }
+        selected = updated
         persist()
         val name = profiles.getOrNull(index)?.name ?: return
         scope.launch(Dispatchers.IO) {
@@ -343,9 +350,11 @@ private fun App() {
             onDismiss = { overlay = null },
             onApply = { theme, background ->
                 val room = selected ?: return@SettingsOverlay
-                room.themeColor = theme
-                room.backgroundKey = background
-                rooms = rooms.toList()
+                // 같은 인스턴스의 var를 고치면 Compose가 변화를 모른다 —
+                // 새 인스턴스로 교체해야 배경·테마가 즉시 화면에 반영된다 (버그 수정)
+                val updated = room.copy(themeColor = theme, backgroundKey = background)
+                rooms = rooms.map { if (it.remoteId == room.remoteId) updated else it }
+                selected = updated
                 persist()
                 // PATCH가 서버에 착지하기 전 폴링이 옛 값을 다시 덮지 않도록 유예 (P3-14)
                 metaFreezeUntil = System.currentTimeMillis() + 15_000
@@ -739,9 +748,11 @@ private fun GmSpeech.Part.text(): String = when (this) {
 
 @Composable
 private fun NarrationBlock(message: Message, text: String) {
+    val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
     Column(
         Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
+            .shadow(3.dp, shape) // 목업 box-shadow 0 3px 12px
+            .clip(shape)
             .background(Tokens.NarrBg)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
@@ -822,7 +833,11 @@ private fun BubbleRow(
                 if (quoteInner != null) {
                     // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
                     // 닫는 따옴표는 글리프 잉크가 글자 상자 위쪽에 몰려 있어 offset으로 보정한다.
-                    Box(Modifier.widthIn(max = 420.dp).clip(shape).background(bubbleColor)) {
+                    Box(
+                        Modifier.widthIn(max = 420.dp)
+                            .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
+                            .clip(shape).background(bubbleColor)
+                    ) {
                         QuoteMark(
                             "“",
                             inkColor,
@@ -842,7 +857,9 @@ private fun BubbleRow(
                     }
                 } else {
                     Box(
-                        Modifier.widthIn(max = 420.dp).clip(shape).background(bubbleColor)
+                        Modifier.widthIn(max = 420.dp)
+                            .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
+                            .clip(shape).background(bubbleColor)
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Row {
@@ -1118,13 +1135,11 @@ private fun InputZone(
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f)
                         .onPreviewKeyEvent { event ->
-                            // PC는 Ctrl+Enter로 바로 전송 (모바일과 동일 규칙)
-                            if (event.type == KeyEventType.KeyDown &&
-                                event.key == Key.Enter &&
-                                event.isCtrlPressed &&
-                                input.isNotBlank()
-                            ) {
-                                doSend()
+                            // PC는 Ctrl+Enter로 바로 전송 (모바일과 동일 규칙).
+                            // 한글 IME 조합 중에는 KeyDown이 IME에 먹혀 도달하지 않으므로
+                            // KeyUp 시점에 발사하고, Down/Up 모두 소비해 개행 삽입을 막는다
+                            if (event.key == Key.Enter && event.isCtrlPressed) {
+                                if (event.type == KeyEventType.KeyUp && input.isNotBlank()) doSend()
                                 true
                             } else false
                         }
@@ -1146,9 +1161,13 @@ private fun InputZone(
                                 }
                                 inner()
                             }
-                            if (input.isEmpty()) {
-                                Text("Ctrl+Enter 전송", fontSize = 10.sp, color = Color(0x5914191F))
-                            }
+                            // PC는 Ctrl+Enter 힌트를 상시 노출 (trpg-app-mockup-pc-light.html)
+                            Text(
+                                "Ctrl+Enter 전송", fontSize = 10.sp, color = Color(0x5914191F),
+                                modifier = Modifier.padding(start = 8.dp)
+                                    .border(1.dp, Color(0x2614191F), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp),
+                            )
                         }
                     },
                 )

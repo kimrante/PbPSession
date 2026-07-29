@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 디자인 목업 v2 — 통일 스페이싱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   디자인 토큰 — 이 파일의 모든 화면은 아래 변수만 사용한다.
+   구현(Compose)에서는 px → dp 로 1:1 매핑한다.
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  /* 색 (다크 모드 — Tokens.kt PbpDarkColors와 동일) */
+  --bg:#0d1117;
+  --panel:#161c24;
+  --panel-2:#1d2530;
+  --line:rgba(255,255,255,.08);
+  --ink:#e8ecf2;
+  --ink-dim:#8b95a5;
+  --postit:#ffd972;                 /* 시그니처 옐로 */
+  --theme:#8ec5e8;                  /* 방 테마 컬러(기본: 새벽 하늘) */
+  --bubble-me:#ffd9a8;
+  --bubble-you:#bfe3f6;
+  --bubble-gmq:#e7e2d4;             /* GM 인용("???") 말풍선 */
+  --bubble-ink:#10151c;
+  --chatter:rgba(255,255,255,.14);  /* 잡담 말풍선 */
+  --chatter-ink:rgba(255,255,255,.62);
+  --narr-bg:rgba(6,10,14,.45);
+  --narr-ink:#f0ead8;
+  --success:#5e9eff;
+  --fail:#ff6b6b;
+
+  /* ── 여백 스케일: 4dp 그리드. 이 6단계 외의 값은 쓰지 않는다 ── */
+  --sp-1:4px;   /* 밀착: 이름↔말풍선, 배지 내부 상하 */
+  --sp-2:8px;   /* 요소 사이 기본 간격 */
+  --sp-3:12px;  /* 카드 사이, 그룹 사이 */
+  --sp-4:16px;  /* ★ 화면 가장자리(모든 화면 공통), 카드 내부 */
+  --sp-5:24px;  /* 섹션 사이 */
+  --sp-6:32px;  /* 큰 단락 사이, 화면 하단 여유 */
+
+  /* ── 반경 스케일: 4단계 ── */
+  --r-cell:12px;   /* 그리드 셀, 입력 필드, 썸네일 */
+  --r-card:16px;   /* 카드, 말풍선, 패널 */
+  --r-sheet:20px;  /* 다이얼로그, 시트 */
+  --r-pill:999px;  /* 칩, 배지, 토글, 아바타 */
+
+  /* ── 타이포 스케일: 6단계 (sp) ── */
+  --t-display:18px;  /* 앱 타이틀 */
+  --t-title:15px;    /* 화면 제목, 카드 제목, 룸명 */
+  --t-body:13px;     /* 본문, 말풍선, 서술 */
+  --t-label:11px;    /* 이름표, 섹션 라벨, 버튼 소형 */
+  --t-micro:10px;    /* 시간, 배지, 아바타 이름표 */
+
+  /* 고정 규격 */
+  --appbar-h:56px;       /* 상단 바 높이 — 전 화면 동일 */
+  --touch:40px;          /* 아이콘 버튼 터치 타깃 */
+  --avatar-chat:38px;    /* 채팅 아바타 */
+  --avatar-strip:36px;   /* 프로필 스트립 아바타 */
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',system-ui,sans-serif;line-height:1.6}
+::selection{background:var(--postit);color:#1a1a1a}
+
+/* ─── 페이지 프레임 ─────────────────────────── */
+.wrap{max-width:1240px;margin:0 auto;padding:64px 24px 120px}
+header.page{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:24px;margin-bottom:16px}
+.title-block h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(28px,4vw,44px);letter-spacing:-.01em;line-height:1.25}
+.title-block h1 em{font-style:normal;color:var(--postit)}
+.title-block p{color:var(--ink-dim);margin-top:10px;max-width:600px;font-size:14px}
+.meta{font-size:12px;color:var(--ink-dim);text-align:right;line-height:1.9;border-right:2px solid var(--postit);padding-right:14px}
+.meta b{color:var(--ink);font-weight:700}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:28px 0 56px}
+.toc a{color:var(--ink-dim);text-decoration:none;font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:6px 14px;transition:.18s}
+.toc a:hover{color:#1a1a1a;background:var(--postit);border-color:var(--postit)}
+
+section.spec{margin-bottom:88px}
+.spec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.spec-head .no{font-family:'Gowun Batang',serif;font-size:15px;color:var(--postit);letter-spacing:.08em}
+.spec-head h2{font-size:21px;font-weight:700;letter-spacing:-.01em}
+.spec-desc{color:var(--ink-dim);font-size:13.5px;max-width:720px;margin-bottom:28px}
+.spec-desc code, .note code, td code{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px;color:var(--postit)}
+.row{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+
+/* 주석 카드 */
+.notes{flex:1;min-width:260px;max-width:420px}
+.note{border-left:2px solid var(--theme);background:linear-gradient(90deg,rgba(142,197,232,.06),transparent 70%);padding:12px 16px;margin-bottom:14px;border-radius:0 8px 8px 0}
+.note h4{font-size:13px;color:var(--theme);margin-bottom:3px;font-weight:700}
+.note p{font-size:12.5px;color:var(--ink-dim)}
+.note.y{border-color:var(--postit);background:linear-gradient(90deg,rgba(255,217,114,.07),transparent 70%)}
+.note.y h4{color:var(--postit)}
+.note.r{border-color:var(--fail);background:linear-gradient(90deg,rgba(255,107,107,.07),transparent 70%)}
+.note.r h4{color:var(--fail)}
+
+/* 토큰 표 */
+table.tokens{border-collapse:collapse;width:100%;max-width:760px;font-size:13px;margin-top:8px}
+table.tokens th{color:var(--ink-dim);font-weight:700;font-size:11px;letter-spacing:.1em;text-align:left;padding:8px 14px;border-bottom:1px solid var(--line)}
+table.tokens td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+table.tokens td:first-child{white-space:nowrap}
+.sw{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:8px;border:1px solid var(--line)}
+.bar{display:inline-block;height:12px;background:var(--postit);border-radius:3px;vertical-align:-1px;margin-right:10px}
+
+/* ─── 폰 프레임 ─────────────────────────────── */
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 0 0 3px #000;padding:10px;position:relative}
+.phone .cap{position:absolute;left:50%;transform:translateX(-50%);bottom:-30px;font-size:11px;color:var(--ink-dim);white-space:nowrap;letter-spacing:.06em}
+.screen{border-radius:29px;overflow:hidden;position:relative;background:var(--bg);height:704px;display:flex;flex-direction:column}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:var(--ink-dim);font-weight:700}
+
+/* ── 공통 상단 바: 높이 56, 좌우 패딩 8, 아이콘 버튼 40 ── */
+.appbar{height:var(--appbar-h);flex-shrink:0;display:flex;align-items:center;padding:0 var(--sp-2);gap:2px}
+.appbar .icon-btn{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink);flex-shrink:0}
+.appbar .grow{flex:1;min-width:0}
+.appbar .bar-title{font-size:var(--t-title);font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .bar-sub{font-size:var(--t-micro);color:var(--ink-dim);display:flex;align-items:center;gap:5px}
+
+/* 화면 본문: 좌우 16 고정 */
+.body16{padding:0 var(--sp-4)}
+
+/* ── 방 목록 ── */
+.applogo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#2a3340,#171d26);display:flex;align-items:center;justify-content:center;color:#efe8d6;font-size:18px;flex-shrink:0}
+.brand{font-family:'Gowun Batang',serif;font-weight:700;font-size:var(--t-display);color:var(--postit);line-height:1.2}
+.textbtn{font-size:var(--t-label);font-weight:700;color:var(--ink-dim);padding:8px 10px;border-radius:var(--r-pill)}
+.room-card{display:flex;align-items:center;gap:var(--sp-3);background:rgba(255,255,255,.035);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3)}
+.thumb{width:48px;height:48px;border-radius:var(--r-cell);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
+.thumb .dot{position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;border:3px solid var(--bg)}
+.room-card .rc-main{flex:1;min-width:0}
+.rc-name{font-size:var(--t-title);font-weight:700;line-height:1.35}
+.rc-prev{font-size:var(--t-label);color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-side{display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-1);flex-shrink:0}
+.rc-time{font-size:var(--t-micro);color:var(--ink-dim)}
+.badge{min-width:18px;height:18px;border-radius:var(--r-pill);background:var(--postit);color:#1a1a1a;font-size:var(--t-micro);font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.fab{position:absolute;right:var(--sp-4);bottom:calc(var(--sp-4) + 8px);width:56px;height:56px;border-radius:18px;background:var(--postit);color:#1a1a1a;font-size:26px;font-weight:700;display:flex;align-items:center;justify-content:center;transform:rotate(-4deg);box-shadow:0 10px 26px rgba(255,217,114,.28)}
+
+/* ── 채팅방 ── */
+.chat-bg{flex:1;display:flex;flex-direction:column;min-height:0;background:linear-gradient(180deg,#26374d,#101a28);position:relative}
+.chat-bg::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,20,.62),rgba(10,14,20,.28) 30%,rgba(10,14,20,.28) 70%,rgba(10,14,20,.62));pointer-events:none}
+.chat-bg>*{position:relative}
+.chat-appbar{background:rgba(0,0,0,.45)}
+.msgs{flex:1;overflow:hidden;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.msgs .cont{margin-top:calc(var(--sp-1) - var(--sp-3))} /* 연속 말풍선: 그룹 간 12 → 연속 4 */
+.sysline{align-self:center;font-size:var(--t-micro);color:rgba(255,255,255,.6);background:rgba(0,0,0,.35);border-radius:var(--r-pill);padding:3px var(--sp-3)}
+.older{align-self:center;font-size:var(--t-label);color:var(--ink-dim);background:rgba(0,0,0,.35);border-radius:var(--r-pill);padding:6px 14px}
+
+.narr{background:var(--narr-bg);border-radius:4px var(--r-card) var(--r-card) 4px;padding:var(--sp-3) var(--sp-4)}
+.narr p{font-family:'Gowun Batang',serif;font-size:var(--t-body);line-height:1.85;color:var(--narr-ink)}
+.narr p em{font-style:normal;color:var(--postit)} /* 루비/강조 */
+.narr .sig{display:flex;align-items:center;gap:6px;margin-top:var(--sp-2)}
+.narr .sig b{font-size:var(--t-micro);color:var(--postit);font-weight:700}
+.narr .sig span{font-size:var(--t-micro);color:var(--ink-dim)}
+
+.mrow{display:flex;gap:var(--sp-2);align-items:flex-end}
+.mrow.me{justify-content:flex-end}
+.mrow .avatar{width:var(--avatar-chat);height:var(--avatar-chat);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--panel-2);border:1px solid var(--line);align-self:flex-start}
+.mrow .spacer{width:var(--avatar-chat);flex-shrink:0}
+.mcol{display:flex;flex-direction:column;max-width:210px}
+.mrow.me .mcol{align-items:flex-end}
+.mname{font-size:var(--t-label);font-weight:700;margin-bottom:var(--sp-1)}
+.bubble{border-radius:4px var(--r-card) var(--r-card) var(--r-card);padding:var(--sp-2) var(--sp-3);font-size:var(--t-body);line-height:1.5;color:var(--bubble-ink);font-weight:500;width:fit-content}
+.mrow.me .bubble{border-radius:var(--r-card) 4px var(--r-card) var(--r-card)}
+.bubble.ooc{background:var(--chatter);color:var(--chatter-ink);border:1px dashed rgba(255,255,255,.22);font-weight:400}
+.ooc-tag{display:inline-block;font-size:9px;border:1px solid rgba(255,255,255,.35);border-radius:var(--r-pill);padding:0 5px;margin-right:5px;vertical-align:1px}
+.mtime{font-size:var(--t-micro);color:var(--ink-dim);flex-shrink:0;padding-bottom:2px}
+.mtime small{display:block;font-size:9px;text-align:inherit}
+
+.dice{align-self:center;display:flex;align-items:center;gap:var(--sp-2);background:rgba(0,0,0,.5);border:1px solid rgba(255,217,114,.35);border-radius:var(--r-cell);padding:6px 14px;font-size:var(--t-label);font-weight:700;color:#ffe9ae}
+.dice .ok{color:var(--success)}
+.dice .ng{color:var(--fail)}
+
+.inputzone{flex-shrink:0;background:rgba(9,12,17,.88);padding:var(--sp-2) var(--sp-4) var(--sp-3)}
+.strip{display:flex;gap:var(--sp-3);align-items:flex-start;padding:var(--sp-1) 0 var(--sp-2)}
+.pchip{display:flex;flex-direction:column;align-items:center;gap:3px;width:44px}
+.pchip .pa{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:50%;background:var(--panel-2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.pchip.on .pa{border:2px solid var(--postit);box-shadow:0 0 0 2px rgba(255,217,114,.25)}
+.pchip .pn{font-size:var(--t-micro);color:var(--ink-dim);white-space:nowrap;max-width:44px;overflow:hidden;text-overflow:ellipsis}
+.pchip.on .pn{color:var(--postit);font-weight:700}
+.pchip .pa.add{border-style:dashed;color:var(--ink-dim);font-size:15px}
+.sugg{display:flex;gap:var(--sp-2);padding-bottom:var(--sp-2)}
+.schip{font-size:var(--t-label);font-weight:700;color:var(--postit);background:rgba(255,217,114,.14);border:1px solid rgba(255,217,114,.4);border-radius:var(--r-pill);padding:5px 12px}
+.inrow{display:flex;align-items:center;gap:var(--sp-2)}
+.ooctgl{display:flex;align-items:center;gap:5px;border-radius:var(--r-pill);border:1px solid var(--line);background:rgba(255,255,255,.07);padding:6px 10px;flex-shrink:0}
+.ooctgl .tk{width:22px;height:12px;border-radius:var(--r-pill);background:rgba(255,255,255,.2);position:relative}
+.ooctgl .tk::after{content:"";position:absolute;left:2px;top:2px;width:8px;height:8px;border-radius:50%;background:#fff}
+.ooctgl span{font-size:var(--t-micro);font-weight:700;color:var(--ink-dim)}
+.ooctgl.on{background:rgba(255,217,114,.16);border-color:rgba(255,217,114,.4)}
+.ooctgl.on .tk{background:var(--postit)}
+.ooctgl.on .tk::after{left:auto;right:2px;background:#1a1a1a}
+.ooctgl.on span{color:var(--postit)}
+.tf{flex:1;background:rgba(255,255,255,.08);border-radius:var(--r-cell);padding:11px 14px;font-size:var(--t-body);color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sendbtn{width:var(--touch);height:var(--touch);border-radius:var(--r-cell);background:var(--theme);color:#0d1420;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sendbtn.dis{opacity:.35}
+
+/* ── 프로필 편집 / 방 설정 공통 ── */
+.savepill{background:var(--postit);color:#1a1a1a;font-size:var(--t-label);font-weight:700;border-radius:var(--r-pill);padding:8px 16px}
+.sec-label{font-size:var(--t-label);font-weight:700;letter-spacing:.12em;color:var(--ink-dim);margin:var(--sp-5) 0 var(--sp-2)}
+.input{background:transparent;border:1px solid rgba(255,255,255,.18);border-radius:var(--r-cell);padding:12px 14px;font-size:var(--t-body);color:var(--ink)}
+.swrow{display:flex;gap:var(--sp-2)}
+.swc{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#10151c}
+.swc.sel{outline:2px solid #fff;outline-offset:2px}
+.swc.rainbow{background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666);color:#fff}
+.statrow{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0;border-bottom:1px solid var(--line)}
+.statrow b{color:#3b82f6;font-size:var(--t-body);flex:1}
+.statrow span{font-size:var(--t-body)}
+.statrow .del{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--ink-dim);font-size:11px;display:flex;align-items:center;justify-content:center}
+.preview{background:linear-gradient(135deg,#233248,#141d2b);border:1px solid rgba(255,255,255,.2);border-radius:var(--r-card);padding:var(--sp-4)}
+.preview .pv-label{font-size:9px;letter-spacing:.3em;color:var(--ink-dim);margin-bottom:var(--sp-3)}
+
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-2)}
+.tcell{border:1.5px solid var(--line);border-radius:var(--r-cell);padding:var(--sp-2);display:flex;flex-direction:column;gap:5px;align-items:center;background:rgba(255,255,255,.03)}
+.tcell .tsw{width:100%;height:26px;border-radius:8px}
+.tcell span{font-size:var(--t-micro);color:var(--ink-dim)}
+.tcell.sel{border-color:var(--postit);background:rgba(255,217,114,.12)}
+.tcell.sel span{color:var(--postit);font-weight:700}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2)}
+.bgcell{height:72px;border-radius:var(--r-cell);border:1.5px solid var(--line);position:relative}
+.bgcell.sel{border-color:var(--postit)}
+.bgcell .use{position:absolute;left:6px;bottom:6px;background:var(--postit);color:#1a1a1a;font-size:9px;font-weight:700;border-radius:5px;padding:1px 6px}
+.bgcell.dash{border-style:dashed;display:flex;align-items:center;justify-content:center;font-size:var(--t-micro);color:var(--ink-dim);text-align:center;line-height:1.5}
+.setrow{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid var(--line)}
+.setrow .sr-main{flex:1;min-width:0}
+.setrow .sr-t{font-size:var(--t-body);color:var(--ink)}
+.setrow .sr-s{font-size:var(--t-label);color:var(--ink-dim)}
+.setrow .chv{color:var(--ink-dim);font-size:16px}
+
+/* ── 다이얼로그 카드(폰 밖 단독 표기) ── */
+.dlg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px;max-width:920px}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sheet);padding:var(--sp-5) var(--sp-5) var(--sp-4);box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.dlg h3{font-size:var(--t-title);font-weight:700;margin-bottom:var(--sp-3)}
+.dlg .opt{padding:var(--sp-3);border-radius:var(--r-cell)}
+.dlg .opt:hover{background:rgba(255,255,255,.04)}
+.dlg .opt b{display:block;font-size:var(--t-body);color:var(--postit);font-weight:700}
+.dlg .opt.danger b{color:var(--fail)}
+.dlg .opt span{font-size:var(--t-label);color:var(--ink-dim)}
+.dlg .acts{display:flex;justify-content:flex-end;gap:var(--sp-2);margin-top:var(--sp-3)}
+.dlg .acts i{font-style:normal;font-size:var(--t-body);font-weight:700;color:var(--postit);padding:8px 12px;border-radius:var(--r-pill)}
+.dlg .acts i.dim{color:var(--ink-dim)}
+.dlg .field{border:1px solid rgba(255,255,255,.18);border-radius:var(--r-cell);padding:11px 14px;font-size:var(--t-body);color:var(--ink-dim);margin-bottom:var(--sp-2)}
+.dlg .helper{font-size:var(--t-label);color:var(--ink-dim);margin-top:var(--sp-1)}
+.dlg .code{font-size:32px;font-weight:900;letter-spacing:.22em;color:var(--postit);text-align:center;padding:var(--sp-2) 0}
+.dlg .radio{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3);border-radius:var(--r-cell);font-size:var(--t-body)}
+.dlg .radio .rb{color:var(--ink-dim)}
+.dlg .radio.on .rb{color:var(--postit)}
+.dlg .serif{font-family:'Gowun Batang',serif}
+
+/* 스페이싱 데모 */
+.scale-demo{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.scale-demo .li{display:flex;align-items:center;font-size:12.5px;color:var(--ink-dim)}
+.scale-demo .li b{color:var(--ink);width:130px;font-weight:700;font-size:12px}
+.radius-demo{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+.radius-demo .rd{width:84px;height:56px;background:var(--panel-2);border:1px solid var(--line);display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;font-size:10px;color:var(--ink-dim)}
+.type-demo{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.type-demo .td{display:flex;align-items:baseline;gap:14px}
+.type-demo .td small{width:150px;color:var(--ink-dim);font-size:11px;letter-spacing:.06em}
+footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);padding-top:24px;line-height:2}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <div class="title-block">
+    <h1>PbP <em>디자인 목업 v2</em><br>— 하나의 그리드, 하나의 호흡</h1>
+    <p>기능이 늘며 화면마다 제각각이 된 여백·글자·반경을 <b>4dp 그리드 기반 토큰</b>으로 다시 묶은 개정 목업.
+    모든 화면의 가장자리는 16dp, 상단 바는 56dp, 글자는 6단계, 반경은 4단계만 사용한다.
+    현재 코드(ChatScreen·RoomList·RoomSettings·ProfileEdit)의 모든 기능을 반영했다.</p>
+  </div>
+  <div class="meta">
+    <b>PbP</b> · Android · 다크 모드 기준<br>
+    v2 — 2026.07.29<br>
+    선행 문서: PbP-design-spec.md · trpg-app-mockup.html
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s0">0. 통일 규칙(토큰)</a>
+  <a href="#s1">1. 방 목록</a>
+  <a href="#s2">2. 채팅방</a>
+  <a href="#s3">3. 입력 영역·채팅 팔레트</a>
+  <a href="#s4">4. 프로필 편집</a>
+  <a href="#s5">5. 방 설정</a>
+  <a href="#s6">6. 다이얼로그 모음</a>
+</nav>
+
+<!-- ═══════════ 0. 통일 규칙 ═══════════ -->
+<section class="spec" id="s0">
+  <div class="spec-head"><span class="no">00</span><h2>통일 규칙 — 스페이싱·타이포·반경 토큰</h2></div>
+  <p class="spec-desc">아래 표가 이 목업의 전부다. 구현에서 이 값 이외의 매직 넘버가 나타나면 디자인 이탈로 간주한다.
+  현재 코드의 혼재값(가장자리 12/14/16/18/20dp, 글자 8.5~15.5sp 14단계, 반경 9~18dp 8종)을 우측 열의 값으로 수렴시킨다.</p>
+
+  <div class="row">
+    <div style="flex:1;min-width:300px">
+      <table class="tokens">
+        <tr><th>토큰</th><th>값</th><th>적용처 (현재 코드 → 통일)</th></tr>
+        <tr><td><code>sp-1</code> 4</td><td><span class="bar" style="width:4px"></span></td><td>이름↔말풍선, 연속 말풍선 간격 (2dp → 4dp)</td></tr>
+        <tr><td><code>sp-2</code> 8</td><td><span class="bar" style="width:8px"></span></td><td>요소 기본 간격, 스와치·그리드 셀 사이</td></tr>
+        <tr><td><code>sp-3</code> 12</td><td><span class="bar" style="width:12px"></span></td><td>카드 사이, 메시지 그룹 사이(12dp 유지)</td></tr>
+        <tr><td><code>sp-4</code> 16</td><td><span class="bar" style="width:16px"></span></td><td>★ 모든 화면 가장자리 (12/14/18/20 → 16), 카드 내부</td></tr>
+        <tr><td><code>sp-5</code> 24</td><td><span class="bar" style="width:24px"></span></td><td>섹션 제목 위 간격 (18 → 24)</td></tr>
+        <tr><td><code>sp-6</code> 32</td><td><span class="bar" style="width:32px"></span></td><td>화면 하단 여유 (30 → 32)</td></tr>
+      </table>
+    </div>
+    <div style="flex:1;min-width:300px">
+      <table class="tokens">
+        <tr><th>구분</th><th>단계</th><th>비고</th></tr>
+        <tr><td>타이포</td><td>18 / 15 / 13 / 11 / 10 (+9 배지 한정)</td><td>8.5·9.5·10.5·11.5·12.5·13.5·15.5 등 소수점 크기 폐기</td></tr>
+        <tr><td>반경</td><td>pill(999) / sheet(20) / card·말풍선(16) / cell·입력(12)</td><td>9·10·13·14·15·18 → 가까운 단계로 흡수</td></tr>
+        <tr><td>상단 바</td><td>높이 56dp · 좌우 8dp · 아이콘 버튼 40dp</td><td>채팅 10/8 · 설정 10/6 · 프로필 10/6 → 3화면 동일</td></tr>
+        <tr><td>아바타</td><td>채팅 38 · 스트립 36 · 프로필 편집 92</td><td>스트립 34 → 36 (터치 여유)</td></tr>
+        <tr><td>색</td><td>기존 Tokens.kt 유지</td><td>색은 손대지 않는다 — 이번 개정은 형태·간격만</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:28px">
+    <div class="notes" style="max-width:none;display:flex;gap:14px;flex-wrap:wrap">
+      <div class="note y" style="flex:1;min-width:240px"><h4>왜 16dp인가</h4>
+        <p>방 목록 14, 채팅 12, 설정 16·18, 프로필 20으로 화면을 오갈 때마다 콘텐츠 시작선이 흔들린다.
+        360dp 폭 기준 16dp는 카드·말풍선·그리드가 모두 여유 있게 앉는 최소 공통값이다.</p></div>
+      <div class="note" style="flex:1;min-width:240px"><h4>세로 리듬</h4>
+        <p>목록 계열은 <code>12dp</code>(카드 사이), 폼 계열은 <code>24dp</code>(섹션 사이)·<code>8dp</code>(라벨↔필드)로
+        두 가지 리듬만 사용한다. 18·14·7dp 같은 중간값을 없앤다.</p></div>
+      <div class="note" style="flex:1;min-width:240px"><h4>반경의 위계</h4>
+        <p>큰 면일수록 둥글다: 시트 20 &gt; 카드·말풍선 16 &gt; 셀·입력 12.
+        말풍선의 "말꼬리"는 한 귀퉁이만 4dp로 꺾는 기존 문법을 유지한다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 1. 방 목록 ═══════════ -->
+<section class="spec" id="s1">
+  <div class="spec-head"><span class="no">01</span><h2>방 목록</h2></div>
+  <p class="spec-desc">헤더(앱 타이틀·글꼴 설정 <code>Aa</code>·초대 코드 <code>참여</code>) + 방 카드 + 생성 FAB.
+  카드는 배경 썸네일·테마 컬러 점·미확인 배지를 유지하되, 가장자리 16dp·카드 간 12dp·내부 16dp로 정렬한다.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+        <div class="appbar" style="padding:0 var(--sp-4)">
+          <div class="applogo">⬦</div>
+          <div class="grow" style="margin-left:10px">
+            <div class="brand">PbP</div>
+            <div class="bar-sub">진행 중인 세션 3</div>
+          </div>
+          <div class="textbtn">Aa</div>
+          <div class="textbtn">참여</div>
+        </div>
+        <div class="body16" style="padding-top:var(--sp-2)">
+          <div class="room-card">
+            <div class="thumb" style="background:linear-gradient(160deg,#26374d,#101a28)">🌊<i class="dot" style="background:#8ec5e8"></i></div>
+            <div class="rc-main">
+              <div class="rc-name">등대에서 만나요</div>
+              <div class="rc-prev">카야 · 등불이 꺼지기 전에 도착할게.</div>
+            </div>
+            <div class="rc-side"><span class="rc-time">방금</span><span class="badge">2</span></div>
+          </div>
+          <div class="room-card">
+            <div class="thumb" style="background:linear-gradient(160deg,#33253f,#141020)">🕯️<i class="dot" style="background:#c9a7e8"></i></div>
+            <div class="rc-main">
+              <div class="rc-name">라일락 관 살인사건</div>
+              <div class="rc-prev">🎲 1d100&lt;=65 → 43 성공</div>
+            </div>
+            <div class="rc-side"><span class="rc-time">1시간 전</span></div>
+          </div>
+          <div class="room-card">
+            <div class="thumb" style="background:linear-gradient(160deg,#173226,#0a120e)">🌲<i class="dot" style="background:#9fe0b8"></i></div>
+            <div class="rc-main">
+              <div class="rc-name">이끼의 숲 단편</div>
+              <div class="rc-prev">잡담 · 오늘은 여기까지 할까요?</div>
+            </div>
+            <div class="rc-side"><span class="rc-time">어제</span></div>
+          </div>
+        </div>
+        <div class="fab">＋</div>
+      </div>
+      <div class="cap">01-A · 방 목록 — 가장자리 16 / 카드 간 12</div>
+    </div>
+
+    <div class="phone">
+      <div class="screen" style="justify-content:center;background:rgba(5,7,10,.72)">
+        <div style="padding:0 var(--sp-5)">
+          <div class="dlg" style="box-shadow:0 30px 80px rgba(0,0,0,.7)">
+            <h3>새 세션</h3>
+            <div class="field">방 이름</div>
+            <div class="field">아이콘 (이모지, 비우면 🎲)</div>
+            <div class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:0">
+              <span style="flex:1;color:var(--ink)"><small style="display:block;font-size:10px;color:var(--ink-dim)">TRPG 룰</small>크툴루의 부름 7판</span><span>▾</span>
+            </div>
+            <p class="helper">방을 만들면 서술자(GM) 프로필과 마스터 권한이 자동 부여됩니다.</p>
+            <div class="acts"><i class="dim">취소</i><i>만들기</i></div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">01-B · 새 세션 — TRPG 룰 선택 포함</div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>통일 포인트</h4>
+        <p>목록 좌우 <code>14 → 16</code>, 카드 내부 <code>12/13 → 16/12</code>, 카드 사이 <code>8 → 12</code>.
+        헤더는 상단 바 규격(56dp)에 맞추고 좌우만 16dp로 넓힌다.</p></div>
+      <div class="note"><h4>방 카드</h4>
+        <p>썸네일 48(반경 12) = 방 배경 프리셋 그라데이션 또는 갤러리 이미지 크롭. 우하단 테마 컬러 점 14.
+        미리보기 1줄: <code>발화자 · 본문</code> / <code>잡담 · …</code> / <code>🎲 수식 → 결과</code>.</p></div>
+      <div class="note"><h4>헤더 우측</h4>
+        <p><code>Aa</code> = 앱 글꼴 설정(시스템/고운 바탕), <code>참여</code> = 초대 코드 입력. 텍스트 버튼도 40dp 터치 타깃을 확보한다.</p></div>
+      <div class="note"><h4>FAB</h4>
+        <p>포스트잇 옐로, 반경 18, -4° 기울임 유지 — 브랜드 시그니처라 예외적으로 반경 스케일 밖을 허용하는 유일한 요소.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 2. 채팅방 ═══════════ -->
+<section class="spec" id="s2">
+  <div class="spec-head"><span class="no">02</span><h2>채팅방 — 메시지 6종의 공통 리듬</h2></div>
+  <p class="spec-desc">GM 서술 / GM 인용(<code>???</code>) / 좌·우 말풍선 / 연속 말풍선 / 다이스 판정 / 잡담 / 시스템 라인.
+  종류가 늘어도 <b>그룹 사이 12dp · 연속 4dp · 좌우 16dp</b> 하나의 리듬으로 흐르게 한다.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+        <div class="chat-bg">
+          <div class="appbar chat-appbar">
+            <div class="icon-btn">←</div>
+            <div class="grow">
+              <div class="bar-title serif" style="font-family:'Gowun Batang',serif">등대에서 만나요</div>
+              <div class="bar-sub"><i style="width:8px;height:8px;border-radius:3px;background:var(--theme);display:inline-block"></i> 마스터</div>
+            </div>
+            <div class="icon-btn">↓</div>
+            <div class="icon-btn">⚙</div>
+          </div>
+
+          <div class="msgs">
+            <div class="older">이전 대화 불러오기</div>
+
+            <div class="narr">
+              <p>밤 아홉 시의 <em>|等臺《등대》</em>는 뭍에서 보면 꺼진 것처럼 보였다. 계단을 오르는 발소리만이
+              탑 안쪽을 <b style="color:inherit">천천히</b> 울렸다.</p>
+              <div class="sig"><b>GM 세라 · 서술</b><span>21:02</span></div>
+            </div>
+
+            <div class="mrow">
+              <div class="avatar">🕯️</div>
+              <div class="mcol">
+                <div class="mname" style="color:var(--postit)">???</div>
+                <div class="bubble" style="background:var(--bubble-gmq)">…거기 누구요. 등불 값은 내고 오르는 거요?</div>
+              </div>
+              <div class="mtime">21:02</div>
+            </div>
+
+            <div class="mrow">
+              <div class="avatar">🌊</div>
+              <div class="mcol">
+                <div class="mname" style="color:#8ec5e8">카야</div>
+                <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+              </div>
+              <div class="mtime">21:03</div>
+            </div>
+            <div class="mrow cont">
+              <div class="spacer"></div>
+              <div class="mcol"><div class="bubble" style="background:var(--bubble-you)">…라고 말하며 한 걸음 물러선다.</div></div>
+              <div class="mtime">21:03</div>
+            </div>
+
+            <div class="sysline">리안 → 밤샘꾼으로 프로필을 전환했습니다</div>
+
+            <div class="mrow me">
+              <div class="mtime" style="text-align:right"><small>(수정됨)</small>21:05</div>
+              <div class="mcol">
+                <div class="mname" style="color:#ffc46b">밤샘꾼</div>
+                <div class="bubble" style="background:var(--bubble-me)">**값은 이야기로 치르지.** 어젯밤 난파선 얘기, 듣고 싶지 않소?</div>
+              </div>
+              <div class="avatar">🌙</div>
+            </div>
+
+            <div class="dice">🎲 <span>1d100&lt;=65 → 43</span> <span class="ok">성공</span> <span style="color:var(--ink-dim);font-weight:400">매력 판정</span></div>
+
+            <div class="mrow me">
+              <div class="mtime">21:07</div>
+              <div class="mcol"><div class="bubble ooc"><span class="ooc-tag">잡담</span>매력 굴림 통과! 오늘 주사위 착하네요</div></div>
+              <div class="avatar">🌙</div>
+            </div>
+          </div>
+
+          <div class="inputzone">
+            <div class="strip">
+              <div class="pchip on"><div class="pa">🌙</div><div class="pn">밤샘꾼</div></div>
+              <div class="pchip"><div class="pa">🗡️</div><div class="pn">리안</div></div>
+              <div class="pchip"><div class="pa" style="border-color:rgba(255,217,114,.6)">📜</div><div class="pn">GM 세라</div></div>
+              <div class="pchip"><div class="pa add">＋</div><div class="pn">추가</div></div>
+            </div>
+            <div class="inrow">
+              <div class="ooctgl"><div class="tk"></div><span>잡담</span></div>
+              <div class="tf">**굵게** · |等臺《등대》 · 1d100</div>
+              <div class="sendbtn">➤</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">02-A · 채팅방 — 메시지 좌우 16 / 그룹 12 / 연속 4</div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>통일 포인트</h4>
+        <p>메시지 목록 좌우 <code>12 → 16</code>(서술 문단의 별도 좌우 8dp 제거 — 목록 패딩에 맡긴다),
+        연속 말풍선 <code>2 → 4</code>, 말풍선 반경 <code>15 → 16</code>, 본문 <code>12.5 → 13</code>.</p></div>
+      <div class="note"><h4>상단 바</h4>
+        <p>56dp 규격. 룸명(명조 15) + 테마 점 8 + 권한 라벨(마스터/참여자).
+        우측 ↓ = HTML 로그 내보내기, ⚙ = 방 설정. 배경 위 가독성 오버레이 45%.</p></div>
+      <div class="note"><h4>GM 서술</h4>
+        <p>명조(고운 바탕) 13sp/행간 1.85, 서명줄 <code>GM 이름 · 서술 + 시간</code>.
+        발화 중 <code>" "</code> 인용만 분리해 <code>???</code> 말풍선(상아색)으로 왼쪽 정렬 — 극중 화자이므로 항상 상대 측.</p></div>
+      <div class="note"><h4>다이스 카드</h4>
+        <p>중앙 정렬 캡슐(반경 12) + 옐로 테두리. 비교식 판정은 <b style="color:var(--success)">성공</b>/<b style="color:var(--fail)">실패</b>를
+        뒤에 붙이고, 판정 매크로 발신 시 "OO 판정" 꼬리표가 남는다. d66·d100 등 표기는 <code>수식 → 결과</code>로 통일.</p></div>
+      <div class="note"><h4>시간·수정됨</h4>
+        <p>내 메시지는 말풍선 왼쪽, 상대는 오른쪽 하단에 시간 10sp. 수정된 메시지는 시간 위에 <code>(수정됨)</code> 9sp.
+        본인 메시지 길게 누르면 편집/삭제 메뉴(06 참조).</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 3. 입력 영역 ═══════════ -->
+<section class="spec" id="s3">
+  <div class="spec-head"><span class="no">03</span><h2>입력 영역 — 프로필 스트립·채팅 팔레트·잡담</h2></div>
+  <p class="spec-desc">입력 영역은 최대 3층: <b>프로필 스트립</b>(항상) → <b>판정 매크로 추천</b>(값 이름 부분 입력 시) → <b>입력줄</b>(항상).
+  층간 간격은 모두 8dp, 좌우는 화면과 같은 16dp.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>21:48</span><span>▲ ● ▮</span></div>
+        <div class="chat-bg">
+          <div class="appbar chat-appbar">
+            <div class="icon-btn">←</div>
+            <div class="grow">
+              <div class="bar-title" style="font-family:'Gowun Batang',serif">라일락 관 살인사건</div>
+              <div class="bar-sub"><i style="width:8px;height:8px;border-radius:3px;background:#c9a7e8;display:inline-block"></i> 참여자</div>
+            </div>
+            <div class="icon-btn">↓</div>
+            <div class="icon-btn">⚙</div>
+          </div>
+
+          <div class="msgs" style="justify-content:flex-end">
+            <div class="mrow">
+              <div class="avatar">📜</div>
+              <div class="mcol">
+                <div class="mname" style="color:var(--postit)">GM 무명</div>
+                <div class="bubble" style="background:var(--bubble-gmq)">문 뒤에서 인기척. 은신하려면 지금이야.</div>
+              </div>
+              <div class="mtime">21:47</div>
+            </div>
+            <div class="dice">🎲 <span>d66 → 41</span></div>
+          </div>
+
+          <div class="inputzone">
+            <div class="strip">
+              <div class="pchip on"><div class="pa">🗡️</div><div class="pn">리안</div></div>
+              <div class="pchip"><div class="pa">🎭</div><div class="pn">NPC 몬드</div></div>
+              <div class="pchip"><div class="pa add">＋</div><div class="pn">추가</div></div>
+            </div>
+            <div class="sugg">
+              <div class="schip">은신 판정</div>
+              <div class="schip" style="opacity:.65">은신술 판정</div>
+            </div>
+            <div class="inrow">
+              <div class="ooctgl on"><div class="tk"></div><span>잡담</span></div>
+              <div class="tf" style="color:var(--ink)">은신</div>
+              <div class="sendbtn" style="background:#c9a7e8">➤</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">03-A · 팔레트 추천 + 잡담 ON — 테마 컬러 전송 버튼</div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>통일 포인트</h4>
+        <p>입력 영역 좌우 <code>10 → 16</code>, 스트립 아바타 <code>34 → 36</code>, 층간 간격 <code>7·8 혼재 → 8</code>.
+        전송 버튼 <code>38 → 40</code>(터치 타깃 규격), 반경 <code>13 → 12</code>.</p></div>
+      <div class="note"><h4>프로필 스트립</h4>
+        <p>활성 프로필 = 옐로 링 + 이름 강조. 탭 = 전환(시스템 라인 기록), 길게 = 프로필 편집.
+        <code>＋</code>는 점선 원 — 캐릭터 추가(클립보드 코드/빈 캐릭터, 06 참조). GM 프로필은 금테로 구분.</p></div>
+      <div class="note"><h4>채팅 팔레트</h4>
+        <p>활성 캐릭터의 값 이름을 부분 입력하면 <code>OO 판정</code> 칩 추천.
+        탭 한 번에 <code>1d100&lt;={은신} 은신 판정</code>(룰별 매크로) 전송. 칩은 옐로 캡슐 — 시그니처 색은 "행동 유발" 요소에만 쓴다.</p></div>
+      <div class="note"><h4>잡담 토글</h4>
+        <p>ON이면 캡슐·스위치가 옐로로 점등되고 플레이스홀더가 "잡담으로 보내기…"로 바뀐다.
+        잡담 발신은 회색 점선 말풍선 + <code>잡담</code> 미니 태그.</p></div>
+      <div class="note"><h4>키보드</h4>
+        <p>물리 키보드 Ctrl+Enter 전송. 키보드가 올라오면 입력 영역이 밀착(인셋 이중 적용 금지 — 현행 코드 유지).</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 4. 프로필 편집 ═══════════ -->
+<section class="spec" id="s4">
+  <div class="spec-head"><span class="no">04</span><h2>캐릭터 프로필 편집</h2></div>
+  <p class="spec-desc">이미지(원형 크롭) · 이름 · 이름 색 · 말풍선 색 · <b>캐릭터 값</b>(판정 매크로용) · 실시간 미리보기.
+  폼 리듬: 섹션 사이 24dp, 라벨↔필드 8dp, 좌우 16dp.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>21:52</span><span>▲ ● ▮</span></div>
+        <div class="appbar">
+          <div class="icon-btn">←</div>
+          <div class="grow"><div class="bar-title">프로필 편집</div></div>
+          <div class="savepill">저장</div>
+        </div>
+        <div class="body16" style="overflow:hidden">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:var(--sp-3) 0 0;gap:var(--sp-2)">
+            <div style="width:92px;height:92px;border-radius:50%;border:3px solid var(--postit);background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:40px">🗡️</div>
+            <div style="border:1px solid rgba(255,255,255,.25);border-radius:var(--r-pill);padding:7px 14px;font-size:var(--t-label);font-weight:700">이미지 선택</div>
+            <div style="font-size:var(--t-micro);color:var(--ink-dim)">프로필 이미지는 원형으로 잘려 표시됩니다</div>
+          </div>
+
+          <div class="sec-label">캐릭터 이름</div>
+          <div class="input">리안</div>
+
+          <div class="sec-label">이름 색</div>
+          <div class="swrow">
+            <div class="swc sel" style="background:#ffc46b">✓</div>
+            <div class="swc" style="background:#8ec5e8"></div>
+            <div class="swc" style="background:#c9a7e8"></div>
+            <div class="swc" style="background:#9fe0b8"></div>
+            <div class="swc" style="background:#f2a1a8"></div>
+            <div class="swc rainbow">＋</div>
+          </div>
+
+          <div class="sec-label">말풍선 색</div>
+          <div class="swrow">
+            <div class="swc sel" style="background:#ffd9a8">✓</div>
+            <div class="swc" style="background:#bfe3f6"></div>
+            <div class="swc" style="background:#e3d2f2"></div>
+            <div class="swc" style="background:#cdeed9"></div>
+            <div class="swc" style="background:#f6d3d6"></div>
+            <div class="swc rainbow">＋</div>
+          </div>
+
+          <div class="sec-label">캐릭터 값 — 메시지에 {값이름}을 쓰면 값으로 바뀝니다</div>
+          <div class="statrow"><b>{은신}</b><span>50</span><div class="del">✕</div></div>
+          <div class="statrow"><b>{매력}</b><span>65</span><div class="del">✕</div></div>
+          <div style="display:flex;gap:var(--sp-2);align-items:center;padding-top:var(--sp-2)">
+            <div class="input" style="flex:1.2;color:var(--ink-dim);font-size:var(--t-label)">값 이름 (예: 도서관)</div>
+            <div class="input" style="flex:.8;color:var(--ink-dim);font-size:var(--t-label)">값 (예: 50)</div>
+            <b style="color:var(--postit);font-size:var(--t-label)">추가</b>
+          </div>
+
+          <div class="sec-label">미리보기 — 방 배경 위</div>
+          <div class="preview">
+            <div style="display:flex;justify-content:flex-end;gap:var(--sp-2)">
+              <div style="display:flex;flex-direction:column;align-items:flex-end">
+                <div class="mname" style="color:#ffc46b">리안</div>
+                <div class="bubble" style="background:#ffd9a8;border-radius:var(--r-card) 4px var(--r-card) var(--r-card)">이 색으로 말하게 됩니다.</div>
+              </div>
+              <div class="mrow"><div class="avatar" style="width:34px;height:34px;font-size:15px">🗡️</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">04-A · 프로필 편집 — 섹션 24 / 라벨↔필드 8</div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>통일 포인트</h4>
+        <p>본문 좌우 <code>20 → 16</code>, 섹션 간 <code>18·20 혼재 → 24</code>, 라벨 아래 <code>7 → 8</code>,
+        스와치 <code>30 → 32</code>, 저장 버튼은 옐로 캡슐(높이 32) 유지.</p></div>
+      <div class="note"><h4>캐릭터 값</h4>
+        <p>판정 매크로·치환의 원천. 메시지의 <code>{은신}</code>은 발신 시 값으로 치환되고,
+        입력 중엔 채팅 팔레트 추천(03)으로 이어진다. ccfolia JSON 캐릭터 코드 가져오기 시 자동 채움.</p></div>
+      <div class="note"><h4>미리보기</h4>
+        <p>이름 색 + 말풍선 색 + 이미지 조합을 방 배경 그라데이션 위에서 즉시 확인 — 저장 전 가독성 검증용.</p></div>
+      <div class="note r"><h4>삭제 규칙</h4>
+        <p>일반 캐릭터만 하단 텍스트 버튼으로 삭제 가능. GM 프로필은 방과 운명을 같이하므로 삭제 불가(버튼 미노출).</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 5. 방 설정 ═══════════ -->
+<section class="spec" id="s5">
+  <div class="spec-head"><span class="no">05</span><h2>방 설정 — 테마·배경·공유</h2></div>
+  <p class="spec-desc">마스터 전용 편집(참여자는 읽기 전용). 테마 컬러 7종+커스텀, 배경 프리셋 5종+커스텀 썸네일+갤러리,
+  초대 코드 공유, 알림 안내. 그리드 셀 간격은 전부 8dp.</p>
+
+  <div class="row">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>21:55</span><span>▲ ● ▮</span></div>
+        <div class="appbar">
+          <div class="icon-btn">←</div>
+          <div class="grow"><div class="bar-title">방 설정 · 등대에서 만나요</div></div>
+        </div>
+        <div class="body16">
+          <div class="sec-label" style="margin-top:var(--sp-2)">테마 컬러</div>
+          <div class="grid4">
+            <div class="tcell sel"><div class="tsw" style="background:#8ec5e8"></div><span>새벽 하늘</span></div>
+            <div class="tcell"><div class="tsw" style="background:#c9a7e8"></div><span>라일락</span></div>
+            <div class="tcell"><div class="tsw" style="background:#e8b48e"></div><span>호박등</span></div>
+            <div class="tcell"><div class="tsw" style="background:#9fe0b8"></div><span>이끼</span></div>
+            <div class="tcell"><div class="tsw" style="background:#f2a1a8"></div><span>동백</span></div>
+            <div class="tcell"><div class="tsw" style="background:#e8d48e"></div><span>사금</span></div>
+            <div class="tcell"><div class="tsw" style="background:#a8b4c8"></div><span>잿빛</span></div>
+            <div class="tcell"><div class="tsw" style="background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666)"></div><span>커스텀</span></div>
+          </div>
+
+          <div class="sec-label">배경 이미지</div>
+          <div class="grid3">
+            <div class="bgcell sel" style="background:linear-gradient(180deg,#26374d,#101a28)"><span class="use">사용 중</span></div>
+            <div class="bgcell" style="background:linear-gradient(180deg,#33253f,#141020)"></div>
+            <div class="bgcell" style="background:linear-gradient(180deg,#4f4a2c,#211d12)"></div>
+            <div class="bgcell" style="background:linear-gradient(180deg,#173226,#0a120e)"></div>
+            <div class="bgcell" style="background:linear-gradient(180deg,#3a1f22,#140b0c)"></div>
+            <div class="bgcell dash">갤러리에서<br>선택</div>
+          </div>
+
+          <div class="sec-label">공유 · 기타</div>
+          <div class="setrow">
+            <div class="sr-main">
+              <div class="sr-t">방 공유 · 초대 코드</div>
+              <div class="sr-s">코드 LK4T9A — 탭하여 확인</div>
+            </div>
+            <span class="chv">›</span>
+          </div>
+          <div class="setrow" style="border-bottom:none">
+            <div class="sr-main">
+              <div class="sr-t">알림</div>
+              <div class="sr-s">미확인 메시지 도착 시 푸시 · 본문은 표시되지 않습니다</div>
+            </div>
+            <span class="chv">›</span>
+          </div>
+        </div>
+      </div>
+      <div class="cap">05-A · 방 설정 — 셀 간격 8 / 섹션 24</div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>통일 포인트</h4>
+        <p>섹션 제목·그리드·행의 좌우 기준선이 현재 <code>16/18</code>로 어긋나 있다 → 전부 <code>16</code> 한 줄로 정렬.
+        섹션 제목 위 <code>18 → 24</code>, 아래 <code>10 → 8</code>. 설정 행 상하 <code>13 → 12</code>.</p></div>
+      <div class="note"><h4>선택 표시</h4>
+        <p>테마 셀·배경 셀 모두 <b>옐로 1.5dp 테두리 + 옅은 옐로 배경</b>으로 동일하게. "사용 중" 배지는 배경 셀에만.
+        커스텀 배경을 쓰는 중이면 프리셋 뒤에 실제 이미지 썸네일 셀이 추가된다.</p></div>
+      <div class="note"><h4>초대 코드</h4>
+        <p>이미 발급된 코드는 부제에 노출하고 탭하면 큰 코드 다이얼로그(06). 미발급이면 탭 시 발급.
+        상대는 방 목록의 <code>참여</code>에서 입력.</p></div>
+      <div class="note"><h4>권한</h4>
+        <p>참여자에겐 동일 화면을 읽기 전용으로 보여주고 상단에 "마스터만 변경할 수 있습니다" 안내 밴드 1줄.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 6. 다이얼로그 모음 ═══════════ -->
+<section class="spec" id="s6">
+  <div class="spec-head"><span class="no">06</span><h2>다이얼로그 모음 — 시트 규격 통일</h2></div>
+  <p class="spec-desc">모든 다이얼로그: 반경 20 · 내부 패딩 20 · 제목 15 · 옵션 행 패딩 12 · 우하단 텍스트 버튼.
+  옵션의 제목은 옐로(파괴적 동작만 레드), 부제는 딤 컬러 11sp.</p>
+
+  <div class="dlg-grid">
+    <div class="dlg">
+      <h3>캐릭터 추가</h3>
+      <div class="opt"><b>클립보드 코드로 생성</b><span>복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록</span></div>
+      <div class="opt"><b>빈 캐릭터 생성</b><span>이름과 색만 정해 새로 만들기</span></div>
+      <div class="acts"><i class="dim">취소</i></div>
+    </div>
+
+    <div class="dlg">
+      <h3>메시지</h3>
+      <div class="opt"><b>편집</b><span>본문을 고치면 (수정됨) 표시가 남습니다</span></div>
+      <div class="opt danger"><b>삭제</b><span>공유된 방이면 상대 화면에서도 사라집니다</span></div>
+      <div class="acts"><i class="dim">취소</i></div>
+    </div>
+
+    <div class="dlg">
+      <h3>초대 코드</h3>
+      <div class="code">LK4T9A</div>
+      <p class="helper" style="text-align:center">상대가 방 목록의 '참여'에서 이 코드를 입력하면<br>같은 방에 연결됩니다.</p>
+      <div class="acts"><i>닫기</i></div>
+    </div>
+
+    <div class="dlg">
+      <h3>앱 글꼴</h3>
+      <div class="radio"><span class="rb">○</span><span>시스템 기본</span></div>
+      <div class="radio on"><span class="rb">●</span><span class="serif">고운 바탕 (명조)</span></div>
+      <div class="acts"><i>닫기</i></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:28px">
+    <div class="notes" style="max-width:none;display:flex;gap:14px;flex-wrap:wrap">
+      <div class="note y" style="flex:1;min-width:240px"><h4>통일 포인트</h4>
+        <p>옵션 행 패딩 <code>10·11·12 혼재 → 12</code>, 행 반경 <code>10 → 12</code>.
+        파괴적 동작(삭제)만 레드 — 그 외 강조는 전부 시그니처 옐로.</p></div>
+      <div class="note" style="flex:1;min-width:240px"><h4>확인 다이얼로그</h4>
+        <p>방 삭제·메시지 삭제 확인도 같은 규격. 확인 버튼 문구는 동사("삭제")로, 취소는 항상 좌측 딤 처리.</p></div>
+      <div class="note" style="flex:1;min-width:240px"><h4>알림(참고)</h4>
+        <p>푸시는 <code>원형 프로필 + "OO님의 메시지가 도착했습니다."</code> 형식 고정, 본문 비노출 — 기존 스펙 7장 유지.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  PbP 디자인 목업 v2 · 2026-07-29 · 다크 모드 기준(라이트 모드는 Tokens.kt <code>PbpLightColors</code> 스왑, 형태·간격 동일)<br>
+  구현 매핑: px = dp 1:1 · 선행 문서 <code>docs/PbP-design-spec.md</code>의 색·규칙은 유지하고, 본 문서는 <b>여백·타이포·반경 통일안</b>을 추가 정의한다.
+</footer>
+
+</div>
+</body>
+</html>

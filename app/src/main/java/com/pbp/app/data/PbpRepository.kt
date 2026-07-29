@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.pbp.app.dice.DiceBot
 import com.pbp.app.sync.SyncManager
 import com.pbp.app.ui.theme.PbpPalette
+import kotlinx.coroutines.withContext
 
 class PbpRepository(private val db: AppDatabase) {
 
@@ -168,27 +169,35 @@ class PbpRepository(private val db: AppDatabase) {
     }
 
     /**
-     * 방 로그 전체 리셋 — 로컬·서버의 모든 메시지를 삭제한다.
+     * 방 로그 전체 리셋 — 서버를 먼저 비우고, 성공한 뒤에 로컬을 지운다.
      * 서버 문서가 지워지면 상대 기기의 리스너(REMOVED)가 상대 로그도 지운다.
+     *
+     * 순서가 중요하다(N2): 로컬을 먼저 지우면 서버 wipe 실패 시 내 쪽만 비고
+     * 다음 시작 때 상대 메시지만 되살아나는 영구 분기가 생긴다.
+     * 화면 이탈로 중간에 취소되지 않도록 NonCancellable로 감싼다(N1).
+     *
      * @return 서버 삭제까지 성공했는지 (로컬 전용 방이면 true)
      */
-    suspend fun resetLogs(roomId: Long): Boolean {
-        val room = db.roomDao().get(roomId) ?: return false
-        db.messageDao().deleteForRoom(roomId)
-        val serverOk = room.remoteId?.let { remoteId ->
-            syncManager?.wipeMessages(remoteId) ?: false
-        } ?: true
-        // 리셋 흔적을 양쪽에 남긴다 (서버 삭제가 끝난 뒤에 보내야 함께 지워지지 않는다)
-        val notice = Message(
-            roomId = roomId,
-            type = MessageType.SYSTEM,
-            body = "방 로그가 초기화되었습니다",
-            createdAt = System.currentTimeMillis(),
-        )
-        val inserted = notice.copy(id = db.messageDao().insert(notice))
-        pushIfSynced(roomId, listOf(inserted))
-        return serverOk
-    }
+    suspend fun resetLogs(roomId: Long): Boolean =
+        withContext(kotlinx.coroutines.NonCancellable) {
+            val room = db.roomDao().get(roomId) ?: return@withContext false
+            val remoteId = room.remoteId
+            if (remoteId != null) {
+                val serverOk = syncManager?.wipeMessages(remoteId) ?: false
+                if (!serverOk) return@withContext false // 로컬은 건드리지 않는다
+            }
+            db.messageDao().deleteForRoom(roomId)
+            // 리셋 흔적을 양쪽에 남긴다 (서버 삭제가 끝난 뒤에 보내야 함께 지워지지 않는다)
+            val notice = Message(
+                roomId = roomId,
+                type = MessageType.SYSTEM,
+                body = "방 로그가 초기화되었습니다",
+                createdAt = System.currentTimeMillis(),
+            )
+            val inserted = notice.copy(id = db.messageDao().insert(notice))
+            pushIfSynced(roomId, listOf(inserted))
+            true
+        }
 
     suspend fun saveProfile(profile: CharacterProfile) {
         if (profile.id == 0L) db.profileDao().insert(profile) else db.profileDao().update(profile)

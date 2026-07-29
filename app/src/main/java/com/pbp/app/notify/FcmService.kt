@@ -12,6 +12,9 @@ import com.pbp.app.PbpApp
  */
 class FcmService : FirebaseMessagingService() {
 
+    // 메시지마다 새로 만들면 알림 채널을 매번 재생성한다 (C18)
+    private val notifier by lazy { MessageNotifier(this) }
+
     override fun onNewToken(token: String) {
         (application as PbpApp).syncManager.onNewFcmToken(token)
     }
@@ -24,6 +27,6 @@ class FcmService : FirebaseMessagingService() {
         val remoteRoomId = message.data["roomId"]
         if (remoteRoomId != null && app.syncManager.isAttached(remoteRoomId)) return
         val senderName = message.data["senderName"] ?: "상대"
-        MessageNotifier(this).notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null)
+        notifier.notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null)
     }
 }

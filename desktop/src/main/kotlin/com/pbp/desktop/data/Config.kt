@@ -74,27 +74,38 @@ class AppConfig private constructor(
         val authRefreshToken: String? = null,
     )
 
+    /**
+     * 저장할 내용을 호출 스레드(=목록을 소유한 UI 스레드)에서 문자열로 굳힌다.
+     * 이렇게 하지 않으면 IO 스레드의 직렬화가 UI의 리스트 변경과 겹쳐
+     * ConcurrentModificationException으로 스코프 전체가 죽을 수 있다 (N8).
+     */
     @Synchronized
-    fun save() {
-        file.parentFile?.mkdirs()
-        // 임시 파일에 쓴 뒤 원자적 이동 — 쓰다 죽어도 기존 config가 깨지지 않는다 (P2-8)
-        val tmp = File(file.parentFile, "config.json.tmp")
-        tmp.writeText(
-            gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken)),
-            Charsets.UTF_8,
-        )
+    fun snapshot(): String =
+        gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken))
+
+    /** 이미 굳힌 스냅샷을 파일에 쓴다. 실패해도 예외를 밖으로 던지지 않는다 (N8). */
+    @Synchronized
+    fun writeSnapshot(json: String) {
         runCatching {
-            java.nio.file.Files.move(
-                tmp.toPath(), file.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-            )
-        }.recoverCatching {
-            // 일부 파일시스템은 ATOMIC_MOVE 미지원 — 일반 교체로 폴백
-            java.nio.file.Files.move(
-                tmp.toPath(), file.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-            )
-        }
+            file.parentFile?.mkdirs()
+            // 임시 파일에 쓴 뒤 원자적 이동 — 쓰다 죽어도 기존 config가 깨지지 않는다 (P2-8)
+            val tmp = File(file.parentFile, "config.json.tmp")
+            tmp.writeText(json, Charsets.UTF_8)
+            runCatching {
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                )
+            }.recoverCatching {
+                // 일부 파일시스템은 ATOMIC_MOVE 미지원 — 일반 교체로 폴백
+                java.nio.file.Files.move(
+                    tmp.toPath(), file.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }.getOrThrow()
+        }.onFailure { System.err.println("config.json 저장 실패: $it") }
     }
+
+    fun save() = writeSnapshot(snapshot())
 }

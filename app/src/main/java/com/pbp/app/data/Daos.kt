@@ -96,9 +96,6 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE roomId = :roomId ORDER BY createdAt ASC, id ASC")
     suspend fun listForRoom(roomId: Long): List<Message>
 
-    @Query("SELECT COUNT(*) FROM messages WHERE remoteId = :remoteId")
-    suspend fun countByRemoteId(remoteId: String): Int
-
     /** 수신 dedup 일괄 조회 — 문서마다 쿼리하지 않도록 */
     @Query("SELECT remoteId FROM messages WHERE remoteId IN (:ids)")
     suspend fun existingRemoteIds(ids: List<String>): List<String>

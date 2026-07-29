@@ -34,6 +34,17 @@ Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → 해당
 - **API 제한**: Identity Toolkit API, Token Service API, Cloud Firestore API, FCM 관련만 허용
 - 규칙이 배포되면 키만으로는 데이터 접근이 불가능해진다(인증+멤버십 필요)
 
+## 배포 후 정리할 것 (전환기 코드)
+
+규칙이 배포되어 정상 동작을 확인한 뒤에는 아래 하위 호환 코드를 제거한다:
+
+- **레거시 초대코드 폴백** — `SyncManager.joinRoom`과 데스크톱 `legacyFindRoomByCode`의
+  `rooms` 컬렉션 쿼리. 규칙 배포 후엔 100% 거부되어 지연만 만든다 (C1)
+- **deviceId 신원 폴백** — `SyncManager.myUid`의 `authUid ?: deviceId`,
+  수신 필터의 deviceId 비교, 멤버 문서 레거시 삭제 (C2)
+- 위 둘을 지우기 전에 양쪽 기기가 최신 빌드로 최소 한 번씩 접속해
+  `members/{auth uid}` 문서가 생겼는지 확인할 것
+
 ## 동작 방식 메모
 
 - 신원: 익명 auth UID. 인증 실패 시(콘솔 미설정 등) 기존 deviceId로 폴백 — 규칙 배포 전 한정

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -120,7 +121,7 @@ fun ImageCropDialog(
                             }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(PbpDimens.sp2))
                     Text(
                         "드래그로 이동 · 두 손가락으로 확대/축소",
                         fontSize = 11.sp,

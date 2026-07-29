@@ -34,7 +34,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -112,33 +115,33 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     val tokens = Pbp.colors
 
     // 폼 상태는 rememberSaveable — 화면 회전 시 DB 값으로 덮어써 입력이 날아가는 것 방지 (P2-4)
-    var loaded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var loaded by rememberSaveable { mutableStateOf(false) }
     var existing by remember { mutableStateOf<CharacterProfile?>(null) }
-    var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
-    var nameColor by androidx.compose.runtime.saveable.rememberSaveable {
+    var name by rememberSaveable { mutableStateOf("") }
+    var nameColor by rememberSaveable {
         mutableStateOf<Long?>(PbpPalette.namePresets.first())
     }
-    var bubbleColor by androidx.compose.runtime.saveable.rememberSaveable {
+    var bubbleColor by rememberSaveable {
         mutableStateOf<Long?>(PbpPalette.bubblePresets.first())
     }
     var cropSource by remember { mutableStateOf<Uri?>(null) } // 크롭 대기 중인 갤러리 이미지
-    var pickedPath by androidx.compose.runtime.saveable.rememberSaveable {
+    var pickedPath by rememberSaveable {
         mutableStateOf<String?>(null) // 크롭 완료된 512px 파일
     }
     var customTarget by remember { mutableStateOf<String?>(null) } // "name" | "bubble"
-    val stats = androidx.compose.runtime.saveable.rememberSaveable(
-        saver = androidx.compose.runtime.saveable.listSaver(
+    val stats = rememberSaveable(
+        saver = listSaver(
             save = { listOf(ProfileStats.encode(it)) },
             restore = { saved ->
                 ProfileStats.decode(saved.first()).let { decoded ->
-                    androidx.compose.runtime.mutableStateListOf<Pair<String, String>>()
+                    mutableStateListOf<Pair<String, String>>()
                         .apply { addAll(decoded) }
                 }
             },
         ),
-    ) { androidx.compose.runtime.mutableStateListOf<Pair<String, String>>() }
-    var newStatName by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
-    var newStatValue by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    ) { mutableStateListOf<Pair<String, String>>() }
+    var newStatName by rememberSaveable { mutableStateOf("") }
+    var newStatValue by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(profileId) {
         existing = vm.load(profileId)
@@ -181,11 +184,13 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 }
                 Text("프로필 편집", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                 Spacer(Modifier.weight(1f))
+                // 기존 프로필이 아직 로드되지 않은 상태로 저장하면 새 프로필이 복제된다 (N9)
+                val canSave = profileId == 0L || existing != null
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(tokens.signature)
-                        .clickable {
+                        .background(if (canSave) tokens.signature else tokens.signature.copy(alpha = .4f))
+                        .clickable(enabled = canSave) {
                             // 추가 버튼을 누르지 않고 저장해도 입력 중인 값은 반영
                             val pending = newStatName.trim()
                                 .takeIf { it.isNotEmpty() }
@@ -285,7 +290,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
                         .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp2),
                 ) {
-                    stats.forEachIndexed { _, statEntry ->
+                    stats.forEach { statEntry ->
                         val (statName, statValue) = statEntry
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = PbpDimens.sp3),

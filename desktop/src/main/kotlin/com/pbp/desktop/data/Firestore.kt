@@ -68,13 +68,37 @@ class FirestoreRest(
 
     @Volatile private var refreshToken: String? = initialRefreshToken
 
-    @Synchronized
+    /** 토큰 발급/갱신 직렬화용 — HTTP는 이 락 밖에서 돌지 않지만, 락 자체는 짧게 유지 (C15) */
+    private val tokenLock = Any()
+
     private fun currentToken(): String? {
+        // 유효한 토큰이 있으면 락 없이 즉시 반환 — 폴링·전송이 서로 막지 않는다
         idToken?.let { if (System.currentTimeMillis() < tokenExpiresAt - 60_000) return it }
-        refreshToken?.let { if (refreshIdToken(it)) return idToken }
-        if (signUpAnonymous()) return idToken
-        return null // 인증 실패 — 보안 규칙 배포 전의 공개 모드에서만 동작 가능
+        synchronized(tokenLock) {
+            // 락 대기 중 다른 스레드가 갱신했을 수 있다
+            idToken?.let { if (System.currentTimeMillis() < tokenExpiresAt - 60_000) return it }
+            val saved = refreshToken
+            if (saved != null) {
+                return when (refreshIdToken(saved)) {
+                    RefreshResult.OK -> idToken
+                    // 네트워크·서버 오류는 토큰을 버리지 않는다 — 새 익명 계정을 만들면
+                    // 기존 UID(=방 멤버십)를 영구히 잃는다 (R4)
+                    RefreshResult.TRANSIENT -> null
+                    // 토큰이 폐기된 경우에만 재가입
+                    RefreshResult.REVOKED -> if (signUpAnonymous()) idToken else null
+                }
+            }
+            return if (signUpAnonymous()) idToken else null
+        }
     }
+
+    /** 401을 받은 호출부가 다음 요청에서 강제 갱신하도록 (C15) */
+    private fun invalidateToken() {
+        idToken = null
+        tokenExpiresAt = 0
+    }
+
+    private enum class RefreshResult { OK, TRANSIENT, REVOKED }
 
     private fun signUpAnonymous(): Boolean = runCatching {
         val res = http.send(
@@ -95,28 +119,38 @@ class FirestoreRest(
         true
     }.getOrDefault(false)
 
-    private fun refreshIdToken(token: String): Boolean = runCatching {
+    private fun refreshIdToken(token: String): RefreshResult = runCatching {
         val res = http.send(
             HttpRequest.newBuilder(URI.create("https://securetoken.googleapis.com/v1/token?key=$apiKey")).timeout(requestTimeout)
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(
                     HttpRequest.BodyPublishers.ofString(
-                        "grant_type=refresh_token&refresh_token=$token", StandardCharsets.UTF_8,
+                        "grant_type=refresh_token&refresh_token=" +
+                            java.net.URLEncoder.encode(token, "UTF-8"),
+                        StandardCharsets.UTF_8,
                     )
                 )
                 .build(),
             HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
         )
-        if (res.statusCode() !in 200..299) return false
+        if (res.statusCode() !in 200..299) {
+            // 400 + invalid_grant/TOKEN_EXPIRED = 토큰 폐기(재가입 필요),
+            // 그 외(네트워크·5xx·429)는 일시 오류로 보고 토큰을 유지한다 (R4)
+            val body = res.body()
+            val revoked = res.statusCode() == 400 &&
+                listOf("INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "invalid_grant")
+                    .any { body.contains(it, ignoreCase = true) }
+            return if (revoked) RefreshResult.REVOKED else RefreshResult.TRANSIENT
+        }
         val o = JsonParser.parseString(res.body()).asJsonObject
         applyTokens(
-            token = o.get("id_token")?.asString ?: return false,
-            newUid = o.get("user_id")?.asString ?: return false,
+            token = o.get("id_token")?.asString ?: return RefreshResult.TRANSIENT,
+            newUid = o.get("user_id")?.asString ?: return RefreshResult.TRANSIENT,
             newRefresh = o.get("refresh_token")?.asString ?: token,
             expiresInSec = o.get("expires_in")?.asString?.toLongOrNull() ?: 3600,
         )
-        true
-    }.getOrDefault(false)
+        RefreshResult.OK
+    }.getOrDefault(RefreshResult.TRANSIENT)
 
     private fun applyTokens(token: String, newUid: String, newRefresh: String, expiresInSec: Long) {
         idToken = token
@@ -132,42 +166,58 @@ class FirestoreRest(
     }
 
     // ── HTTP ──────────────────────────────────────────────
-    private fun get(url: String): JsonObject? = runCatching {
-        val res = http.send(
-            HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout).auth().GET().build(),
-            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
-        )
-        if (res.statusCode() in 200..299) JsonParser.parseString(res.body()).asJsonObject else null
+
+    /** 401/403이면 토큰을 무효화하고 한 번만 재시도한다 (C15) */
+    private fun sendWithRetry(build: () -> HttpRequest): HttpResponse<String>? = runCatching {
+        var res = http.send(build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+        if (res.statusCode() == 401 && idToken != null) {
+            invalidateToken()
+            res = http.send(build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+        }
+        res
     }.getOrNull()
 
-    private fun post(url: String, bodyJson: String): JsonObject? = runCatching {
-        val res = http.send(
+    private fun get(url: String): JsonObject? {
+        val res = sendWithRetry {
+            HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout).auth().GET().build()
+        } ?: return null
+        return if (res.statusCode() in 200..299) {
+            runCatching { JsonParser.parseString(res.body()).asJsonObject }.getOrNull()
+        } else null
+    }
+
+    private fun post(url: String, bodyJson: String): JsonObject? {
+        val res = sendWithRetry {
             HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout)
                 .header("Content-Type", "application/json; charset=utf-8")
                 .auth()
                 .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
-                .build(),
-            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
-        )
-        if (res.statusCode() in 200..299) {
-            JsonParser.parseString(res.body()).asJsonObject
+                .build()
+        } ?: run {
+            System.err.println("Firestore POST 실패(네트워크): $url")
+            return null
+        }
+        return if (res.statusCode() in 200..299) {
+            runCatching { JsonParser.parseString(res.body()).asJsonObject }.getOrNull()
         } else {
             System.err.println("Firestore POST ${res.statusCode()}: ${res.body().take(300)}")
             null
         }
-    }.onFailure { System.err.println("Firestore POST error: $it") }.getOrNull()
+    }
 
-    private fun patch(url: String, bodyJson: String): Boolean = runCatching {
-        val res = http.send(
+    private fun patch(url: String, bodyJson: String): Boolean {
+        val res = sendWithRetry {
             HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout)
                 .header("Content-Type", "application/json; charset=utf-8")
                 .auth()
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
-                .build(),
-            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
-        )
-        res.statusCode() in 200..299
-    }.getOrDefault(false)
+                .build()
+        } ?: return false
+        if (res.statusCode() !in 200..299) {
+            System.err.println("Firestore PATCH ${res.statusCode()}: ${res.body().take(300)}")
+        }
+        return res.statusCode() in 200..299
+    }
 
     // ── Firestore 값 인코딩/디코딩 ────────────────────────
     private fun v(value: Any): JsonObject {
@@ -319,8 +369,9 @@ class FirestoreRest(
         val out = mutableListOf<Message>()
         var pageToken: String? = null
         do {
+            // 토큰에 +·= 가 들어가므로 인코딩하지 않으면 2페이지 이후가 영구 실패 (C12)
             val url = "$base/rooms/$remoteRoomId/messages?key=$apiKey&pageSize=300&orderBy=createdAt" +
-                (pageToken?.let { "&pageToken=$it" } ?: "")
+                (pageToken?.let { "&pageToken=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
             // 페이지 하나라도 실패하면 부분 결과로 커서를 오염시키지 않도록 에러로 처리
             val res = get(url) ?: return null
             res.getAsJsonArray("documents")?.forEach { el -> out += parseMessage(el.asJsonObject) }

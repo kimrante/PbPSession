@@ -83,9 +83,12 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
         onResult(app.syncManager.shareRoom(roomId))
     }
 
-    /** 방 로그 전체 리셋 — 로컬·서버·상대 로그까지 삭제 */
-    fun resetLogs(onResult: (Boolean) -> Unit) = viewModelScope.launch {
-        onResult(repo.resetLogs(roomId))
+    /**
+     * 방 로그 전체 리셋 — 로컬·서버·상대 로그까지 삭제.
+     * 파괴적 작업이라 화면을 벗어나도 끝까지 돌도록 앱 수준 스코프에서 실행한다 (N1).
+     */
+    fun resetLogs(onResult: (Boolean) -> Unit) {
+        app.syncManager.runInAppScope(work = { repo.resetLogs(roomId) }, onDone = onResult)
     }
 }
 
@@ -251,14 +254,11 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 title = "방 공유 · 초대 코드",
                 subtitle = room?.inviteCode?.let { "코드 $it — 탭하여 확인" } ?: "초대 코드를 만들어 상대를 부릅니다",
             ) {
-                val existing = room?.inviteCode
-                if (existing != null) {
-                    shareCode = existing
-                } else {
-                    vm.share { code ->
-                        if (code != null) shareCode = code
-                        else Toast.makeText(context, "공유에 실패했습니다. 네트워크를 확인해주세요.", Toast.LENGTH_SHORT).show()
-                    }
+                // 코드가 이미 있어도 share를 다시 호출한다 — 멤버 등록·코드 매핑·백필이
+                // 중간에 실패해 '죽은 초대코드'가 된 방을 멱등 복구 (R2)
+                vm.share { code ->
+                    if (code != null) shareCode = code
+                    else Toast.makeText(context, "공유에 실패했습니다. 네트워크를 확인해주세요.", Toast.LENGTH_SHORT).show()
                 }
             }
             SettingRow(
@@ -290,7 +290,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         Toast.makeText(
                             context,
                             if (ok) "방 로그를 초기화했습니다"
-                            else "로컬 로그는 지웠지만 서버 삭제에 실패했습니다. 네트워크를 확인해주세요.",
+                            else "서버 삭제에 실패해 초기화를 취소했습니다. 네트워크를 확인해주세요.",
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
@@ -326,7 +326,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(PbpDimens.sp2))
                     Text(
                         "상대가 방 목록의 '참여'에서 이 코드를 입력하면 같은 방에 연결됩니다.",
                         fontSize = 13.sp,

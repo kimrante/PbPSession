@@ -39,7 +39,8 @@ service cloud.firestore {
       }
 
       match /members/{memberId} {
-        allow read: if signedIn();
+        // FCM 토큰이 들어 있으므로 같은 방 멤버만 (Functions는 admin이라 규칙 무관)
+        allow read: if isMember(roomId);
         // 멤버 등록·토큰 갱신은 본인 문서만 (방 문서 ID를 아는 사람 = 초대받은 사람)
         allow create, update: if signedIn() && request.auth.uid == memberId;
         // 본인 탈퇴 + 구버전(deviceId 키) 멤버 문서 정리는 멤버가 수행

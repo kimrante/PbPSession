@@ -169,11 +169,19 @@ object PbpMarkup {
 object ProfileStats {
     private val placeholder = Regex("""\{([^{}]+)\}""")
 
+    /** 중괄호가 든 값은 마커 파싱을 깨뜨리므로 제거 — 안드로이드 P3-11과 동일 (C11) */
+    fun sanitize(stats: Map<String, String>): Map<String, String> =
+        stats.entries.associate { (key, value) ->
+            key.filterNot { it == '{' || it == '}' }.trim() to
+                value.filterNot { it == '{' || it == '}' }
+        }.filterKeys { it.isNotBlank() }
+
     fun substitute(text: String, stats: Map<String, String>): Pair<String, String> {
         if (stats.isEmpty() || '{' !in text) return text to text
-        val plain = placeholder.replace(text) { m -> stats[m.groupValues[1]] ?: m.value }
+        val clean = sanitize(stats)
+        val plain = placeholder.replace(text) { m -> clean[m.groupValues[1]] ?: m.value }
         val marked = placeholder.replace(text) { m ->
-            stats[m.groupValues[1]]?.let { "{{$it}}" } ?: m.value
+            clean[m.groupValues[1]]?.let { "{{$it}}" } ?: m.value
         }
         return plain to marked
     }

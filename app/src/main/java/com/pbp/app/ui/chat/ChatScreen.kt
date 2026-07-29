@@ -42,7 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -175,10 +177,22 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val profiles by vm.profiles.collectAsState()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
-    var editTarget by remember { mutableStateOf<Message?>(null) }
-    var deleteTarget by remember { mutableStateOf<Message?>(null) }
-    var actionTarget by remember { mutableStateOf<Message?>(null) } // 길게 누른 내 메시지
-    var showAddProfile by remember { mutableStateOf(false) }
+    // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
+    var editTargetId by rememberSaveable {
+        mutableStateOf<Long?>(null)
+    }
+    var deleteTargetId by rememberSaveable {
+        mutableStateOf<Long?>(null)
+    }
+    var actionTargetId by rememberSaveable {
+        mutableStateOf<Long?>(null) // 길게 누른 내 메시지
+    }
+    val editTarget = messages.find { it.id == editTargetId }
+    val deleteTarget = messages.find { it.id == deleteTargetId }
+    val actionTarget = messages.find { it.id == actionTargetId }
+    var showAddProfile by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
     val incomingCount = messages.count { it.incoming }
@@ -192,6 +206,11 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         if (messages.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
             listState.scrollToItem(0)
         }
+    }
+    // 내가 보낸 메시지는 어디를 보고 있든 최신으로 내려간다 (N4)
+    var sendTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(sendTick) {
+        if (sendTick > 0 && messages.isNotEmpty()) listState.scrollToItem(0)
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -276,7 +295,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
-                                onLongPress = { actionTarget = it },
+                                onLongPress = { actionTargetId = it.id },
                             )
                         }
                     }
@@ -310,7 +329,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     onSwitch = { vm.switchTo(it) },
                     onEditProfile = { nav.navigate("profile/${it.id}") },
                     onAddProfile = { showAddProfile = true },
-                    onSend = { text, ooc -> vm.send(text, ooc) },
+                    onSend = { text, ooc ->
+                        vm.send(text, ooc)
+                        sendTick++ // 내 전송은 항상 최신으로 스크롤 (N4)
+                    },
                     rule = room?.rule ?: com.pbp.app.dice.Rules.COC7,
                 )
             }
@@ -353,40 +375,41 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         MessageActionDialog(
             message = target,
             onEdit = {
-                editTarget = target
-                actionTarget = null
+                editTargetId = target.id
+                actionTargetId = null
             },
             onDelete = {
-                deleteTarget = target
-                actionTarget = null
+                deleteTargetId = target.id
+                actionTargetId = null
             },
-            onDismiss = { actionTarget = null },
+            onDismiss = { actionTargetId = null },
         )
     }
 
     editTarget?.let { target ->
         EditMessageDialog(
+            messageId = target.id,
             original = target.body,
-            onDismiss = { editTarget = null },
+            onDismiss = { editTargetId = null },
             onSave = { newBody ->
                 vm.edit(target.id, newBody)
-                editTarget = null
+                editTargetId = null
             },
         )
     }
 
     deleteTarget?.let { target ->
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
+            onDismissRequest = { deleteTargetId = null },
             title = { Text("메시지 삭제") },
             text = { Text("이 메시지를 삭제할까요? 공유된 방이면 상대 화면에서도 사라집니다.") },
             confirmButton = {
                 TextButton(onClick = {
                     vm.delete(target)
-                    deleteTarget = null
+                    deleteTargetId = null
                 }) { Text("삭제", color = Pbp.colors.signature) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { deleteTargetId = null }) { Text("취소") } },
         )
     }
 }
@@ -426,14 +449,14 @@ private fun MessageBlock(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(PbpDimens.rCell))
                         .background(Color.Black.copy(alpha = .5f))
-                        .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(12.dp))
+                        .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(PbpDimens.rCell))
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(PbpDimens.sp2))
                     Text(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp,
@@ -443,11 +466,11 @@ private fun MessageBlock(
                     // 비교식 판정: 성공 = 파랑, 실패 = 빨강
                     when (message.diceOutcome) {
                         "success" -> {
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(PbpDimens.sp2))
                             Text("성공", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5E9EFF))
                         }
                         "fail" -> {
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(PbpDimens.sp2))
                             Text("실패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF6B6B))
                         }
                     }
@@ -686,8 +709,8 @@ private fun InputZone(
     val tokens = Pbp.colors
     // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록.
     // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
-    var input by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
-    var oocOn by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var input by rememberSaveable { mutableStateOf("") }
+    var oocOn by rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
@@ -1019,9 +1042,16 @@ private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun EditMessageDialog(original: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    // 회전에도 편집 중 텍스트 보존 (P2-4)
-    var body by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(original) }
+private fun EditMessageDialog(
+    messageId: Long,
+    original: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    // 회전에도 편집 중 텍스트 보존 (P2-4). 키가 메시지 id라 다른 메시지를 열면 초기화된다
+    var body by rememberSaveable(messageId) {
+        mutableStateOf(original)
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("메시지 수정") },

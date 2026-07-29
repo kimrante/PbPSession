@@ -21,7 +21,7 @@ object GmSpeech {
             val before = text.substring(cursor, match.range.first).trim()
             if (before.isNotEmpty()) parts += Part.Narration(before)
             val quote = match.groupValues[1].ifEmpty { match.groupValues[2] }.trim()
-            // 공백만 있는 인용부는 빈 "???" 말풍선을 만들지 않는다 (P3-8)
+            // 공백만 있는 인용부는 빈 말풍선을 만들지 않는다 (P3-8)
             if (quote.isNotEmpty()) parts += Part.Quote(quote)
             cursor = match.range.last + 1
         }

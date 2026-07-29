@@ -42,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
@@ -202,15 +201,16 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     // 키는 최신 메시지 id만 — size를 키로 쓰면 '이전 대화 불러오기'나 삭제 때마다
     // 바닥으로 끌려간다. 위로 스크롤해 읽는 중에는 자동 스크롤하지 않는다. (P1-7)
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.firstOrNull()?.id) {
-        if (messages.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
+    // 내 발신(메시지·판정)은 어디를 보고 있든 최신으로 내려간다. 전송 직후에는 아직
+    // DB 반영 전이라 목록이 그대로이므로, 플래그를 새 메시지가 도착할 때까지 유지한다 (N4)
+    var pendingScrollToLatest by remember { mutableStateOf(false) }
+    LaunchedEffect(messages.firstOrNull()?.id, pendingScrollToLatest) {
+        if (messages.isEmpty()) return@LaunchedEffect
+        // 위로 스크롤해 이전 대화를 읽는 중이면 수신 메시지로 끌어내리지 않는다 (P1-7)
+        if (pendingScrollToLatest || listState.firstVisibleItemIndex <= 1) {
             listState.scrollToItem(0)
+            pendingScrollToLatest = false
         }
-    }
-    // 내가 보낸 메시지는 어디를 보고 있든 최신으로 내려간다 (N4)
-    var sendTick by remember { mutableIntStateOf(0) }
-    LaunchedEffect(sendTick) {
-        if (sendTick > 0 && messages.isNotEmpty()) listState.scrollToItem(0)
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -248,28 +248,30 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         Text("←", fontSize = 20.sp, color = tokens.ink)
                     }
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            room?.name ?: "",
-                            fontFamily = GowunBatang,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = tokens.ink,
-                            maxLines = 1,
-                        )
+                        // 테마 컬러는 방 이름 옆에 — 아래 줄은 역할 표시만
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                room?.name ?: "",
+                                fontFamily = GowunBatang,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = tokens.ink,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            Spacer(Modifier.width(PbpDimens.sp2))
                             Box(
                                 Modifier
-                                    .size(8.dp)
-                                    .clip(RoundedCornerShape(3.dp))
+                                    .size(10.dp)
+                                    .clip(CircleShape)
                                     .background(themeColor)
                             )
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                if (room?.isMaster == true) "마스터" else "참여자",
-                                fontSize = 10.sp,
-                                color = tokens.inkDim,
-                            )
                         }
+                        Text(
+                            if (room?.isMaster == true) "마스터" else "참여자",
+                            fontSize = 10.sp,
+                            color = tokens.inkDim,
+                        )
                     }
                     IconButton(onClick = { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }) {
                         Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
@@ -331,7 +333,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc ->
                         vm.send(text, ooc)
-                        sendTick++ // 내 전송은 항상 최신으로 스크롤 (N4)
+                        pendingScrollToLatest = true // 내 전송·판정은 항상 최신으로 스크롤
                     },
                     rule = room?.rule ?: com.pbp.app.dice.Rules.COC7,
                 )
@@ -487,7 +489,7 @@ private fun MessageBlock(
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
                             overrideBody = part.text,
-                            overrideName = "???",
+                            overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
                             onLongPress = onLongPress,
                         )
@@ -573,7 +575,7 @@ private fun BubbleRow(
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
-    // GM 인용("???")은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
+    // GM 인용은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
     val mine = !message.incoming && overrideName == null
     val body = overrideBody ?: message.body
     val bubbleColor = when {

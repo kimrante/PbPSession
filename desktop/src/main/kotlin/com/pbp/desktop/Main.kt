@@ -652,7 +652,7 @@ private fun MessageBlock(
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message, deviceId = deviceId, room = room,
                             avatarCache = avatarCache, firestore = firestore,
-                            overrideBody = part.text, overrideName = "???",
+                            overrideBody = part.text, overrideName = "GM",
                             overrideBubbleColor = Tokens.gmQuoteBubble,
                         )
                     }

@@ -80,7 +80,7 @@ object LogExporter {
                                 bubbleHtml(
                                     message = message,
                                     bodyHtml = markupHtml(part.text),
-                                    name = "???",
+                                    name = "GM",
                                     nameColor = "#8A6D1C",
                                     bubbleColor = "#EFE9D8",
                                     mine = false,

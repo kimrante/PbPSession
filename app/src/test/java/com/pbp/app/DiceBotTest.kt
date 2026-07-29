@@ -32,12 +32,44 @@ class DiceBotTest {
     @Test
     fun `잘못된 입력은 null을 돌려준다`() {
         assertNull(DiceBot.parse("안녕하세요"))
-        assertNull(DiceBot.parse("1d7"))        // 미지원 면 수
-        assertNull(DiceBot.parse("0d6"))        // 개수 0
-        assertNull(DiceBot.parse("21d6"))       // 최대 개수 초과
-        assertNull(DiceBot.parse("1d6 굴려줘")) // 다른 텍스트와 섞임
+        assertNull(DiceBot.parse("1d7"))          // 미지원 면 수
+        assertNull(DiceBot.parse("0d6"))          // 개수 0
+        assertNull(DiceBot.parse("21d6"))         // 최대 개수 초과
+        assertNull(DiceBot.parse("공격! 1d6"))    // 문장 중간의 다이스는 명령 아님
+        assertNull(DiceBot.parse("d6면체"))       // 명령 뒤에 공백 없이 글자
         assertNull(DiceBot.parse("/r"))
         assertNull(DiceBot.parse(""))
+    }
+
+    @Test
+    fun `명령 뒤에 공백과 대사가 붙어도 다이스로 인식한다`() {
+        assertEquals(DiceBot.Command(1, 6), DiceBot.parse("1d6 굴려줘"))
+        assertEquals(DiceBot.Command(2, 10), DiceBot.parse("2d10 기습 공격!"))
+        assertEquals(
+            DiceBot.Command(1, 100, "<=", 50),
+            DiceBot.parse("1d100<=50 은신 판정"),
+        )
+    }
+
+    @Test
+    fun `비교식을 파싱한다 - 공백 유무 모두`() {
+        assertEquals(DiceBot.Command(1, 100, "<", 30), DiceBot.parse("1d100<30"))
+        assertEquals(DiceBot.Command(2, 6, ">", 7), DiceBot.parse("2d6 > 7"))
+        assertEquals(DiceBot.Command(1, 10, ">=", 5), DiceBot.parse("/r 1d10 >= 5"))
+        assertEquals("1d100<=50", DiceBot.Command(1, 100, "<=", 50).expr)
+    }
+
+    @Test
+    fun `비교식 판정 - 성공과 실패`() {
+        // total=7
+        val r7 = DiceBot.Result(DiceBot.Command(1, 10, "<", 10), listOf(7))
+        assertEquals(true, r7.success)
+        assertEquals(false, DiceBot.Result(DiceBot.Command(1, 10, ">", 10), listOf(7)).success)
+        assertEquals(true, DiceBot.Result(DiceBot.Command(1, 10, "<=", 7), listOf(7)).success)
+        assertEquals(true, DiceBot.Result(DiceBot.Command(1, 10, ">=", 7), listOf(7)).success)
+        assertEquals(false, DiceBot.Result(DiceBot.Command(1, 10, "<=", 6), listOf(7)).success)
+        // 비교식이 없으면 판정 없음
+        assertNull(DiceBot.Result(DiceBot.Command(1, 10), listOf(7)).success)
     }
 
     @Test

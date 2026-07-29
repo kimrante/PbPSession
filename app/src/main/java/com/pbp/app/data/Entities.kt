@@ -78,6 +78,8 @@ data class Message(
     val type: MessageType,
     val body: String,
     val diceExpr: String? = null,
+    /** 다이스 비교식 판정 결과: "success" | "fail" | null(판정 없음) */
+    val diceOutcome: String? = null,
     val senderName: String? = null,
     val senderEmoji: String? = null,
     val senderImagePath: String? = null,

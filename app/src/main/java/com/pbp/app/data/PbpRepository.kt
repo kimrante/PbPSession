@@ -42,10 +42,10 @@ class PbpRepository(private val db: AppDatabase) {
         val gmId = db.profileDao().insert(
             CharacterProfile(
                 name = "GM",
-                emoji = "敍",
+                emoji = "", // 문자 없이 컬러만 있는 아바타
                 isGm = true,
                 roomId = roomId,
-                nameColor = 0xFFFFD972,
+                nameColor = 0xFF000000, // 검정 이름색
                 bubbleColor = PbpPalette.gmQuoteBubble,
             )
         )
@@ -125,6 +125,7 @@ class PbpRepository(private val db: AppDatabase) {
                         type = MessageType.DICE,
                         body = result.breakdown,
                         diceExpr = "${sender.name} · ${command.expr}",
+                        diceOutcome = result.success?.let { if (it) "success" else "fail" },
                         senderName = "다이스봇",
                         senderEmoji = "🎲",
                         senderIsBot = true,

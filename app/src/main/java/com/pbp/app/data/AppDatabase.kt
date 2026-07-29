@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -45,9 +45,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** 다이스 판정 컬럼 + 기존 GM 프로필을 새 기본값(문자 없는 아바타·검정 이름)으로 */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN diceOutcome TEXT")
+                db.execSQL("UPDATE profiles SET emoji = '', nameColor = -16777216 WHERE isGm = 1")
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "pbp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

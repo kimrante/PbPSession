@@ -54,8 +54,14 @@ object LogExporter {
                 message.type == MessageType.SYSTEM ->
                     body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
 
-                message.type == MessageType.DICE ->
-                    body.append("""<div class="dice">🎲 ${escape(message.diceExpr ?: "")} → <b>${escape(message.body)}</b></div>""")
+                message.type == MessageType.DICE -> {
+                    val outcome = when (message.diceOutcome) {
+                        "success" -> """ <b style="color:#2563C9">성공</b>"""
+                        "fail" -> """ <b style="color:#C0392B">실패</b>"""
+                        else -> ""
+                    }
+                    body.append("""<div class="dice">🎲 ${escape(message.diceExpr ?: "")} → <b>${escape(message.body)}</b>$outcome</div>""")
+                }
 
                 // GM 서술: 명조 문단 + " " 인용만 말풍선 분리
                 message.senderIsGm && !message.isOoc -> {

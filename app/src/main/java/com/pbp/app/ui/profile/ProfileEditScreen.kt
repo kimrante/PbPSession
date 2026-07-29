@@ -52,9 +52,9 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
-import com.pbp.app.data.Images
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.HexColorDialog
+import com.pbp.app.ui.common.ImageCropDialog
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
@@ -72,19 +72,15 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         name: String,
         nameColor: Long?,
         bubbleColor: Long?,
-        newImageUri: Uri?,
+        newImagePath: String?, // 크롭 다이얼로그가 만든 512px JPEG 경로
         onDone: () -> Unit,
     ) = viewModelScope.launch {
         withContext(Dispatchers.IO) {
-            // 아바타는 최대 512px로 축소 저장 (풀사이즈 디코딩 방지)
-            val imagePath = newImageUri
-                ?.let { Images.importDownscaled(app, it, "avatars", maxSize = 512) }
-                ?: existing?.imagePath
             val profile = (existing ?: CharacterProfile(name = "")).copy(
                 name = name.trim().ifEmpty { "이름 없음" },
                 nameColor = nameColor,
                 bubbleColor = bubbleColor,
-                imagePath = imagePath,
+                imagePath = newImagePath ?: existing?.imagePath,
             )
             app.repository.saveProfile(profile)
         }
@@ -113,7 +109,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     var name by remember { mutableStateOf("") }
     var nameColor by remember { mutableStateOf<Long?>(PbpPalette.namePresets.first()) }
     var bubbleColor by remember { mutableStateOf<Long?>(PbpPalette.bubblePresets.first()) }
-    var pickedUri by remember { mutableStateOf<Uri?>(null) }
+    var cropSource by remember { mutableStateOf<Uri?>(null) } // 크롭 대기 중인 갤러리 이미지
+    var pickedPath by remember { mutableStateOf<String?>(null) } // 크롭 완료된 512px 파일
     var customTarget by remember { mutableStateOf<String?>(null) } // "name" | "bubble"
 
     LaunchedEffect(profileId) {
@@ -127,7 +124,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
-        if (it != null) pickedUri = it
+        if (it != null) cropSource = it // 선택 후 크롭 다이얼로그로
     }
 
     if (!loaded) return
@@ -151,7 +148,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         .clip(RoundedCornerShape(999.dp))
                         .background(tokens.signature)
                         .clickable {
-                            vm.save(existing, name, nameColor, bubbleColor, pickedUri) {
+                            vm.save(existing, name, nameColor, bubbleColor, pickedPath) {
                                 nav.popBackStack()
                             }
                         }
@@ -173,7 +170,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box {
-                        if (pickedUri != null) {
+                        if (pickedPath != null) {
                             Box(
                                 Modifier
                                     .size(92.dp)
@@ -181,7 +178,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                     .clip(CircleShape)
                             ) {
                                 AsyncImage(
-                                    model = pickedUri,
+                                    model = File(pickedPath!!),
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -268,10 +265,10 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             }
                         }
                         Spacer(Modifier.width(9.dp))
-                        if (pickedUri != null) {
+                        if (pickedPath != null) {
                             Box(Modifier.size(34.dp).clip(CircleShape)) {
                                 AsyncImage(
-                                    model = pickedUri,
+                                    model = File(pickedPath!!),
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
@@ -294,6 +291,18 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Spacer(Modifier.height(30.dp))
             }
         }
+    }
+
+    // 갤러리에서 고른 이미지를 원형 프레임에서 이동·확대해 잘라낸다
+    cropSource?.let { uri ->
+        ImageCropDialog(
+            uri = uri,
+            onDismiss = { cropSource = null },
+            onCropped = { path ->
+                pickedPath = path
+                cropSource = null
+            },
+        )
     }
 
     customTarget?.let { target ->

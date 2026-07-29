@@ -337,6 +337,17 @@ private fun MessageBlock(
                         color = Color(0xFFFFE9AE),
                         fontWeight = FontWeight.Bold,
                     )
+                    // 비교식 판정: 성공 = 파랑, 실패 = 빨강
+                    when (message.diceOutcome) {
+                        "success" -> {
+                            Spacer(Modifier.width(8.dp))
+                            Text("성공", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5E9EFF))
+                        }
+                        "fail" -> {
+                            Spacer(Modifier.width(8.dp))
+                            Text("실패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF6B6B))
+                        }
+                    }
                 }
             }
         }

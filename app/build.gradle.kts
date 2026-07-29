@@ -26,6 +26,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // 개인 테스트용 디버그 서명 — 스토어 배포 시 실제 키스토어로 교체할 것
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

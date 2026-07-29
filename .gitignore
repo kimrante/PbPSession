@@ -6,3 +6,4 @@ local.properties
 .kotlin/
 google-services.json
 .claude/settings.local.json
+PbP-release.apk

@@ -83,6 +83,21 @@ class AppConfig private constructor(
     fun snapshot(): String =
         gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken))
 
+    /**
+     * 목록 교체와 스냅샷을 한 락 안에서 원자적으로 (C1) — 어느 스레드에서 불러도
+     * snapshot()의 toList() 순회와 clear/addAll이 교차(CME)하지 않는다.
+     */
+    @Synchronized
+    fun replaceAndSnapshot(newRooms: List<JoinedRoom>, newProfiles: List<Profile>): String {
+        rooms.clear(); rooms.addAll(newRooms)
+        profiles.clear(); profiles.addAll(newProfiles)
+        return snapshot()
+    }
+
+    /** 시작 시 순회용 사본 (C1) — 라이브 리스트 순회 중 변경으로 인한 CME 방지 */
+    @Synchronized
+    fun roomsCopy(): List<JoinedRoom> = rooms.toList()
+
     /** 이미 굳힌 스냅샷을 파일에 쓴다. 실패해도 예외를 밖으로 던지지 않는다 (N8). */
     @Synchronized
     fun writeSnapshot(json: String) {

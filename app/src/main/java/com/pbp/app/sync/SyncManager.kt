@@ -20,6 +20,7 @@ import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
@@ -124,26 +125,36 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      */
     fun start() = scope.launch {
         val synced = db.roomDao().listSynced()
-        if (synced.isNotEmpty()) ensureAuth()
+        if (synced.isEmpty()) return@launch
+        ensureAuth()
         // 구버전(deviceId 키) 방들에 auth UID 멤버 문서를 1회 보충 — 규칙 배포 후에도 접근 유지
         val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
         val memberFixKey = "memberFix-$myUid"
-        val needMemberFix = synced.isNotEmpty() && !prefs.getBoolean(memberFixKey, false)
-        var memberFixOk = true
-        synced.forEach { room ->
-            val remote = room.remoteId ?: return@forEach
-            if (needMemberFix) {
-                memberFixOk = memberFixOk && runCatching { ensureMembership(remote) }.isSuccess
+        val needMemberFix = !prefs.getBoolean(memberFixKey, false)
+        val memberFixOk = java.util.concurrent.atomic.AtomicBoolean(true)
+        // 방별 독립 코루틴 (S5) — 오프라인의 무기한 await가 다른 방의 attach를 막지 않는다.
+        // attach를 먼저 해도 안전: 삭제 대조 기준선이 attach 시점의 uploaded=1 집합이라
+        // 이후 올라가는 아웃박스 메시지는 기준선 밖이다 (R3/L4).
+        val jobs = synced.mapNotNull { room ->
+            val remote = room.remoteId ?: return@mapNotNull null
+            scope.launch {
+                if (needMemberFix) {
+                    if (!runCatching { ensureMembership(remote) }.isSuccess) {
+                        memberFixOk.set(false)
+                    }
+                }
+                attach(room.id, remote)
+                // 아웃박스는 메시지별로 격리 — 1건 실패가 나머지를 막지 않는다 (C7 패턴)
+                db.messageDao().listUnsent(room.id).forEach { message ->
+                    runCatching { pushMessage(remote, message) }.onFailure {
+                        android.util.Log.w("PbpSync", "아웃박스 재전송 실패 id=${message.id}", it)
+                    }
+                }
             }
-            // 아웃박스를 attach보다 먼저 — 첫 스냅샷 삭제 대조가 방금 올린 메시지를
-            // '서버에 없는 것'으로 오인해 지우는 레이스 방지 (R3)
-            runCatching {
-                db.messageDao().listUnsent(room.id).forEach { pushMessage(remote, it) }
-            }
-            attach(room.id, remote)
         }
-        if (needMemberFix && memberFixOk) prefs.edit().putBoolean(memberFixKey, true).apply()
-        if (synced.isNotEmpty()) registerFcmToken()
+        registerFcmToken()
+        jobs.joinAll()
+        if (needMemberFix && memberFixOk.get()) prefs.edit().putBoolean(memberFixKey, true).apply()
     }
 
     /**
@@ -165,8 +176,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .await()
     }
 
+    /** 참여/공유 더블탭 가드 — 같은 키의 동시 실행을 차단한다 (L2) */
+    private val joinInFlight = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    private val shareInFlight = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+
     /** 방을 Firestore에 올리고 초대 코드를 돌려준다. 이미 공유된 방이면 기존 코드. */
-    suspend fun shareRoom(roomId: Long): String? = runCatching {
+    suspend fun shareRoom(roomId: Long): String? {
+        // 더블탭 동시 실행 시 원격 방 이중 생성·백필 중복 방지 (L2)
+        if (shareInFlight.putIfAbsent(roomId, true) != null) return null
+        try {
+            return shareRoomInternal(roomId)
+        } finally {
+            shareInFlight.remove(roomId)
+        }
+    }
+
+    private suspend fun shareRoomInternal(roomId: Long): String? = runCatching {
         val room = db.roomDao().get(roomId) ?: return null
         ensureAuth()
 
@@ -208,18 +233,24 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // remoteId를 커밋 전에 저장해 중간 크래시 시에도 아웃박스가 같은 문서로 재시도(멱등)
         db.messageDao().listUnsent(roomId).chunked(450).forEach { chunk ->
             val batch = firestore.batch()
-            val refs = chunk.map { message ->
+            val refs = chunk.mapNotNull { message ->
                 val avatarId = message.senderImagePath?.let { path ->
                     runCatching { ensureAvatarUploaded(roomDoc.id, path) }.getOrNull()
                 }
-                val ref = message.remoteId?.let { roomDoc.collection("messages").document(it) }
-                    ?: roomDoc.collection("messages").document()
-                db.messageDao().setRemoteId(message.id, ref.id)
-                batch.set(ref, SyncMapping.toMap(message, myUid, avatarId))
+                // 원자 선점 (L3) — 동시 전송 중인 메시지에 두 번째 문서를 만들지 않는다
+                val remoteId = resolveRemoteId(
+                    message, roomDoc.collection("messages").document().id,
+                ) ?: return@mapNotNull null
+                batch.set(
+                    roomDoc.collection("messages").document(remoteId),
+                    SyncMapping.toMap(message, myUid, avatarId),
+                )
                 message.id
             }
-            batch.commit().await()
-            refs.forEach { localId -> db.messageDao().setUploaded(localId) }
+            if (refs.isNotEmpty()) {
+                batch.commit().await()
+                refs.forEach { localId -> db.messageDao().setUploaded(localId) }
+            }
         }
         attach(roomId, roomDoc.id)
         registerFcmToken(force = true) // 새 방의 멤버 문서에 등록
@@ -227,7 +258,17 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }.getOrNull()
 
     /** 초대 코드로 상대의 방에 참여한다. 성공하면 로컬 방 ID를 돌려준다. */
-    suspend fun joinRoom(code: String): Long? = runCatching {
+    suspend fun joinRoom(code: String): Long? {
+        // 더블탭 동시 실행 시 같은 원격 방에 로컬 방 2개가 생기는 분열 방지 (L2)
+        if (joinInFlight.putIfAbsent(code, true) != null) return null
+        try {
+            return joinRoomInternal(code)
+        } finally {
+            joinInFlight.remove(code)
+        }
+    }
+
+    private suspend fun joinRoomInternal(code: String): Long? = runCatching {
         db.roomDao().findByInviteCode(code)?.let { return it.id } // 이미 참여한 방
         ensureAuth()
 
@@ -242,6 +283,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .whereEqualTo("inviteCode", code).limit(1).get().await()
             .documents.firstOrNull() ?: return null
         val repo = repository ?: return null
+
+        // 코드가 달라도 같은 원격 방이면 기존 로컬 방을 재사용 (L2)
+        db.roomDao().findByRemoteId(roomDoc.id)?.let { return it.id }
 
         // 멤버 등록이 규칙상 메시지 읽기의 전제 — 리스너 attach보다 먼저
         ensureMembership(roomDoc.id)
@@ -262,11 +306,19 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         roomId
     }.getOrNull()
 
+    /** 로그 초기화 중 리스너 재접속용 — attach의 공개 통로 (L1) */
+    fun reattach(localRoomId: Long, remoteRoomId: String) = attach(localRoomId, remoteRoomId)
+
     /**
      * 방의 서버 메시지를 전부 삭제한다(로그 리셋). 문서 삭제가 상대 기기의
      * REMOVED 리스너로 전파되어 상대의 로컬 로그도 함께 지워진다.
+     * Firestore 쓰기는 자체 타임아웃이 없어 오프라인이면 무한 대기하므로 60초 상한 (L1).
      */
-    suspend fun wipeMessages(remoteRoomId: String): Boolean = runCatching {
+    suspend fun wipeMessages(remoteRoomId: String): Boolean =
+        kotlinx.coroutines.withTimeoutOrNull(60_000) { wipeMessagesInternal(remoteRoomId) }
+            ?: false
+
+    private suspend fun wipeMessagesInternal(remoteRoomId: String): Boolean = runCatching {
         ensureAuth()
         val docs = firestore.collection("rooms").document(remoteRoomId)
             .collection("messages").get().await().documents
@@ -291,17 +343,26 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
+    /**
+     * remoteId를 원자적으로 확보한다 (L3): 스냅샷의 remoteId → 원자 선점 시도 →
+     * 선점 실패면 다른 경로(동시 전송·백필)가 먼저 발급한 값을 DB에서 재조회.
+     * 같은 메시지가 서로 다른 원격 문서로 두 번 올라가는 레이스를 막는다.
+     */
+    private suspend fun resolveRemoteId(message: Message, candidate: String): String? {
+        message.remoteId?.let { return it }
+        if (db.messageDao().claimRemoteId(message.id, candidate) == 1) return candidate
+        return db.messageDao().get(message.id)?.remoteId
+    }
+
     private suspend fun pushMessage(remoteRoomId: String, message: Message) {
         val avatarId = message.senderImagePath?.let { path ->
             runCatching { ensureAvatarUploaded(remoteRoomId, path) }.getOrNull()
         }
         val collection = firestore.collection("rooms").document(remoteRoomId)
             .collection("messages")
-        // 멱등 전송(P1-2): 문서 ID를 먼저 로컬에 고정 — 업로드 후 크래시해도
-        // 재전송이 같은 문서를 덮어써 중복이 생기지 않는다
-        val remoteId = message.remoteId ?: collection.document().id.also {
-            db.messageDao().setRemoteId(message.id, it)
-        }
+        // 멱등 전송(P1-2): 문서 ID를 먼저 로컬에 고정(원자 선점, L3) — 업로드 후
+        // 크래시해도 재전송이 같은 문서를 덮어써 중복이 생기지 않는다
+        val remoteId = resolveRemoteId(message, collection.document().id) ?: return
         collection.document(remoteId).set(SyncMapping.toMap(message, myUid, avatarId)).await()
         db.messageDao().setUploaded(message.id)
     }
@@ -359,50 +420,62 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         java.util.concurrent.ConcurrentHashMap<Long, kotlinx.coroutines.channels.Channel<SnapshotEvent>>()
 
     private fun attach(localRoomId: Long, remoteRoomId: String) {
-        if (listeners.containsKey(localRoomId)) return
-        attachedRemotes[localRoomId] = remoteRoomId
+        // 확인-후-등록 레이스 방지 — putIfAbsent로 자리를 선점한다 (S4).
+        // isAttached·detach도 이 맵 기준이라 선점 실패 = 이미 attach 진행/완료.
+        if (attachedRemotes.putIfAbsent(localRoomId, remoteRoomId) != null) return
         attachRoomDoc(localRoomId, remoteRoomId)
         val channel =
             kotlinx.coroutines.channels.Channel<SnapshotEvent>(kotlinx.coroutines.channels.Channel.UNLIMITED)
         eventChannels[localRoomId] = channel
         scope.launch {
-            // 삭제 대조 기준선을 attach 시점에 고정 — 이후 전송된 메시지는 후보에서 빠진다 (R3)
+            // 삭제 대조 기준선을 리스너 등록 **전에** 고정 (L4) — 등록 후 조회하면
+            // 그 밀리초 틈에 업로드 완료된 메시지가 기준선에 들어가 잘못 지워질 수 있다.
             val baseline = runCatching { db.messageDao().listRemoteIdsForRoom(localRoomId) }
                 .getOrDefault(emptyList()).toSet()
+            val registration = firestore.collection("rooms").document(remoteRoomId)
+                .collection("messages").orderBy("createdAt")
+                .addSnapshotListener { snapshot, error ->
+                    // 리스너 에러를 무시하면 동기화가 죽어도 무신호 (P3-4)
+                    if (error != null) {
+                        android.util.Log.w("PbpSync", "메시지 리스너 오류 room=$remoteRoomId", error)
+                        // 권한 거부 = 인증/멤버십 문제 — 재인증 후 다시 붙는다 (N5)
+                        if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                            recoverAuth(localRoomId, remoteRoomId)
+                        }
+                    }
+                    if (snapshot == null) return@addSnapshotListener
+                    channel.trySend(
+                        SnapshotEvent(
+                            changes = snapshot.documentChanges.toList(),
+                            allIds = snapshot.documents.mapTo(mutableSetOf()) { it.id },
+                            fromCache = snapshot.metadata.isFromCache,
+                        )
+                    )
+                }
+            // 코루틴이 등록하는 사이 detach가 왔으면 즉시 해제 — 리스너 누수 방지 (S4)
+            if (!attachedRemotes.containsKey(localRoomId)) {
+                registration.remove()
+                channel.close()
+                return@launch
+            }
+            listeners[localRoomId] = registration
             var needReconcile = true
             for (event in channel) {
                 // 삭제 대조는 서버 전체 상태가 확실한 첫 서버 스냅샷에서만 (캐시 스냅샷 제외)
                 val doReconcile = needReconcile && !event.fromCache
                 // 처리 실패(FK 위반·SQLite 예외 등)가 앱 크래시로 번지지 않게 (P1-3)
-                runCatching {
+                val ok = runCatching {
                     processSnapshot(
                         localRoomId, remoteRoomId, event,
                         if (doReconcile) baseline else null,
                     )
-                }
-                if (doReconcile) needReconcile = false
+                }.isSuccess
+                // 실패한 스냅샷에서 reconcile 기회를 소진하지 않는다 (S6)
+                if (doReconcile && ok) needReconcile = false
+                // 정상 수신 중이면 권한 복구 백오프 카운터 리셋
+                if (ok) recoverAttempts.remove(localRoomId)
             }
         }
-        listeners[localRoomId] = firestore.collection("rooms").document(remoteRoomId)
-            .collection("messages").orderBy("createdAt")
-            .addSnapshotListener { snapshot, error ->
-                // 리스너 에러를 무시하면 동기화가 죽어도 무신호 (P3-4)
-                if (error != null) {
-                    android.util.Log.w("PbpSync", "메시지 리스너 오류 room=$remoteRoomId", error)
-                    // 권한 거부 = 인증/멤버십 문제 — 재인증 후 다시 붙는다 (N5)
-                    if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                        recoverAuth(localRoomId, remoteRoomId)
-                    }
-                }
-                if (snapshot == null) return@addSnapshotListener
-                channel.trySend(
-                    SnapshotEvent(
-                        changes = snapshot.documentChanges.toList(),
-                        allIds = snapshot.documents.mapTo(mutableSetOf()) { it.id },
-                        fromCache = snapshot.metadata.isFromCache,
-                    )
-                )
-            }
     }
 
     private suspend fun processSnapshot(
@@ -426,24 +499,29 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .flatMap { db.messageDao().existingRemoteIds(it) }.toSet()
 
         for (doc in addedDocs) {
-            if (doc.id in known) {
-                // 이미 있는 문서가 ADDED로 재도착 = 리스너가 없던 사이의 편집 — 업서트 (P1-1)
-                db.messageDao().updateBodyByRemoteId(
-                    remoteId = doc.id,
-                    body = doc.getString("body") ?: "",
-                    editedAt = doc.getLong("editedAt"),
-                )
-                continue
-            }
-            // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
-            val avatarPath = doc.getString("avatarId")?.let { avatarId ->
-                runCatching { resolveAvatar(remoteRoomId, avatarId) }.getOrNull()
-            }
-            val message = SyncMapping.fromMap(doc.id, doc.data ?: emptyMap(), localRoomId)
-                .copy(senderImagePath = avatarPath)
-            // 유니크 인덱스 충돌(-1)이면 이미 있는 메시지 — 알림을 다시 띄우지 않는다 (C6)
-            if (db.messageDao().insert(message) != -1L) {
-                onIncomingMessage?.invoke(message, remoteRoomId)
+            // 문서 1건의 예외가 같은 스냅샷의 나머지 문서를 삼키지 않게 격리 (S6)
+            runCatching {
+                if (doc.id in known) {
+                    // 이미 있는 문서가 ADDED로 재도착 = 리스너가 없던 사이의 편집 — 업서트 (P1-1)
+                    db.messageDao().updateBodyByRemoteId(
+                        remoteId = doc.id,
+                        body = doc.getString("body") ?: "",
+                        editedAt = doc.getLong("editedAt"),
+                    )
+                    return@runCatching
+                }
+                // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
+                val avatarPath = doc.getString("avatarId")?.let { avatarId ->
+                    runCatching { resolveAvatar(remoteRoomId, avatarId) }.getOrNull()
+                }
+                val message = SyncMapping.fromMap(doc.id, doc.data ?: emptyMap(), localRoomId)
+                    .copy(senderImagePath = avatarPath)
+                // 유니크 인덱스 충돌(-1)이면 이미 있는 메시지 — 알림을 다시 띄우지 않는다 (C6)
+                if (db.messageDao().insert(message) != -1L) {
+                    onIncomingMessage?.invoke(message, remoteRoomId)
+                }
+            }.onFailure {
+                android.util.Log.w("PbpSync", "수신 메시지 처리 실패 doc=${doc.id}", it)
             }
         }
 
@@ -474,6 +552,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     /** 권한 거부 복구 (N5): 리스너를 떼고 재인증·멤버십 보강 후 다시 붙는다 */
     private val recovering = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
+    private val recoverAttempts = java.util.concurrent.ConcurrentHashMap<Long, Int>()
 
     private fun recoverAuth(localRoomId: Long, remoteRoomId: String) {
         if (recovering.putIfAbsent(localRoomId, true) != null) return
@@ -481,7 +560,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             try {
                 // 재접속 전까지는 리스너가 죽은 상태 — FCM 경로가 알림을 맡아야 한다
                 detach(localRoomId)
-                kotlinx.coroutines.delay(3_000)
+                // 권한 거부가 지속되면(설정 오류 등) 지수 백오프로 무한 재시도 폭주 방지
+                val attempt = recoverAttempts.merge(localRoomId, 1, Int::plus) ?: 1
+                val delayMs = (3_000L shl (attempt - 1).coerceAtMost(5)).coerceAtMost(120_000L)
+                kotlinx.coroutines.delay(delayMs)
                 authUid = null // 익명 로그인 재시도
                 ensureAuth()
                 runCatching { ensureMembership(remoteRoomId) }

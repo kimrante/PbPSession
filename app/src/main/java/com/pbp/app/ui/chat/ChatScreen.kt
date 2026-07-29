@@ -122,7 +122,12 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
 
     fun send(text: String, isOoc: Boolean) = viewModelScope.launch {
-        val sender = profiles.value.find { it.id == room.value?.activeProfileId } ?: return@launch
+        val sender = profiles.value.find { it.id == room.value?.activeProfileId }
+        if (sender == null) {
+            // 프로필 삭제 직후의 좁은 레이스 — 입력이 조용히 버려지지 않게 알린다 (L6)
+            Toast.makeText(app, "발화 프로필이 없어 전송하지 못했습니다", Toast.LENGTH_SHORT).show()
+            return@launch
+        }
         repo.sendMessage(roomId, sender, text, isOoc)
         repo.markRead(roomId)
     }
@@ -192,6 +197,15 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val actionTarget = messages.find { it.id == actionTargetId }
     var showAddProfile by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    // 수정 작성 중 상대가 그 메시지를 삭제하면 다이얼로그가 무통보로 사라진다 —
+    // 최소한 이유는 알린다 (L6)
+    LaunchedEffect(editTargetId, editTarget == null, messages.isNotEmpty()) {
+        if (editTargetId != null && editTarget == null && messages.isNotEmpty()) {
+            Toast.makeText(context, "편집하려던 메시지가 삭제되었습니다", Toast.LENGTH_SHORT).show()
+            editTargetId = null
+        }
     }
 
     // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
@@ -275,7 +289,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             color = tokens.inkDim,
                         )
                     }
-                    IconButton(onClick = { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }) {
+                    IconButton(onClick = {
+                        // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
+                        runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
+                            .onFailure {
+                                Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
+                            }
+                    }) {
                         Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                     }
                     IconButton(onClick = { nav.navigate("settings/$roomId") }) {

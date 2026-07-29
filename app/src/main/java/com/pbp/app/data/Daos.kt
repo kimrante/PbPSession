@@ -36,6 +36,9 @@ interface RoomDao {
     @Query("SELECT * FROM rooms WHERE inviteCode = :code LIMIT 1")
     suspend fun findByInviteCode(code: String): ChatRoom?
 
+    @Query("SELECT * FROM rooms WHERE remoteId = :remoteId LIMIT 1")
+    suspend fun findByRemoteId(remoteId: String): ChatRoom?
+
     @Query("UPDATE rooms SET themeColor = :color WHERE id = :roomId")
     suspend fun setThemeColor(roomId: Long, color: Long)
 
@@ -104,8 +107,12 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE roomId = :roomId AND uploaded = 0 ORDER BY createdAt ASC, id ASC")
     suspend fun listUnsent(roomId: Long): List<Message>
 
-    @Query("UPDATE messages SET remoteId = :remoteId WHERE id = :id")
-    suspend fun setRemoteId(id: Long, remoteId: String)
+    /**
+     * remoteId 원자 선점 (L3) — 이미 다른 경로(동시 전송·백필)가 선점했으면 0을 돌려준다.
+     * 백필과 pushMessage가 같은 메시지에 서로 다른 원격 문서를 만드는 레이스 방지.
+     */
+    @Query("UPDATE messages SET remoteId = :remoteId WHERE id = :id AND remoteId IS NULL")
+    suspend fun claimRemoteId(id: Long, remoteId: String): Int
 
     @Query("UPDATE messages SET uploaded = 1 WHERE id = :id")
     suspend fun setUploaded(id: Long)

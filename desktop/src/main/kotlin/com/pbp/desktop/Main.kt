@@ -107,10 +107,11 @@ private fun App() {
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // 시작 시 1회: 참여 중인 방들에 auth UID 멤버 문서 보강 (보안 규칙의 접근 근거)
+    // 시작 시 1회: 참여 중인 방들에 auth UID 멤버 문서 보강 (보안 규칙의 접근 근거).
+    // 라이브 리스트를 IO에서 순회하면 persist의 clear/addAll과 겹쳐 CME (C1) — 사본 사용
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            config.rooms.forEach { runCatching { firestore.ensureMember(it.remoteId) } }
+            config.roomsCopy().forEach { runCatching { firestore.ensureMember(it.remoteId) } }
         }
     }
 
@@ -129,10 +130,9 @@ private fun App() {
     fun authorUid(): String = firestore.uid ?: config.deviceId
 
     fun persist() {
-        config.rooms.clear(); config.rooms.addAll(rooms)
-        config.profiles.clear(); config.profiles.addAll(profiles)
-        // 직렬화는 목록을 소유한 여기서, 파일 쓰기만 IO에서 (N8·P3-16)
-        val json = config.snapshot()
+        // 목록 교체+직렬화를 한 락 안에서 (C1) — IO 핸들러에서 불러도 CME 없음.
+        // 파일 쓰기만 IO에서 (N8·P3-16)
+        val json = config.replaceAndSnapshot(rooms, profiles)
         scope.launch(Dispatchers.IO) { config.writeSnapshot(json) }
     }
 
@@ -144,35 +144,38 @@ private fun App() {
         var lastCreatedAt = 0L
         var tick = 0
         while (isActive) {
-            val fetched = withContext(Dispatchers.IO) {
-                firestore.listMessagesSince(room.remoteId, lastCreatedAt)
-            }
-            // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
-            if (fetched != null && fetched.isNotEmpty()) {
-                val byId = messages.associateBy { it.docId }
-                val fresh = fetched.filter { it.docId !in byId }
-                // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10)
-                val edited = fetched.filter { incoming ->
-                    byId[incoming.docId]?.let { it.editedAt != incoming.editedAt } == true
-                }.associateBy { it.docId }
-                if (fresh.isNotEmpty() || edited.isNotEmpty()) {
-                    messages = (messages.map { edited[it.docId] ?: it } + fresh)
-                        .sortedBy { it.createdAt }
+            // 반복 1회 전체를 격리 — 예기치 못한 예외 1건이 폴링을 영구 정지시키지 않게 (C2)
+            runCatching {
+                val fetched = withContext(Dispatchers.IO) {
+                    firestore.listMessagesSince(room.remoteId, lastCreatedAt)
                 }
-                lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
-            }
-            if (tick % 4 == 0 && System.currentTimeMillis() > metaFreezeUntil) {
-                val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
-                if (meta != null &&
-                    (meta.themeColor != room.themeColor || meta.backgroundKey != room.backgroundKey || meta.name != room.name)
-                ) {
-                    room.themeColor = meta.themeColor
-                    room.backgroundKey = meta.backgroundKey
-                    room.name = meta.name
-                    rooms = rooms.toList() // 재구성 트리거
-                    persist()
+                // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
+                if (fetched != null && fetched.isNotEmpty()) {
+                    val byId = messages.associateBy { it.docId }
+                    val fresh = fetched.filter { it.docId !in byId }
+                    // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10)
+                    val edited = fetched.filter { incoming ->
+                        byId[incoming.docId]?.let { it.editedAt != incoming.editedAt } == true
+                    }.associateBy { it.docId }
+                    if (fresh.isNotEmpty() || edited.isNotEmpty()) {
+                        messages = (messages.map { edited[it.docId] ?: it } + fresh)
+                            .sortedBy { it.createdAt }
+                    }
+                    lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
                 }
-            }
+                if (tick % 4 == 0 && System.currentTimeMillis() > metaFreezeUntil) {
+                    val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
+                    if (meta != null &&
+                        (meta.themeColor != room.themeColor || meta.backgroundKey != room.backgroundKey || meta.name != room.name)
+                    ) {
+                        room.themeColor = meta.themeColor
+                        room.backgroundKey = meta.backgroundKey
+                        room.name = meta.name
+                        rooms = rooms.toList() // 재구성 트리거
+                        persist()
+                    }
+                }
+            }.onFailure { System.err.println("폴링 오류(다음 주기에 재시도): $it") }
             tick++
             delay(2500)
         }
@@ -260,7 +263,9 @@ private fun App() {
                 room = room,
                 messages = messages,
                 profiles = profiles,
-                deviceId = config.deviceId,
+                // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
+                // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
+                deviceId = authorUid(),
                 avatarCache = avatarCache,
                 firestore = firestore,
                 onSend = ::sendMessage,
@@ -565,10 +570,18 @@ private fun ChatPane(
             // 메시지 목록 — 최신 메시지가 바뀔 때만, 바닥 근처를 보고 있을 때만 따라간다
             // (안드로이드 P1-7과 같은 규칙, C9)
             val listState = rememberLazyListState()
+            // 방 입장 직후의 첫 로드는 무조건 최하단으로 (S2 — 빈 목록 기준 lastVisible=-1이라
+            // 근접 판정이 항상 실패했음). 내 전송이 도착했을 때도 무조건 따라간다.
+            var initialScrollDone by remember(room.remoteId) { mutableStateOf(false) }
             LaunchedEffect(messages.lastOrNull()?.docId) {
                 if (messages.isEmpty()) return@LaunchedEffect
                 val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                if (lastVisible >= messages.size - 2) listState.scrollToItem(messages.size - 1)
+                val nearBottom = lastVisible >= messages.size - 2
+                val myMessageArrived = messages.last().authorUid == deviceId
+                if (!initialScrollDone || nearBottom || myMessageArrived) {
+                    listState.scrollToItem(messages.size - 1)
+                    initialScrollDone = true
+                }
             }
             // 본문 최대 폭 720dp 중앙 정렬 — 초광폭에서 말풍선이 늘어지지 않게 (PC 규격)
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
@@ -917,12 +930,16 @@ private fun InputZone(
         onSend(text, ooc) { textOk, diceOk ->
             when {
                 !textOk -> {
-                    // 늦게 도착한 실패 콜백이 새로 친 글을 덮지 않도록 (N3)
                     if (input.isEmpty()) {
+                        // 늦게 도착한 실패 콜백이 새로 친 글을 덮지 않도록 (N3)
                         input = text
                         oocOn = ooc
+                        errorMessage = "전송에 실패했습니다 — 네트워크를 확인해주세요"
+                    } else {
+                        // 새 입력을 이미 치고 있으면 원문이 갈 곳이 없다 —
+                        // 에러 라인에 원문을 남겨 복사할 수 있게 (C3)
+                        errorMessage = "전송 실패 — 잃은 내용: $text"
                     }
-                    errorMessage = "전송에 실패했습니다 — 네트워크를 확인해주세요"
                 }
                 !diceOk -> errorMessage = "메시지는 전송됐지만 다이스 결과 전송에 실패했습니다"
             }

@@ -73,15 +73,22 @@ class FirestoreRest(
     /** 토큰 발급/갱신 직렬화용 — HTTP는 이 락 밖에서 돌지 않지만, 락 자체는 짧게 유지 (C15) */
     private val tokenLock = Any()
 
+    /** 인증 실패 네거티브 캐시 (S1) — 이 시각까지는 재시도하지 않는다 */
+    @Volatile private var authRetryBlockedUntil = 0L
+
     private fun currentToken(): String? {
         // 유효한 토큰이 있으면 락 없이 즉시 반환 — 폴링·전송이 서로 막지 않는다
         idToken?.let { if (System.currentTimeMillis() < tokenExpiresAt - 60_000) return it }
+        // 실패 직후에는 락도 잡지 않고 즉시 무인증 진행 — 인증 서버가 느리거나
+        // 익명 로그인이 꺼져 있을 때 매 요청이 identitytoolkit 왕복 뒤로 직렬화되는 것 방지 (S1)
+        if (System.currentTimeMillis() < authRetryBlockedUntil) return null
         synchronized(tokenLock) {
-            // 락 대기 중 다른 스레드가 갱신했을 수 있다
+            // 락 대기 중 다른 스레드가 갱신/실패했을 수 있다
             idToken?.let { if (System.currentTimeMillis() < tokenExpiresAt - 60_000) return it }
+            if (System.currentTimeMillis() < authRetryBlockedUntil) return null
             val saved = refreshToken
-            if (saved != null) {
-                return when (refreshIdToken(saved)) {
+            val token = if (saved != null) {
+                when (refreshIdToken(saved)) {
                     RefreshResult.OK -> idToken
                     // 네트워크·서버 오류는 토큰을 버리지 않는다 — 새 익명 계정을 만들면
                     // 기존 UID(=방 멤버십)를 영구히 잃는다 (R4)
@@ -89,8 +96,13 @@ class FirestoreRest(
                     // 토큰이 폐기된 경우에만 재가입
                     RefreshResult.REVOKED -> if (signUpAnonymous()) idToken else null
                 }
+            } else {
+                if (signUpAnonymous()) idToken else null
             }
-            return if (signUpAnonymous()) idToken else null
+            if (token == null) {
+                authRetryBlockedUntil = System.currentTimeMillis() + 60_000
+            }
+            return token
         }
     }
 
@@ -252,7 +264,9 @@ class FirestoreRest(
     private fun JsonObject.bool(name: String): Boolean =
         getAsJsonObject("fields")?.getAsJsonObject(name)?.get("booleanValue")?.asBoolean ?: false
 
-    private fun JsonObject.docId(): String = get("name").asString.substringAfterLast("/")
+    // name 필드가 없는 기형 응답에서 NPE로 폴링이 죽지 않게 (C2)
+    private fun JsonObject.docId(): String =
+        get("name")?.takeIf { it.isJsonPrimitive }?.asString?.substringAfterLast("/") ?: ""
 
     // ── 방 ────────────────────────────────────────────────
 
@@ -311,7 +325,11 @@ class FirestoreRest(
         ),
     )
 
-    fun getRoom(remoteId: String): RoomMeta? =
+    fun getRoom(remoteId: String): RoomMeta? = runCatching {
+        getRoomInternal(remoteId)
+    }.getOrNull()
+
+    private fun getRoomInternal(remoteId: String): RoomMeta? =
         get("$base/rooms/$remoteId?key=$apiKey")?.let { roomMeta(it) }
 
     private fun roomMeta(doc: JsonObject) = RoomMeta(
@@ -375,10 +393,13 @@ class FirestoreRest(
             // 토큰에 +·= 가 들어가므로 인코딩하지 않으면 2페이지 이후가 영구 실패 (C12)
             val url = "$base/rooms/$remoteRoomId/messages?key=$apiKey&pageSize=300&orderBy=createdAt" +
                 (pageToken?.let { "&pageToken=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
-            // 페이지 하나라도 실패하면 부분 결과로 커서를 오염시키지 않도록 에러로 처리
+            // 페이지 하나라도 실패하면 부분 결과로 커서를 오염시키지 않도록 에러로 처리.
+            // 파싱 예외도 오류로 — 기형 응답 1건이 폴링을 영구 정지시키지 않게 (C2)
             val res = get(url) ?: return null
-            res.getAsJsonArray("documents")?.forEach { el -> out += parseMessage(el.asJsonObject) }
-            pageToken = res.get("nextPageToken")?.asString
+            runCatching {
+                res.getAsJsonArray("documents")?.forEach { el -> out += parseMessage(el.asJsonObject) }
+                pageToken = res.get("nextPageToken")?.takeIf { it.isJsonPrimitive }?.asString
+            }.getOrElse { return null }
         } while (pageToken != null)
         return out
     }
@@ -409,9 +430,12 @@ class FirestoreRest(
             )
             if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
         }.getOrNull() ?: return null
-        return res.mapNotNull { el ->
-            el.asJsonObject.getAsJsonObject("document")?.let { parseMessage(it) }
-        }
+        // 파싱 예외도 오류(null)로 — 커서 미전진 계약(P1-6)이 흡수한다 (C2)
+        return runCatching {
+            res.mapNotNull { el ->
+                el.asJsonObject.getAsJsonObject("document")?.let { parseMessage(it) }
+            }
+        }.getOrNull()
     }
 
     fun postMessage(remoteRoomId: String, values: Map<String, Any?>): Boolean =

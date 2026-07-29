@@ -184,7 +184,13 @@ class PbpRepository(private val db: AppDatabase) {
             val room = db.roomDao().get(roomId) ?: return@withContext false
             val remoteId = room.remoteId
             if (remoteId != null) {
+                // 리스너를 떼고 지운다 (L1): 붙여둔 채 지우면 배치가 커밋될 때마다
+                // 내 리스너의 REMOVED가 로컬을 즉시 삭제해 '실패 시 로컬 보존'이 깨진다.
+                syncManager?.detach(roomId)
                 val serverOk = syncManager?.wipeMessages(remoteId) ?: false
+                // 성공/실패와 무관하게 재접속 — 재접속 시 삭제 대조(reconcile)가
+                // 서버 상태 기준으로 수렴한다 (부분 삭제면 남은 것 유지)
+                syncManager?.reattach(roomId, remoteId)
                 if (!serverOk) return@withContext false // 로컬은 건드리지 않는다
             }
             db.messageDao().deleteForRoom(roomId)

@@ -195,8 +195,9 @@ fun RoomListScreen(nav: NavController) {
     if (showJoin) {
         JoinRoomDialog(
             onDismiss = { showJoin = false },
-            onJoin = { code ->
+            onJoin = { code, onDone ->
                 vm.joinRoom(code) { roomId ->
+                    onDone()
                     if (roomId != null) {
                         showJoin = false
                         nav.navigate("chat/$roomId")
@@ -439,8 +440,10 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
 }
 
 @Composable
-private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String) -> Unit) {
+private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String, () -> Unit) -> Unit) {
     var code by remember { mutableStateOf("") }
+    // 더블탭 가드 (L2) — 진행 중에는 버튼 비활성화
+    var joining by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("초대 코드로 참여") },
@@ -460,7 +463,13 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String) -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { onJoin(code) }, enabled = code.isNotBlank()) { Text("참여") }
+            TextButton(
+                onClick = {
+                    joining = true
+                    onJoin(code) { joining = false }
+                },
+                enabled = code.isNotBlank() && !joining,
+            ) { Text(if (joining) "참여 중…" else "참여") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )

@@ -290,7 +290,8 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         Toast.makeText(
                             context,
                             if (ok) "방 로그를 초기화했습니다"
-                            else "서버 삭제에 실패해 초기화를 취소했습니다. 네트워크를 확인해주세요.",
+                            else "서버 삭제가 완료되지 않아 중단했습니다. 일부만 삭제되었을 수 " +
+                                "있으니 네트워크 확인 후 다시 시도해주세요.",
                             Toast.LENGTH_SHORT,
                         ).show()
                     }

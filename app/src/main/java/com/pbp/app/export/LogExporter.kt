@@ -106,23 +106,33 @@ object LogExporter {
                     val bubbleColor =
                         if (ooc) "#E3DED2" else hex(message.senderBubbleColor ?: PbpPalette.bubblePresets.first())
                     val prefix = if (ooc) "〔잡담〕 " else ""
-                    body.append(
-                        bubbleHtml(
-                            message = message,
-                            bodyHtml = prefix + markupHtml(message.body),
-                            name = message.senderName ?: "",
-                            nameColor = nameColor,
-                            bubbleColor = bubbleColor,
-                            mine = mine,
-                            time = time,
-                            edited = edited,
-                            avatar = avatarHtml(
-                                message,
-                                if (ooc) "filter:grayscale(.5);opacity:.7;" else "",
-                            ),
-                            ooc = ooc,
+                    // 잡담이 아니면 문장 중간의 " " 대사를 별도 말풍선으로 분리 (앱 화면과 동일)
+                    val parts = if (ooc) listOf(GmSpeech.Part.Narration(message.body))
+                    else GmSpeech.split(message.body)
+                    parts.forEachIndexed { index, part ->
+                        val partText = when (part) {
+                            is GmSpeech.Part.Narration -> part.text
+                            is GmSpeech.Part.Quote -> "“${part.text}”"
+                        }
+                        body.append(
+                            bubbleHtml(
+                                message = message,
+                                bodyHtml = prefix + markupHtml(partText),
+                                name = message.senderName ?: "",
+                                nameColor = nameColor,
+                                bubbleColor = bubbleColor,
+                                mine = mine,
+                                time = if (index == parts.lastIndex) time else "",
+                                edited = if (index == parts.lastIndex) edited else "",
+                                avatar = avatarHtml(
+                                    message,
+                                    if (ooc) "filter:grayscale(.5);opacity:.7;" else "",
+                                ),
+                                ooc = ooc,
+                            )
                         )
-                    )
+                        body.append('\n')
+                    }
                 }
             }
             body.append('\n')

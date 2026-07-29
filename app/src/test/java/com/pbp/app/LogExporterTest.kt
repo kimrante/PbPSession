@@ -3,6 +3,7 @@ package com.pbp.app
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -46,6 +47,25 @@ class LogExporterTest {
         // 줄바꿈 문자가 본문에 그대로 있고, CSS가 pre-wrap으로 렌더링한다 (P2-7)
         assertTrue(html.contains("첫 줄\n둘째 줄"))
         assertTrue(html.contains("white-space:pre-wrap"))
+    }
+
+    @Test
+    fun `캐릭터 발화도 문장 중간의 대사를 별도 말풍선으로 나눈다`() {
+        val html = LogExporter.buildHtml(
+            "방", "",
+            listOf(message(body = """뒤를 돌아봤다. "누구야?" 목소리가 갈라졌다."""))
+        )
+        // 서술 조각과 대사 조각이 각각 말풍선으로
+        assertTrue(html.contains("뒤를 돌아봤다."))
+        assertTrue(html.contains("“누구야?”"))
+        assertTrue(html.contains("목소리가 갈라졌다."))
+        assertEquals(3, Regex("class=\"lbubble").findAll(html).count())
+    }
+
+    @Test
+    fun `대사가 없으면 말풍선 하나로 유지된다`() {
+        val html = LogExporter.buildHtml("방", "", listOf(message(body = "그냥 한 마디")))
+        assertEquals(1, Regex("class=\"lbubble").findAll(html).count())
     }
 
     @Test

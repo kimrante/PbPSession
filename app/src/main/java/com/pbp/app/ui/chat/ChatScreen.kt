@@ -448,11 +448,15 @@ private fun MessageBlock(
                 }
             }
         }
-        // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 작게 '이름 : 내용'
+        // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 작게 '이름 : 내용'.
+        // 배경은 그 캐릭터의 말풍선 색을 반투명으로 깔아 누가 말했는지 색으로도 구분한다
         message.isOoc -> {
+            val chatterColor = Color(
+                message.senderBubbleColor ?: PbpPalette.bubblePresets.first()
+            ).copy(alpha = .55f)
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Surface(
-                    color = Color.Black.copy(alpha = .35f),
+                    color = chatterColor,
                     shape = RoundedCornerShape(999.dp),
                     modifier = Modifier.combinedClickable(
                         onClick = {},
@@ -462,7 +466,7 @@ private fun MessageBlock(
                     Text(
                         "${message.senderName ?: ""} : ${message.body}",
                         fontSize = 10.sp,
-                        color = Color.White.copy(alpha = .6f),
+                        color = tokens.bubbleInk.copy(alpha = .85f),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
                     )
                 }
@@ -518,11 +522,30 @@ private fun MessageBlock(
                 }
             }
         }
-        else -> BubbleRow(
-            message = message,
-            showHeader = !grouped,
-            onLongPress = onLongPress,
-        )
+        else -> {
+            // 캐릭터 발화도 GM과 같은 규칙: 문장 중간의 " " 대사만 인용 말풍선으로 분리한다.
+            // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다.
+            val parts = GmSpeech.split(message.body)
+            if (parts.size <= 1) {
+                BubbleRow(message = message, showHeader = !grouped, onLongPress = onLongPress)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp1)) {
+                    parts.forEachIndexed { index, part ->
+                        BubbleRow(
+                            message = message,
+                            overrideBody = when (part) {
+                                is GmSpeech.Part.Narration -> part.text
+                                is GmSpeech.Part.Quote -> part.text
+                            },
+                            quoteBubble = part is GmSpeech.Part.Quote,
+                            showHeader = !grouped && index == 0,
+                            showTime = index == parts.lastIndex,
+                            onLongPress = onLongPress,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -576,16 +599,24 @@ private fun BubbleRow(
     overrideBody: String? = null,
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
+    /** 이 조각이 대사(인용)임을 호출부가 이미 판정한 경우 */
+    quoteBubble: Boolean = false,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
+    showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
     // GM 인용은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
     val mine = !message.incoming && overrideName == null
     val body = overrideBody ?: message.body
-    // 본문 전체가 " "로 감싸이면 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게
-    // (목업 mockup-quote-bubble). 잡담과 GM 인용(???)은 제외.
-    val quoteInner = if (!message.isOoc && overrideName == null) quoteContent(body) else null
+    // 대사는 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게 (목업 mockup-quote-bubble).
+    // 조각으로 나뉜 경우는 호출부가 알려주고, 통짜 메시지는 본문 전체가 " "인지 본다.
+    val quoteInner = when {
+        message.isOoc -> null
+        quoteBubble -> body
+        overrideName == null -> quoteContent(body)
+        else -> null
+    }
     val bubbleColor = when {
         message.isOoc -> tokens.chatterBubble
         else -> Color(overrideBubbleColor ?: message.senderBubbleColor ?: PbpPalette.bubblePresets.first())
@@ -605,7 +636,7 @@ private fun BubbleRow(
         Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
-                TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
+                if (showTime) TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
             }
             if (!mine) {
                 if (showHeader) {
@@ -698,7 +729,7 @@ private fun BubbleRow(
             }
             if (!mine) {
                 // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽
-                TimeStamp(message, alignEnd = false, Modifier.align(Alignment.Bottom))
+                if (showTime) TimeStamp(message, alignEnd = false, Modifier.align(Alignment.Bottom))
             }
             if (mine) {
                 if (showHeader) {

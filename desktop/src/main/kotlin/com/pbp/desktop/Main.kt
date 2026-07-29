@@ -660,8 +660,30 @@ private fun MessageBlock(
                 }
             }
         }
-        else -> BubbleRow(message, deviceId, room, avatarCache, firestore)
+        else -> {
+            // 캐릭터 발화도 GM과 같은 규칙 — 문장 중간의 " " 대사만 인용 말풍선으로 분리
+            val parts = GmSpeech.split(message.body)
+            if (parts.size <= 1) {
+                BubbleRow(message, deviceId, room, avatarCache, firestore)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    parts.forEach { part ->
+                        BubbleRow(
+                            message = message, deviceId = deviceId, room = room,
+                            avatarCache = avatarCache, firestore = firestore,
+                            overrideBody = part.text(),
+                            quoteBubble = part is GmSpeech.Part.Quote,
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+private fun GmSpeech.Part.text(): String = when (this) {
+    is GmSpeech.Part.Narration -> text
+    is GmSpeech.Part.Quote -> text
 }
 
 @Composable
@@ -696,11 +718,18 @@ private fun BubbleRow(
     overrideBody: String? = null,
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
+    /** 이 조각이 대사(인용)임을 호출부가 이미 판정한 경우 */
+    quoteBubble: Boolean = false,
 ) {
     val mine = message.authorUid == deviceId && overrideName == null
     val body = overrideBody ?: message.body
-    // 본문 전체가 " "로 감싸이면 인용 말풍선 — 모바일과 동일 규칙 (목업 mockup-quote-bubble)
-    val quoteInner = if (!message.isOoc && overrideName == null) quoteContent(body) else null
+    // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 mockup-quote-bubble)
+    val quoteInner = when {
+        message.isOoc -> null
+        quoteBubble -> body
+        overrideName == null -> quoteContent(body)
+        else -> null
+    }
     val bubbleColor = when {
         message.isOoc -> Tokens.ChatterBubble
         else -> Color(overrideBubbleColor ?: message.senderBubbleColor ?: Tokens.bubblePresets.first())

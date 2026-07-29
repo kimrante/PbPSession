@@ -199,15 +199,16 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     LaunchedEffect(roomId, incomingCount) { vm.markRead() }
 
     // 새 메시지가 오면 최신 위치로 스크롤 (reverseLayout에서 index 0 = 최신).
-    // 키는 최신 메시지 id만 — size를 키로 쓰면 '이전 대화 불러오기'나 삭제 때마다
-    // 바닥으로 끌려간다. 위로 스크롤해 읽는 중에는 자동 스크롤하지 않는다. (P1-7)
+    // messages는 오래된 순이므로 최신은 last — first를 키로 쓰면 새 메시지가 와도
+    // 키가 그대로라 이펙트가 아예 실행되지 않는다.
     val listState = rememberLazyListState()
     // 내 발신(메시지·판정)은 어디를 보고 있든 최신으로 내려간다. 전송 직후에는 아직
-    // DB 반영 전이라 목록이 그대로이므로, 플래그를 새 메시지가 도착할 때까지 유지한다 (N4)
+    // DB 반영 전이라, 플래그를 새 메시지가 실제로 도착할 때까지 유지한다 (N4)
     var pendingScrollToLatest by remember { mutableStateOf(false) }
-    LaunchedEffect(messages.firstOrNull()?.id, pendingScrollToLatest) {
-        if (messages.isEmpty()) return@LaunchedEffect
-        // 위로 스크롤해 이전 대화를 읽는 중이면 수신 메시지로 끌어내리지 않는다 (P1-7)
+    val latestMessageId = messages.lastOrNull()?.id
+    LaunchedEffect(latestMessageId, pendingScrollToLatest) {
+        if (latestMessageId == null) return@LaunchedEffect
+        // 내 발신이면 무조건, 아니면 바닥 근처를 보고 있을 때만 따라간다 (P1-7)
         if (pendingScrollToLatest || listState.firstVisibleItemIndex <= 1) {
             listState.scrollToItem(0)
             pendingScrollToLatest = false
@@ -420,11 +421,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
 /** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 */
 private fun isContinuation(prev: Message?, current: Message): Boolean {
     if (prev == null) return false
-    fun isBubble(m: Message) = m.type == MessageType.TEXT && (!m.senderIsGm || m.isOoc)
+    // 잡담은 말풍선이 아니라 중앙 안내로 렌더링되므로 그룹 대상이 아니다
+    fun isBubble(m: Message) = m.type == MessageType.TEXT && !m.senderIsGm && !m.isOoc
     if (!isBubble(prev) || !isBubble(current)) return false
-    return prev.senderName == current.senderName &&
-        prev.incoming == current.incoming &&
-        prev.isOoc == current.isOoc
+    return prev.senderName == current.senderName && prev.incoming == current.incoming
 }
 
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
@@ -441,6 +441,26 @@ private fun MessageBlock(
                 Surface(color = Color.Black.copy(alpha = .35f), shape = RoundedCornerShape(999.dp)) {
                     Text(
                         message.body,
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = .6f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 작게 '이름 : 내용'
+        message.isOoc -> {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(
+                    color = Color.Black.copy(alpha = .35f),
+                    shape = RoundedCornerShape(999.dp),
+                    modifier = Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                    ),
+                ) {
+                    Text(
+                        "${message.senderName ?: ""} : ${message.body}",
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = .6f),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
@@ -535,6 +555,7 @@ private fun NarrationBlock(
                 )
                 .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
         ) {
+            // 서술은 문단 자체가 화면이 되도록 — 서술자·시간 등 메타 표기는 두지 않는다
             MarkupText(
                 text = text,
                 fontSize = 13.sp,
@@ -543,23 +564,6 @@ private fun NarrationBlock(
                 fontFamily = GowunBatang,
                 lineHeight = 24.sp,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = PbpDimens.sp2)) {
-                val gmLabel = message.senderName
-                    ?.let { if (it.startsWith("GM")) it else "GM $it" } ?: "GM"
-                Text(
-                    "$gmLabel · 서술",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = tokens.signature,
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(formatTime(message.createdAt), fontSize = 10.sp, color = tokens.inkDim)
-                if (message.editedAt != null) {
-                    Spacer(Modifier.width(4.dp))
-                    Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
-                }
-                Spacer(Modifier.weight(1f))
-            }
         }
     }
 }

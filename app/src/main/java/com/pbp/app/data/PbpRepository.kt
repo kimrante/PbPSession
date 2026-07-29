@@ -23,7 +23,10 @@ class PbpRepository(private val db: AppDatabase) {
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
     fun observeGlobalProfiles() = db.profileDao().observeGlobal()
 
-    /** 방을 만들고, 그 방에 귀속된 GM 프로필을 함께 생성해 기본 발화 프로필로 지정한다. */
+    /**
+     * 방을 만든다. 마스터면 방에 귀속된 GM 프로필을 함께 생성해 기본 발화 프로필로,
+     * 참여자(초대 참가)면 GM 없이 기본 캐릭터만 만든다 — 서술 권한은 마스터 전용.
+     */
     suspend fun createRoom(
         name: String,
         icon: String = "",
@@ -43,17 +46,25 @@ class PbpRepository(private val db: AppDatabase) {
                 rule = rule,
             )
         )
-        val gmId = db.profileDao().insert(
-            CharacterProfile(
-                name = "GM",
-                emoji = "", // 문자 없이 컬러만 있는 아바타
-                isGm = true,
-                roomId = roomId,
-                nameColor = 0xFF000000, // 검정 이름색
-                bubbleColor = PbpPalette.gmQuoteBubble,
+        if (isMaster) {
+            val gmId = db.profileDao().insert(
+                CharacterProfile(
+                    name = "GM",
+                    emoji = "", // 문자 없이 컬러만 있는 아바타
+                    isGm = true,
+                    roomId = roomId,
+                    nameColor = 0xFF000000, // 검정 이름색
+                    bubbleColor = PbpPalette.gmQuoteBubble,
+                )
             )
-        )
-        db.roomDao().setActiveProfile(roomId, gmId)
+            db.roomDao().setActiveProfile(roomId, gmId)
+        } else {
+            // 초대받은 참여자는 GM(서술) 권한이 없다 — 기본 캐릭터로 시작
+            val playerId = db.profileDao().insert(
+                CharacterProfile(name = "플레이어", roomId = roomId)
+            )
+            db.roomDao().setActiveProfile(roomId, playerId)
+        }
         roomId
     }
 

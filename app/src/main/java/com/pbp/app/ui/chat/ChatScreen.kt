@@ -319,6 +319,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
+                                themeColor = themeColor,
                                 onLongPress = { actionTargetId = it.id },
                             )
                         }
@@ -452,6 +453,7 @@ private fun isContinuation(prev: Message?, current: Message): Boolean {
 private fun MessageBlock(
     message: Message,
     grouped: Boolean = false,
+    themeColor: Color,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -536,6 +538,7 @@ private fun MessageBlock(
                             overrideBody = part.text,
                             overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
+                            themeColor = themeColor,
                             onLongPress = onLongPress,
                         )
                     }
@@ -547,7 +550,10 @@ private fun MessageBlock(
             // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다.
             val parts = GmSpeech.split(message.body)
             if (parts.size <= 1) {
-                BubbleRow(message = message, showHeader = !grouped, onLongPress = onLongPress)
+                BubbleRow(
+                    message = message, showHeader = !grouped,
+                    themeColor = themeColor, onLongPress = onLongPress,
+                )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp1)) {
                     parts.forEachIndexed { index, part ->
@@ -560,6 +566,7 @@ private fun MessageBlock(
                             quoteBubble = part is GmSpeech.Part.Quote,
                             showHeader = !grouped && index == 0,
                             showTime = index == parts.lastIndex,
+                            themeColor = themeColor,
                             onLongPress = onLongPress,
                         )
                     }
@@ -623,6 +630,7 @@ private fun BubbleRow(
     quoteBubble: Boolean = false,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
     showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
+    themeColor: Color,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -656,7 +664,9 @@ private fun BubbleRow(
         Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
-                if (showTime) TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
+                if (showTime) {
+                    TimeStamp(message, themeColor, alignEnd = true, Modifier.align(Alignment.Bottom))
+                }
             }
             if (!mine) {
                 if (showHeader) {
@@ -749,7 +759,9 @@ private fun BubbleRow(
             }
             if (!mine) {
                 // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽
-                if (showTime) TimeStamp(message, alignEnd = false, Modifier.align(Alignment.Bottom))
+                if (showTime) {
+                    TimeStamp(message, themeColor, alignEnd = false, Modifier.align(Alignment.Bottom))
+                }
             }
             if (mine) {
                 if (showHeader) {
@@ -792,15 +804,20 @@ private fun QuoteMark(mark: String, inkColor: Color, modifier: Modifier) {
     )
 }
 
-/** 말풍선 곁 시간 + (수정됨) — 내 메시지는 왼쪽, 남의 메시지는 오른쪽에 붙는다 */
+/** 말풍선 곁 시간 + (수정됨) — 내 메시지는 왼쪽, 남의 메시지는 오른쪽. 시간 색 = 방 테마 컬러 */
 @Composable
-private fun TimeStamp(message: Message, alignEnd: Boolean, modifier: Modifier = Modifier) {
+private fun TimeStamp(
+    message: Message,
+    themeColor: Color,
+    alignEnd: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val tokens = Pbp.colors
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         if (message.editedAt != null) {
             Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
         }
-        Text(formatTime(message.createdAt), fontSize = 10.sp, color = tokens.inkDim)
+        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
     }
 }
 

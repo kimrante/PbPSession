@@ -24,6 +24,13 @@ interface RoomDao {
     @Query("UPDATE rooms SET activeProfileId = NULL WHERE activeProfileId = :profileId")
     suspend fun clearActiveProfile(profileId: Long)
 
+    /** 삭제된 프로필을 가리키는 activeProfileId 정리 (GM 프로필 일괄 제거 후) */
+    @Query(
+        "UPDATE rooms SET activeProfileId = NULL WHERE activeProfileId IS NOT NULL " +
+            "AND activeProfileId NOT IN (SELECT id FROM profiles)"
+    )
+    suspend fun clearDanglingActiveProfiles()
+
     @Query("SELECT * FROM rooms WHERE id = :id")
     suspend fun get(id: Long): ChatRoom?
 
@@ -32,6 +39,9 @@ interface RoomDao {
 
     @Query("SELECT * FROM rooms WHERE remoteId IS NOT NULL")
     suspend fun listSynced(): List<ChatRoom>
+
+    @Query("SELECT * FROM rooms WHERE isMaster = 0")
+    suspend fun listJoined(): List<ChatRoom>
 
     @Query("SELECT * FROM rooms WHERE inviteCode = :code LIMIT 1")
     suspend fun findByInviteCode(code: String): ChatRoom?
@@ -61,6 +71,14 @@ interface ProfileDao {
 
     @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId ORDER BY isGm DESC, name")
     fun observeForRoom(roomId: Long): Flow<List<CharacterProfile>>
+
+    /** 과거 버전이 참여자 방에도 만들었던 GM 프로필 제거 — 서술 권한은 마스터 전용 */
+    @Query("DELETE FROM profiles WHERE isGm = 1 AND roomId IN (SELECT id FROM rooms WHERE isMaster = 0)")
+    suspend fun deleteGmProfilesOfJoinedRooms(): Int
+
+    /** 이 방에서 고를 수 있는 프로필 수(전역 + 방 귀속) */
+    @Query("SELECT COUNT(*) FROM profiles WHERE roomId IS NULL OR roomId = :roomId")
+    suspend fun countForRoom(roomId: Long): Int
 
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun get(id: Long): CharacterProfile?

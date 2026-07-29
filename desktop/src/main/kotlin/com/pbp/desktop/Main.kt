@@ -154,6 +154,22 @@ private fun App() {
         scope.launch(Dispatchers.IO) { config.writeSnapshot(json) }
     }
 
+    // 과거 빌드는 참여 방에서도 GM이 기본 발화 프로필이었다 — 일회성 교정
+    // (서술 권한은 마스터 전용, 모바일과 동일 규칙)
+    LaunchedEffect(Unit) {
+        val firstPlayer = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0)
+        val fixed = rooms.map { r ->
+            if (!r.isMaster && profiles.getOrNull(r.activeProfileIndex)?.isGm == true) {
+                r.copy(activeProfileIndex = firstPlayer)
+            } else r
+        }
+        if (fixed != rooms) {
+            selected = fixed.firstOrNull { it.remoteId == selected?.remoteId }
+            rooms = fixed
+            persist()
+        }
+    }
+
     // 선택된 방 폴링: 최초 전체 1회 + 이후 증분(createdAt 기준)만 — read 과금 최소화.
     // 방 메타(테마/배경)는 10초 주기.
     LaunchedEffect(selected?.remoteId) {
@@ -215,7 +231,10 @@ private fun App() {
         val room = selected ?: return onResult(false, true)
         val body = text.trim()
         if (body.isEmpty()) return onResult(true, true)
-        val sender = profiles.getOrNull(room.activeProfileIndex) ?: profiles.firstOrNull()
+        // 참여자는 GM 프로필로 발화할 수 없다 — 서술 권한은 마스터 전용
+        val sender = profiles.getOrNull(room.activeProfileIndex)
+            ?.takeIf { room.isMaster || !it.isGm }
+            ?: profiles.firstOrNull { room.isMaster || !it.isGm }
             ?: return onResult(false, true)
         // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
         val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
@@ -325,6 +344,8 @@ private fun App() {
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
                             backgroundKey = meta.backgroundKey ?: "preset_lighthouse", isMaster = false,
                             rule = meta.rule,
+                            // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
+                            activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
                         )
                         if (existing == null) rooms = rooms + joined
                         selected = joined
@@ -871,7 +892,7 @@ private fun BubbleRow(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (mine && showTime) {
                 // 내 메시지: 시간은 말풍선 왼쪽 (모바일과 동일)
-                TimeStamp(message, Modifier.align(Alignment.Bottom))
+                TimeStamp(message, Color(room.themeColor), Modifier.align(Alignment.Bottom))
             }
             if (!mine) {
                 if (showHeader) {
@@ -945,7 +966,7 @@ private fun BubbleRow(
             }
             if (!mine && showTime) {
                 // 남의 메시지: 시간은 말풍선 오른쪽 (모바일과 동일)
-                TimeStamp(message, Modifier.align(Alignment.Bottom))
+                TimeStamp(message, Color(room.themeColor), Modifier.align(Alignment.Bottom))
             }
             if (mine) {
                 if (showHeader) {
@@ -958,14 +979,14 @@ private fun BubbleRow(
     }
 }
 
-/** 말풍선 곁 시간 + (수정됨) — 모바일 TimeStamp와 동일 */
+/** 말풍선 곁 시간 + (수정됨) — 모바일 TimeStamp와 동일. 시간 색 = 방 테마 컬러 */
 @Composable
-private fun TimeStamp(message: Message, modifier: Modifier = Modifier) {
+private fun TimeStamp(message: Message, themeColor: Color, modifier: Modifier = Modifier) {
     Column(modifier) {
         if (message.editedAt != null) {
             Text("(수정됨)", fontSize = 9.sp, color = Tokens.InkDim)
         }
-        Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
+        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
     }
 }
 
@@ -1094,9 +1115,11 @@ private fun InputZone(
                 .widthIn(max = 720.dp).fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 12.dp),
         ) {
+            // 참여자에게는 GM 프로필을 숨긴다 — 서술 권한은 마스터 전용 (모바일과 동일)
+            val visible = profiles.withIndex().filter { room.isMaster || !it.value.isGm }
             LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(profiles.size) { index ->
-                    val profile = profiles[index]
+                items(visible.size) { vi ->
+                    val (index, profile) = visible[vi]
                     val on = index == room.activeProfileIndex
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,

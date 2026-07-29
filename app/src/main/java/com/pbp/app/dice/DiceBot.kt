@@ -9,10 +9,14 @@ import kotlin.random.Random
  *  - `/r 1d6`, `1d6`, `d6` — 메시지 전체가 명령일 때
  *  - `1d6 공격한다!` — 메시지가 `XdY` + 공백으로 시작하면 나머지는 대사, 굴림은 함께 실행
  *  - `1d100<=50`, `2d6 > 7` — 비교식(<, >, <=, >=)이 붙으면 합계를 판정해 성공/실패 표시
+ *  - `d66` — 특수 주사위: 1d6×10 + 1d6 (십의 자리·일의 자리)
  */
 object DiceBot {
     /** 지원하는 주사위 면 수. 새 주사위는 이 목록에만 추가하면 된다. */
-    val supportedSides = listOf(6, 10, 100)
+    val supportedSides = listOf(6, 10, 20, 100)
+
+    /** 특수 주사위: d66 = 1d6*10 + 1d6 */
+    const val D66 = 66
 
     const val MAX_COUNT = 20
 
@@ -33,11 +37,16 @@ object DiceBot {
     }
 
     data class Result(val command: Command, val rolls: List<Int>) {
-        val total: Int get() = rolls.sum()
+        val total: Int
+            get() = if (command.sides == D66) rolls[0] * 10 + rolls[1] else rolls.sum()
 
-        /** "7" 또는 "3 + 5 = 8" 형태의 표시용 문자열 */
+        /** "7", "3 + 5 = 8", d66은 "30 + 5 = 35" 형태의 표시용 문자열 */
         val breakdown: String
-            get() = if (rolls.size == 1) "$total" else rolls.joinToString(" + ") + " = $total"
+            get() = when {
+                command.sides == D66 -> "${rolls[0]}0 + ${rolls[1]} = $total"
+                rolls.size == 1 -> "$total"
+                else -> rolls.joinToString(" + ") + " = $total"
+            }
 
         /** 비교식 판정 결과. 비교식이 없으면 null */
         val success: Boolean?
@@ -64,7 +73,9 @@ object DiceBot {
         val count = match.groupValues[1].ifEmpty { "1" }.toIntOrNull() ?: return null
         val sides = match.groupValues[2].toIntOrNull() ?: return null
         if (count !in 1..MAX_COUNT) return null
-        if (sides !in supportedSides) return null
+        if (sides == D66) {
+            if (count != 1) return null // d66은 1회만
+        } else if (sides !in supportedSides) return null
         val op = match.groupValues[3].ifEmpty { null }
         val threshold = match.groupValues[4].toIntOrNull()
         if (op != null && threshold == null) return null
@@ -72,5 +83,9 @@ object DiceBot {
     }
 
     fun roll(command: Command, random: Random = Random.Default): Result =
-        Result(command, List(command.count) { random.nextInt(1, command.sides + 1) })
+        if (command.sides == D66) {
+            Result(command, listOf(random.nextInt(1, 7), random.nextInt(1, 7)))
+        } else {
+            Result(command, List(command.count) { random.nextInt(1, command.sides + 1) })
+        }
 }

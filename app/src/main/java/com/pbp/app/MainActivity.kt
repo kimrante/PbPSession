@@ -25,6 +25,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 키보드가 올라와도 창이 줄어들지 않게(배경 고정) — IME는 인셋으로 전달받아
+        // 내용(imePadding)만 밀어올린다
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {

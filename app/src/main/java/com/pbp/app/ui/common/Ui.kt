@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
@@ -103,7 +105,11 @@ fun Modifier.dashedBorder(color: Color, corner: Dp): Modifier = drawBehind {
     )
 }
 
-/** 방 배경: 프리셋 그라데이션 또는 갤러리 이미지 + 가독성 베일 (스펙 4장) */
+/**
+ * 방 배경: 프리셋 그라데이션 또는 갤러리 이미지 + 가독성 베일 (스펙 4장).
+ * 배경 레이어는 IME(키보드) 인셋을 무시해 키보드가 올라와도 그대로 고정되고,
+ * 내용 컬럼만 imePadding으로 밀려 올라간다.
+ */
 @Composable
 fun RoomBackdrop(
     backgroundKey: String,
@@ -141,7 +147,7 @@ fun RoomBackdrop(
                     )
                 )
         )
-        Column(Modifier.fillMaxSize()) { content() }
+        Column(Modifier.fillMaxSize().imePadding()) { content() }
     }
 }
 
@@ -195,6 +201,8 @@ private fun buildMarkup(
                             fontWeight = if (node.bold) FontWeight.ExtraBold else null,
                             fontStyle = if (node.italic) FontStyle.Italic else null,
                             textDecoration = if (node.strike) TextDecoration.LineThrough else null,
+                            // 한글 서체는 이탤릭 페이스가 없어 합성 기울임을 강제한다
+                            fontSynthesis = if (node.italic || node.bold) FontSynthesis.All else null,
                         )
                     ) { append(node.text) }
                 }

@@ -224,24 +224,33 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 }
 
                 // ── 메시지 목록
+                val reversed = messages.asReversed()
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     reverseLayout = true,
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
                 ) {
-                    items(messages.asReversed(), key = { it.id }) { message ->
-                        MessageBlock(
-                            message = message,
-                            onEdit = { editTarget = it },
-                            onDelete = { deleteTarget = it },
-                        )
+                    items(reversed.size, key = { reversed[it].id }) { revIdx ->
+                        val message = reversed[revIdx]
+                        // 같은 인물의 연속 메시지는 아바타·이름을 생략하고 간격을 좁힌다
+                        val grouped = isContinuation(reversed.getOrNull(revIdx + 1), message)
+                        Box(Modifier.padding(top = if (grouped) 2.dp else 12.dp)) {
+                            MessageBlock(
+                                message = message,
+                                grouped = grouped,
+                                onEdit = { editTarget = it },
+                                onDelete = { deleteTarget = it },
+                            )
+                        }
                     }
                     // 페이지가 가득 찼으면 더 오래된 대화가 있을 수 있다 (reverseLayout이라 최상단)
                     if (messages.size >= limitValue) {
                         item(key = "load-older") {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.fillMaxWidth().padding(top = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Text(
                                     "이전 대화 불러오기",
                                     fontSize = 12.sp,
@@ -298,10 +307,21 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     }
 }
 
+/** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 */
+private fun isContinuation(prev: Message?, current: Message): Boolean {
+    if (prev == null) return false
+    fun isBubble(m: Message) = m.type == MessageType.TEXT && (!m.senderIsGm || m.isOoc)
+    if (!isBubble(prev) || !isBubble(current)) return false
+    return prev.senderName == current.senderName &&
+        prev.incoming == current.incoming &&
+        prev.isOoc == current.isOoc
+}
+
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
 @Composable
 private fun MessageBlock(
     message: Message,
+    grouped: Boolean = false,
     onEdit: (Message) -> Unit,
     onDelete: (Message) -> Unit,
 ) {
@@ -369,7 +389,12 @@ private fun MessageBlock(
                 }
             }
         }
-        else -> BubbleRow(message = message, onEdit = onEdit, onDelete = onDelete)
+        else -> BubbleRow(
+            message = message,
+            showHeader = !grouped,
+            onEdit = onEdit,
+            onDelete = onDelete,
+        )
     }
 }
 
@@ -428,6 +453,7 @@ private fun BubbleRow(
     overrideBody: String? = null,
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
+    showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
     onEdit: (Message) -> Unit,
     onDelete: (Message) -> Unit,
 ) {
@@ -453,21 +479,27 @@ private fun BubbleRow(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             if (!mine) {
-                Avatar(
-                    emoji = message.senderEmoji,
-                    imagePath = message.senderImagePath,
-                    size = 38.dp,
-                    dimmed = message.isOoc,
-                )
+                if (showHeader) {
+                    Avatar(
+                        emoji = message.senderEmoji,
+                        imagePath = message.senderImagePath,
+                        size = 38.dp,
+                        dimmed = message.isOoc,
+                    )
+                } else {
+                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
+                }
             }
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-                Text(
-                    overrideName ?: message.senderName ?: "",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = nameColor,
-                )
-                Spacer(Modifier.height(3.dp))
+                if (showHeader) {
+                    Text(
+                        overrideName ?: message.senderName ?: "",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = nameColor,
+                    )
+                    Spacer(Modifier.height(3.dp))
+                }
                 val shape = if (mine) {
                     RoundedCornerShape(topStart = 15.dp, topEnd = 4.dp, bottomEnd = 15.dp, bottomStart = 15.dp)
                 } else {
@@ -519,12 +551,16 @@ private fun BubbleRow(
                 }
             }
             if (mine) {
-                Avatar(
-                    emoji = message.senderEmoji,
-                    imagePath = message.senderImagePath,
-                    size = 38.dp,
-                    dimmed = message.isOoc,
-                )
+                if (showHeader) {
+                    Avatar(
+                        emoji = message.senderEmoji,
+                        imagePath = message.senderImagePath,
+                        size = 38.dp,
+                        dimmed = message.isOoc,
+                    )
+                } else {
+                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
+                }
             }
         }
     }
@@ -533,23 +569,38 @@ private fun BubbleRow(
 /** 말풍선 곁 연필·휴지통 마이크로 버튼 */
 @Composable
 private fun MiniActions(message: Message, onEdit: (Message) -> Unit, onDelete: (Message) -> Unit) {
+    // 글리프의 폰트 여백 때문에 중앙이 틀어지지 않도록 폰트 패딩 제거 + 라인높이 고정
+    val glyphStyle = androidx.compose.ui.text.TextStyle(
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    )
     Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         Box(
             Modifier
-                .size(17.dp)
+                .size(18.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color.Black.copy(alpha = .38f))
                 .clickable { onEdit(message) },
             contentAlignment = Alignment.Center,
-        ) { Text("✎", fontSize = 9.sp, color = Color.White.copy(alpha = .75f)) }
+        ) {
+            Text(
+                "✎",
+                fontSize = 10.sp,
+                lineHeight = 10.sp,
+                color = Color.White.copy(alpha = .75f),
+                style = glyphStyle,
+            )
+        }
         Box(
             Modifier
-                .size(17.dp)
+                .size(18.dp)
                 .clip(RoundedCornerShape(5.dp))
                 .background(Color.Black.copy(alpha = .38f))
                 .clickable { onDelete(message) },
             contentAlignment = Alignment.Center,
-        ) { Text("🗑", fontSize = 8.sp) }
+        ) {
+            Text("🗑", fontSize = 9.sp, lineHeight = 9.sp, style = glyphStyle)
+        }
     }
 }
 

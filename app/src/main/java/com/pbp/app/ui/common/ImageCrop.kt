@@ -85,15 +85,6 @@ fun ImageCropDialog(
                     val total = baseScale * zoom
                     val image = remember(source) { source.asImageBitmap() }
 
-                    fun clampOffset(candidate: Offset): Offset {
-                        val maxX = maxOf(0f, (source.width * total - cropPx) / 2f)
-                        val maxY = maxOf(0f, (source.height * total - cropPx) / 2f)
-                        return Offset(
-                            candidate.x.coerceIn(-maxX, maxX),
-                            candidate.y.coerceIn(-maxY, maxY),
-                        )
-                    }
-
                     Box(
                         Modifier
                             .size(cropSizeDp)
@@ -101,11 +92,20 @@ fun ImageCropDialog(
                             .background(Color.Black)
                             .border(2.dp, tokens.signature, CircleShape)
                             .pointerInput(source) {
+                                // 주의: 제스처 람다는 재구성돼도 유지되므로,
+                                // 이동 한계는 항상 '현재 zoom' 기준으로 다시 계산한다
                                 detectTransformGestures { _, pan, gestureZoom, _ ->
                                     val newZoom = (zoom * gestureZoom).coerceIn(1f, 6f)
                                     val zoomRatio = newZoom / zoom
                                     zoom = newZoom
-                                    offset = clampOffset(offset * zoomRatio + pan)
+                                    val current = baseScale * newZoom
+                                    val maxX = maxOf(0f, (source.width * current - cropPx) / 2f)
+                                    val maxY = maxOf(0f, (source.height * current - cropPx) / 2f)
+                                    val candidate = offset * zoomRatio + pan
+                                    offset = Offset(
+                                        candidate.x.coerceIn(-maxX, maxX),
+                                        candidate.y.coerceIn(-maxY, maxY),
+                                    )
                                 }
                             },
                     ) {

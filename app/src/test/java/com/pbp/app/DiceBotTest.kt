@@ -100,4 +100,29 @@ class DiceBotTest {
     fun `expr은 XdY 형식이다`() {
         assertEquals("2d6", DiceBot.Command(2, 6).expr)
     }
+
+    @Test
+    fun `d20을 지원한다`() {
+        assertEquals(DiceBot.Command(1, 20), DiceBot.parse("1d20"))
+        assertEquals(DiceBot.Command(3, 20, ">=", 15), DiceBot.parse("3d20 >= 15 공격"))
+        repeat(500) {
+            val roll = DiceBot.roll(DiceBot.Command(1, 20)).rolls.single()
+            assertTrue(roll in 1..20)
+        }
+    }
+
+    @Test
+    fun `d66은 1d6x10 더하기 1d6으로 계산한다`() {
+        assertEquals(DiceBot.Command(1, 66), DiceBot.parse("d66"))
+        assertEquals(DiceBot.Command(1, 66), DiceBot.parse("1d66 조우표"))
+        assertNull(DiceBot.parse("2d66")) // d66은 1회만
+        repeat(500) {
+            val result = DiceBot.roll(DiceBot.Command(1, 66))
+            assertEquals(2, result.rolls.size)
+            assertTrue(result.total in 11..66)
+            assertEquals(result.rolls[0] * 10 + result.rolls[1], result.total)
+        }
+        // 표시 형식: "30 + 5 = 35"
+        assertEquals("30 + 5 = 35", DiceBot.Result(DiceBot.Command(1, 66), listOf(3, 5)).breakdown)
+    }
 }

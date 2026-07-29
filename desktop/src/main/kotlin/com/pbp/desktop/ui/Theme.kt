@@ -84,6 +84,18 @@ val GowunBatang = FontFamily(
     Font(resource = "fonts/gowun_batang_bold.ttf", weight = FontWeight.Bold),
 )
 
+/** 본문 대안 서체 — Pretendard (고딕) */
+val Pretendard = FontFamily(
+    Font(resource = "fonts/pretendard.ttf", weight = FontWeight.Normal),
+)
+
+/** 글꼴 설정 값("system"/"gowun"/"pretendard") → FontFamily. null = 시스템 기본 */
+fun appFontFamily(choice: String): FontFamily? = when (choice) {
+    "gowun" -> GowunBatang
+    "pretendard" -> Pretendard
+    else -> null
+}
+
 /** 마크다운 + 루비(위첨자) 렌더링 — 모바일 MarkupText와 동일 방식 */
 @Composable
 fun MarkupText(

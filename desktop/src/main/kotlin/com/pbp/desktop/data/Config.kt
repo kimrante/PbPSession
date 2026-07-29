@@ -36,6 +36,8 @@ class AppConfig private constructor(
     val rooms: MutableList<JoinedRoom>,
     /** 익명 인증 리프레시 토큰 — 재시작해도 같은 auth UID 유지 (P0-1) */
     @Volatile var authRefreshToken: String? = null,
+    /** 앱 전체 글꼴 — "system" / "gowun" / "pretendard" (모바일 AppFonts와 동일 값) */
+    @Volatile var appFont: String = "system",
 ) {
     companion object {
         private val file = File(System.getProperty("user.home"), ".pbp-desktop/config.json")
@@ -60,6 +62,7 @@ class AppConfig private constructor(
                 profiles = (loaded?.profiles ?: defaultProfiles()).toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
+                appFont = loaded?.appFont ?: "system",
             ).also { it.save() }
         }
 
@@ -74,6 +77,7 @@ class AppConfig private constructor(
         val profiles: List<Profile>?,
         val rooms: List<JoinedRoom>?,
         val authRefreshToken: String? = null,
+        val appFont: String? = null,
     )
 
     /**
@@ -83,7 +87,7 @@ class AppConfig private constructor(
      */
     @Synchronized
     fun snapshot(): String =
-        gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken))
+        gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont))
 
     /**
      * 목록 교체와 스냅샷을 한 락 안에서 원자적으로 (C1) — 어느 스레드에서 불러도

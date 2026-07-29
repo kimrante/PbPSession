@@ -25,8 +25,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -48,6 +50,8 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,7 +70,9 @@ import com.pbp.desktop.logic.Rules
 import com.pbp.desktop.logic.GmSpeech
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
+import com.pbp.desktop.ui.Pretendard
 import com.pbp.desktop.ui.Tokens
+import com.pbp.desktop.ui.appFontFamily
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,6 +129,9 @@ private fun App() {
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
     var overlay by remember { mutableStateOf<OverlayKind?>(null) }
+
+    // 앱 전체 글꼴 — config.json에 유지, 모바일 AppFonts와 동일 선택지
+    var appFont by remember { mutableStateOf(config.appFont) }
 
     // 내 테마/배경 변경 직후 폴링이 옛 서버 값으로 되돌리는 것 방지 (P3-14)
     var metaFreezeUntil by remember { mutableStateOf(0L) }
@@ -252,6 +261,12 @@ private fun App() {
         }
     }
 
+    // 앱 전체 글꼴 적용 — 서술(명조)처럼 명시 지정한 곳은 그대로 유지된다
+    CompositionLocalProvider(
+        LocalTextStyle provides LocalTextStyle.current.merge(
+            TextStyle(fontFamily = appFontFamily(appFont))
+        )
+    ) {
     Row(Modifier.fillMaxSize().background(Tokens.Bg)) {
         LeftPane(
             rooms = rooms,
@@ -259,6 +274,7 @@ private fun App() {
             onSelect = { selected = it },
             onCreate = { overlay = OverlayKind.CreateRoom },
             onJoin = { overlay = OverlayKind.JoinRoom },
+            onFontSetting = { overlay = OverlayKind.FontSetting },
         )
         Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.Line))
         val room = selected
@@ -364,8 +380,18 @@ private fun App() {
                 overlay = null
             },
         )
+        OverlayKind.FontSetting -> FontOverlay(
+            current = appFont,
+            onDismiss = { overlay = null },
+            onSelect = { value ->
+                appFont = value
+                config.appFont = value
+                persist()
+            },
+        )
         null -> {}
     }
+    } // CompositionLocalProvider — 앱 전체 글꼴
 }
 
 /** 컴포지션 진입 전 1회성 파일 IO를 UI 스레드 밖에서 수행 (C8) */
@@ -376,7 +402,7 @@ private fun <T> runBlockingIo(block: () -> T): T =
 private val avatarsInFlight: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-private enum class OverlayKind { JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings }
+private enum class OverlayKind { JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting }
 
 private fun inviteCode(): String {
     val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -418,6 +444,7 @@ private fun LeftPane(
     onSelect: (JoinedRoom) -> Unit,
     onCreate: () -> Unit,
     onJoin: () -> Unit,
+    onFontSetting: () -> Unit,
 ) {
     // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
     Column(
@@ -434,13 +461,22 @@ private fun LeftPane(
                 contentAlignment = Alignment.Center,
             ) { Text("⬦", color = Color(0xFFEFE8D6), fontSize = 17.sp) }
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 // 라이트 모드 "PbP" 강조색 = 잉크 블랙 (스펙 2장)
                 Text(
                     "PbP", fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
                     fontSize = 18.sp, color = Tokens.Ink,
                 )
                 Text("진행 중인 세션 ${rooms.size} · PC", fontSize = 11.sp, color = Tokens.InkDim)
+            }
+            // 앱 글꼴 설정 — 모바일 방 목록의 'Aa' 버튼과 동일 위계
+            Box(
+                Modifier.size(32.dp).clip(CircleShape)
+                    .border(1.dp, Tokens.Line, CircleShape)
+                    .clickable(onClick = onFontSetting),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Aa", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
             }
         }
         LazyColumn(
@@ -1401,6 +1437,44 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
             YellowButton("적용", Modifier.weight(1f)) { onApply(theme, background) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
+    }
+}
+
+/** 앱 전체 글꼴 선택 — 모바일 FontSettingDialog와 동일 선택지, 즉시 반영·config.json 유지 */
+@Composable
+private fun FontOverlay(current: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
+    OverlayScaffold("앱 글꼴", onDismiss) {
+        listOf(
+            "system" to "시스템 기본",
+            "gowun" to "고운 바탕 (명조)",
+            "pretendard" to "프리텐다드 (고딕)",
+        ).forEach { (value, label) ->
+            val selected = current == value
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSelect(value) }
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (selected) "●" else "○",
+                    color = if (selected) Tokens.SignatureRing else Tokens.InkDim,
+                    fontSize = 13.sp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    label, fontSize = 13.sp, color = Tokens.Ink,
+                    fontFamily = when (value) {
+                        "gowun" -> GowunBatang
+                        "pretendard" -> Pretendard
+                        else -> FontFamily.Default
+                    },
+                )
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        GhostButton("닫기", Modifier.fillMaxWidth(), onDismiss)
     }
 }
 

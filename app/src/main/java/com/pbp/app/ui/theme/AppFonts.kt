@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 object AppFonts {
     const val SYSTEM = "system" // 시스템 기본
     const val GOWUN = "gowun"   // 고운 바탕(명조)
+    const val PRETENDARD = "pretendard" // 프리텐다드(고딕)
 
     var choice by mutableStateOf(SYSTEM)
         private set
@@ -32,7 +33,11 @@ object AppFonts {
 
     /** 현재 설정의 기본 FontFamily. null이면 시스템 기본 */
     val fontFamily: FontFamily?
-        get() = if (choice == GOWUN) GowunBatang else null
+        get() = when (choice) {
+            GOWUN -> GowunBatang
+            PRETENDARD -> Pretendard
+            else -> null
+        }
 }
 
 /** Typography의 모든 스타일에 기본 글꼴을 입힌다 */

@@ -347,6 +347,7 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
                 listOf(
                     com.pbp.app.ui.theme.AppFonts.SYSTEM to "시스템 기본",
                     com.pbp.app.ui.theme.AppFonts.GOWUN to "고운 바탕 (명조)",
+                    com.pbp.app.ui.theme.AppFonts.PRETENDARD to "프리텐다드 (고딕)",
                 ).forEach { (value, label) ->
                     val selected = com.pbp.app.ui.theme.AppFonts.choice == value
                     Row(
@@ -368,7 +369,12 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
                         Text(
                             label,
                             fontSize = 13.sp,
-                            fontFamily = if (value == com.pbp.app.ui.theme.AppFonts.GOWUN) GowunBatang else null,
+                            fontFamily = when (value) {
+                                com.pbp.app.ui.theme.AppFonts.GOWUN -> GowunBatang
+                                com.pbp.app.ui.theme.AppFonts.PRETENDARD ->
+                                    com.pbp.app.ui.theme.Pretendard
+                                else -> null
+                            },
                         )
                     }
                 }

@@ -15,3 +15,8 @@ import com.pbp.app.R
 val GowunBatang = FontFamily(
     Font(R.font.gowun_batang_regular, FontWeight.Normal),
 )
+
+/** 본문 대안 서체 — Pretendard (고딕) */
+val Pretendard = FontFamily(
+    Font(R.font.pretendard, FontWeight.Normal),
+)

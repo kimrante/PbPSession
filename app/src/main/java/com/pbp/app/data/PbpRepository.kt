@@ -26,7 +26,7 @@ class PbpRepository(private val db: AppDatabase) {
     /** 방을 만들고, 그 방에 귀속된 GM 프로필을 함께 생성해 기본 발화 프로필로 지정한다. */
     suspend fun createRoom(
         name: String,
-        icon: String,
+        icon: String = "",
         isMaster: Boolean = true,
         themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
         backgroundKey: String = PbpPalette.DEFAULT_BACKGROUND,
@@ -125,6 +125,7 @@ class PbpRepository(private val db: AppDatabase) {
                 createdAt = System.currentTimeMillis(),
             )
             inserted += textMessage.copy(id = db.messageDao().insert(textMessage))
+            val rule = db.roomDao().get(roomId)?.rule ?: com.pbp.app.dice.Rules.COC7
             if (!isOoc) {
                 DiceBot.parse(plain)?.let { command ->
                     val result = DiceBot.roll(command)
@@ -133,7 +134,7 @@ class PbpRepository(private val db: AppDatabase) {
                         type = MessageType.DICE,
                         body = result.breakdown,
                         diceExpr = "${sender.name} · ${command.expr}",
-                        diceOutcome = result.success?.let { if (it) "success" else "fail" },
+                        diceOutcome = com.pbp.app.dice.Rules.judgeOutcome(rule, result),
                         senderName = "다이스봇",
                         senderEmoji = "🎲",
                         senderIsBot = true,

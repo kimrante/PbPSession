@@ -166,16 +166,18 @@ fun MarkupText(
     fontWeight: FontWeight? = null,
     lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
+    // 지정이 없으면 앱 글꼴 설정을 따른다 — GM 서술만 명조를 명시적으로 넘긴다
+    val family = fontFamily ?: com.pbp.app.ui.theme.AppFonts.fontFamily
     // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, fontFamily, fontWeight) {
-        buildMarkup(text, fontSize, color, rubyColor, fontFamily, fontWeight)
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight) {
+        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight)
     }
     Text(
         annotated,
         modifier = modifier,
         color = color,
         fontSize = fontSize,
-        fontFamily = fontFamily,
+        fontFamily = family,
         fontWeight = fontWeight,
         lineHeight = lineHeight,
         inlineContent = inline,

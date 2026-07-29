@@ -77,9 +77,17 @@ object Images {
             )
         } else oriented
 
+        // 투명 영역이 있으면 PNG로 — JPEG는 알파를 검정으로 채운다
+        val keepAlpha = bitmap.hasAlpha()
         val dir = File(context.filesDir, subDir).apply { mkdirs() }
-        val file = File(dir, "${UUID.randomUUID()}.jpg")
-        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+        val file = File(dir, "${UUID.randomUUID()}" + if (keepAlpha) ".png" else ".jpg")
+        file.outputStream().use {
+            if (keepAlpha) {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            } else {
+                bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it)
+            }
+        }
         file.absolutePath
     }.getOrNull()
 }

@@ -297,7 +297,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "{$statName}",
+                                statName,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF3B82F6),

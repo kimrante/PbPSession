@@ -178,9 +178,17 @@ private fun cropToFile(
     }
     canvas.drawBitmap(source, matrix, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
 
+    // 투명 영역이 있는 원본(PNG 등)은 JPEG로 저장하면 검게 채워진다 — PNG로 보존
+    val keepAlpha = source.hasAlpha()
     val dir = File(context.filesDir, "avatars").apply { mkdirs() }
-    val file = File(dir, "${UUID.randomUUID()}.jpg")
-    file.outputStream().use { out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+    val file = File(dir, "${UUID.randomUUID()}" + if (keepAlpha) ".png" else ".jpg")
+    file.outputStream().use {
+        if (keepAlpha) {
+            out.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        } else {
+            out.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it)
+        }
+    }
     file.absolutePath
 }.getOrNull()
 

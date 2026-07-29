@@ -248,7 +248,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
         val roomId = repo.createRoom(
             name = roomDoc.getString("name") ?: "공유 캠페인",
-            icon = roomDoc.getString("icon") ?: "🎲",
+            icon = "", // 방 아이콘 폐지 — 배경 이미지로만 구분
             isMaster = false, // 참여자 표시용 (설정 변경은 누구나 가능)
             themeColor = roomDoc.getLong("themeColor")
                 ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_THEME_COLOR,
@@ -650,7 +650,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         return file.absolutePath
     }
 
-    /** 긴 변 256px 이하 JPEG로 축소 (Firestore 1MB 문서 제한을 넉넉히 하회) */
+    /**
+     * 긴 변 256px 이하로 축소 (Firestore 1MB 문서 제한을 넉넉히 하회).
+     * 투명 영역이 있으면 PNG, 아니면 JPEG — JPEG는 알파를 검정으로 채운다.
+     */
     private fun downscaleToJpeg(path: String, maxSize: Int = 256): ByteArray? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
@@ -669,7 +672,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             )
         } else decoded
         val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
+        if (bitmap.hasAlpha()) {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        } else {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
+        }
         return out.toByteArray()
     }
 

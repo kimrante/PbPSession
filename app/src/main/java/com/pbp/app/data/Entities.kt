@@ -13,7 +13,8 @@ enum class MessageType { TEXT, DICE, SYSTEM }
 data class ChatRoom(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val icon: String = "🎲",
+    /** 미사용(구버전 호환) — 방은 배경 이미지로만 구분한다 */
+    val icon: String = "",
     val activeProfileId: Long? = null,
     val createdAt: Long,
     /** Firestore 방 문서 ID. null이면 로컬 전용(공유 안 됨) */

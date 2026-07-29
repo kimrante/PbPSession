@@ -187,6 +187,41 @@ object ProfileStats {
     }
 }
 
+/** 판정 등급 — 안드로이드 Rules와 동일 규칙 (COC7 하향 판정의 성공 단계) */
+object Rules {
+    const val COC7 = "coc7"
+
+    fun judgeOutcome(rule: String, result: DiceBot.Result): String? {
+        val success = result.success ?: return null
+        val command = result.command
+        val threshold = command.threshold
+        val coc7Downward = rule == COC7 && command.op == "<=" && threshold != null &&
+            command.sides == 100
+        if (!coc7Downward) return if (success) "success" else "fail"
+        return when {
+            result.total == 1 -> "critical"
+            result.total == 100 -> "fumble"
+            !success -> "fail"
+            result.total <= threshold!! / 5 -> "extreme"
+            result.total <= threshold / 2 -> "hard"
+            else -> "success"
+        }
+    }
+
+    fun outcomeLabel(outcome: String?): String? = when (outcome) {
+        "critical" -> "대성공"
+        "extreme" -> "대단한 성공"
+        "hard" -> "어려운 성공"
+        "success" -> "성공"
+        "fail" -> "실패"
+        "fumble" -> "대실패"
+        else -> null
+    }
+
+    fun isSuccess(outcome: String?): Boolean =
+        outcome in setOf("critical", "extreme", "hard", "success")
+}
+
 /** GM 발화에서 " " 인용만 말풍선으로 분리 */
 object GmSpeech {
     sealed interface Part {

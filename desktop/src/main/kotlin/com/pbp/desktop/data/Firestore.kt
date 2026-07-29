@@ -15,6 +15,8 @@ data class Message(
     val type: String,
     val body: String,
     val diceExpr: String?,
+    /** 판정 등급 (critical/extreme/hard/success/fail/fumble) */
+    val diceOutcome: String?,
     val senderName: String?,
     val senderEmoji: String?,
     val senderIsGm: Boolean,
@@ -348,6 +350,7 @@ class FirestoreRest(
         type = doc.str("type") ?: "TEXT",
         body = doc.str("body") ?: "",
         diceExpr = doc.str("diceExpr"),
+        diceOutcome = doc.str("diceOutcome"),
         senderName = doc.str("senderName"),
         senderEmoji = doc.str("senderEmoji"),
         senderIsGm = doc.bool("senderIsGm"),

@@ -55,7 +55,14 @@ fun PbpTheme(
             surfaceContainerHighest = tokens.panel2,
         )
     }
-    CompositionLocalProvider(LocalPbpColors provides tokens) {
+    // Material3의 typography는 컴포넌트별로만 적용돼 일반 Text에는 닿지 않는다.
+    // 앱 글꼴이 모든 텍스트(말풍선·이름·시간)에 반영되도록 LocalTextStyle도 함께 제공한다.
+    val baseTextStyle = androidx.compose.material3.LocalTextStyle.current
+        .merge(androidx.compose.ui.text.TextStyle(fontFamily = AppFonts.fontFamily))
+    CompositionLocalProvider(
+        LocalPbpColors provides tokens,
+        androidx.compose.material3.LocalTextStyle provides baseTextStyle,
+    ) {
         MaterialTheme(
             colorScheme = material,
             typography = typographyWith(AppFonts.fontFamily),

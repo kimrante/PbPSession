@@ -60,6 +60,7 @@ import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
 import com.pbp.desktop.logic.DiceBot
 import com.pbp.desktop.logic.ProfileStats
+import com.pbp.desktop.logic.Rules
 import com.pbp.desktop.logic.GmSpeech
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
@@ -207,7 +208,8 @@ private fun App() {
                             sender = Profile(name = "다이스봇", emoji = "🎲"),
                             isOoc = false, authorUid = authorUid(),
                             diceExpr = "${sender.name} · ${command.expr}", isBot = true,
-                            diceOutcome = result.success?.let { if (it) "success" else "fail" },
+                            // 방 룰은 데스크톱 config에 없으므로 기본 COC7 기준 (모바일과 동일 규칙)
+                            diceOutcome = Rules.judgeOutcome(Rules.COC7, result),
                         ),
                     )
                 }
@@ -628,6 +630,17 @@ private fun MessageBlock(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp, color = Color(0xFF7A5B12), fontWeight = FontWeight.Bold,
                     )
+                    // 판정 등급 — 성공 계열 파랑, 실패 빨강 (모바일과 동일 표기)
+                    Rules.outcomeLabel(message.diceOutcome)?.let { label ->
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            label,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (Rules.isSuccess(message.diceOutcome)) Color(0xFF5E9EFF)
+                            else Color(0xFFFF6B6B),
+                        )
+                    }
                 }
             }
         }

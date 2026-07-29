@@ -463,16 +463,17 @@ private fun MessageBlock(
                         color = Color(0xFFFFE9AE),
                         fontWeight = FontWeight.Bold,
                     )
-                    // 비교식 판정: 성공 = 파랑, 실패 = 빨강
-                    when (message.diceOutcome) {
-                        "success" -> {
-                            Spacer(Modifier.width(PbpDimens.sp2))
-                            Text("성공", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF5E9EFF))
-                        }
-                        "fail" -> {
-                            Spacer(Modifier.width(PbpDimens.sp2))
-                            Text("실패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF6B6B))
-                        }
+                    // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
+                    // (CoC7 하향 판정은 대성공·대단한 성공·어려운 성공 단계까지)
+                    com.pbp.app.dice.Rules.outcomeLabel(message.diceOutcome)?.let { label ->
+                        val success = com.pbp.app.dice.Rules.isSuccess(message.diceOutcome)
+                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Text(
+                            label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (success) Color(0xFF5E9EFF) else Color(0xFFFF6B6B),
+                        )
                     }
                 }
             }

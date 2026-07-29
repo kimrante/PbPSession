@@ -55,11 +55,13 @@ object LogExporter {
                     body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
 
                 message.type == MessageType.DICE -> {
-                    val outcome = when (message.diceOutcome) {
-                        "success" -> """ <b style="color:#2563C9">성공</b>"""
-                        "fail" -> """ <b style="color:#C0392B">실패</b>"""
-                        else -> ""
-                    }
+                    val outcome = com.pbp.app.dice.Rules.outcomeLabel(message.diceOutcome)
+                        ?.let { label ->
+                            val color =
+                                if (com.pbp.app.dice.Rules.isSuccess(message.diceOutcome)) "#2563C9"
+                                else "#C0392B"
+                            """ <b style="color:$color">${escape(label)}</b>"""
+                        } ?: ""
                     body.append("""<div class="dice">🎲 ${escape(message.diceExpr ?: "")} → <b>${escape(message.body)}</b>$outcome</div>""")
                 }
 
@@ -159,7 +161,7 @@ ruby rt{font-size:7px;color:#C9A227}
 <body>
 <div class="wrap">
 <div class="doc-h">
-<h1>${escape(roomIcon)} ${escape(roomName)}</h1>
+<h1>${(escape(roomIcon) + " ").takeIf { roomIcon.isNotEmpty() } ?: ""}${escape(roomName)}</h1>
 <p>메시지 ${messages.size}개 · PbP에서 내보냄 · UTF-8</p>
 </div>
 $body</div>

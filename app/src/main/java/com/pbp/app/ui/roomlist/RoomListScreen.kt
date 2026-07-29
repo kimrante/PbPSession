@@ -81,7 +81,7 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun createRoom(name: String, rule: String) = viewModelScope.launch {
-        repo.createRoom(name.trim().ifEmpty { "새 세션" }, "🎲", rule = rule)
+        repo.createRoom(name.trim().ifEmpty { "새 세션" }, rule = rule)
     }
 
     fun deleteRoom(room: ChatRoom) = viewModelScope.launch { repo.deleteRoom(room) }
@@ -269,6 +269,7 @@ private fun RoomCard(
                     ),
                 contentAlignment = Alignment.Center,
             ) {
+                // 썸네일은 방 배경만 — 아이콘 글자는 표시하지 않는다
                 if (preset == null) {
                     coil3.compose.AsyncImage(
                         model = java.io.File(room.backgroundKey),
@@ -277,7 +278,6 @@ private fun RoomCard(
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     )
                 }
-                Text(room.icon, fontSize = 17.sp)
             }
             Box(
                 Modifier

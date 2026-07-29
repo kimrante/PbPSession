@@ -100,6 +100,7 @@ fun RoomListScreen(nav: NavController) {
     val unread by vm.unread.collectAsState()
     var showCreate by remember { mutableStateOf(false) }
     var showJoin by remember { mutableStateOf(false) }
+    var showFont by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ChatRoom?>(null) }
 
     Scaffold(
@@ -138,6 +139,9 @@ fun RoomListScreen(nav: NavController) {
                     Text("진행 중인 세션 ${rooms.size}", fontSize = 11.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
+                TextButton(onClick = { showFont = true }) {
+                    Text("Aa", color = tokens.inkDim, fontSize = 13.sp)
+                }
                 TextButton(onClick = { showJoin = true }) {
                     Text("참여", color = tokens.inkDim, fontSize = 13.sp)
                 }
@@ -200,6 +204,10 @@ fun RoomListScreen(nav: NavController) {
                 }
             },
         )
+    }
+
+    if (showFont) {
+        FontSettingDialog(onDismiss = { showFont = false })
     }
 
     deleteTarget?.let { room ->
@@ -303,6 +311,50 @@ private fun previewText(message: Message?): String = when {
     message.type == MessageType.SYSTEM -> message.body
     message.type == MessageType.DICE -> "🎲 ${message.diceExpr} → ${message.body}"
     else -> "${message.senderName} · ${message.body}"
+}
+
+/** 앱 전체 글꼴 선택 — 시스템 기본 / 고운 바탕(명조), 즉시 반영·유지 */
+@Composable
+private fun FontSettingDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val tokens = Pbp.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("앱 글꼴") },
+        text = {
+            Column {
+                listOf(
+                    com.pbp.app.ui.theme.AppFonts.SYSTEM to "시스템 기본",
+                    com.pbp.app.ui.theme.AppFonts.GOWUN to "고운 바탕 (명조)",
+                ).forEach { (value, label) ->
+                    val selected = com.pbp.app.ui.theme.AppFonts.choice == value
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .combinedClickable(onClick = {
+                                com.pbp.app.ui.theme.AppFonts.set(context, value)
+                            })
+                            .padding(horizontal = 10.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (selected) "●" else "○",
+                            color = if (selected) tokens.signature else tokens.inkDim,
+                            fontSize = 13.sp,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            label,
+                            fontSize = 14.sp,
+                            fontFamily = if (value == com.pbp.app.ui.theme.AppFonts.GOWUN) GowunBatang else null,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+    )
 }
 
 @Composable

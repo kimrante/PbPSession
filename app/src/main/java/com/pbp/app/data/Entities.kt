@@ -56,6 +56,8 @@ data class CharacterProfile(
     val nameColor: Long? = null,
     /** 말풍선 색(ARGB). null이면 기본 프리셋 첫 색 */
     val bubbleColor: Long? = null,
+    /** 캐릭터별 value 목록(ProfileStats 인코딩). 메시지의 {값이름}이 값으로 치환된다 */
+    val stats: String = "",
 )
 
 /**

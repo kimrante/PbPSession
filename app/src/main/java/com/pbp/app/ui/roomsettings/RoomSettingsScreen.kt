@@ -92,7 +92,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     })
     val tokens = Pbp.colors
     val room by vm.room.collectAsState()
-    val isMaster = room?.isMaster == true
     var showCustomTheme by remember { mutableStateOf(false) }
     var shareCode by remember { mutableStateOf<String?>(null) }
 
@@ -123,27 +122,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 )
             }
 
-            // 마스터 권한 밴드 (스펙 5장)
-            Row(
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(tokens.signature.copy(alpha = .1f))
-                    .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 12.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("♔", color = tokens.signature, fontSize = 13.sp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (isMaster) "마스터 권한 — 테마와 배경을 변경할 수 있습니다."
-                    else "마스터 권한 — 이 방을 만든 사람만 수정할 수 있습니다. (읽기 전용)",
-                    fontSize = 11.sp,
-                    color = if (tokens.isDark) Color(0xFFFFE9AE) else tokens.ink,
-                )
-            }
-
             SectionTitle("테마 컬러")
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
@@ -157,7 +135,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     ThemeCell(
                         label = label,
                         selected = sel,
-                        enabled = isMaster,
                         swatch = { modifier ->
                             Box(modifier.background(Color(color)))
                         },
@@ -168,7 +145,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     ThemeCell(
                         label = "커스텀",
                         selected = PbpPalette.themePresets.none { it.first == room?.themeColor },
-                        enabled = isMaster,
                         swatch = { modifier ->
                             Box(
                                 modifier.background(
@@ -187,9 +163,15 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             }
 
             SectionTitle("배경 이미지")
+            // 갤러리에서 고른 커스텀 배경이면 프리셋 뒤에 썸네일 셀이 추가된다 (3열 → 3행)
+            val customBg = room?.backgroundKey
+                ?.takeIf { PbpPalette.backgroundPresets[it] == null }
+            val bgRows = if (customBg != null) 3 else 2
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.padding(horizontal = 16.dp).height(170.dp),
+                modifier = Modifier
+                    .padding(horizontal = 16.dp)
+                    .height((76 * bgRows + 8 * (bgRows - 1) + 2).dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 userScrollEnabled = false,
@@ -209,21 +191,29 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                                 if (sel) tokens.signature else tokens.line,
                                 RoundedCornerShape(12.dp),
                             )
-                            .clickable(enabled = isMaster) { vm.setBackground(key) },
+                            .clickable { vm.setBackground(key) },
                         contentAlignment = Alignment.BottomStart,
                     ) {
-                        if (sel) {
-                            Text(
-                                "사용 중",
-                                fontSize = 8.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1A1A1A),
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .clip(RoundedCornerShape(5.dp))
-                                    .background(tokens.signature)
-                                    .padding(horizontal = 6.dp, vertical = 1.dp),
+                        if (sel) UsingBadge()
+                    }
+                }
+                if (customBg != null) {
+                    item {
+                        // 현재 커스텀 배경 미리보기 — 어떤 이미지인지 바로 보인다
+                        Box(
+                            Modifier
+                                .height(76.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(1.5.dp, tokens.signature, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.BottomStart,
+                        ) {
+                            coil3.compose.AsyncImage(
+                                model = java.io.File(customBg),
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             )
+                            UsingBadge("커스텀 · 사용 중")
                         }
                     }
                 }
@@ -232,7 +222,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         Modifier
                             .height(76.dp)
                             .dashedCell(tokens.line)
-                            .clickable(enabled = isMaster) {
+                            .clickable {
                                 bgPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
@@ -312,10 +302,24 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
 }
 
 @Composable
+private fun UsingBadge(label: String = "사용 중") {
+    Text(
+        label,
+        fontSize = 8.5.sp,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF1A1A1A),
+        modifier = Modifier
+            .padding(6.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(Pbp.colors.signature)
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
+@Composable
 private fun ThemeCell(
     label: String,
     selected: Boolean,
-    enabled: Boolean,
     swatch: @Composable (Modifier) -> Unit,
     onClick: () -> Unit,
 ) {
@@ -329,7 +333,7 @@ private fun ThemeCell(
                 if (selected) tokens.themeDefault else tokens.line,
                 RoundedCornerShape(12.dp),
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

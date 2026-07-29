@@ -53,6 +53,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
+import com.pbp.app.data.ProfileStats
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.common.ImageCropDialog
@@ -74,6 +75,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         nameColor: Long?,
         bubbleColor: Long?,
         newImagePath: String?, // 크롭 다이얼로그가 만든 512px JPEG 경로
+        stats: List<Pair<String, String>>,
         onDone: () -> Unit,
     ) = viewModelScope.launch {
         withContext(Dispatchers.IO) {
@@ -82,6 +84,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
                 nameColor = nameColor,
                 bubbleColor = bubbleColor,
                 imagePath = newImagePath ?: existing?.imagePath,
+                stats = ProfileStats.encode(stats),
             )
             app.repository.saveProfile(profile)
         }
@@ -113,6 +116,9 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     var cropSource by remember { mutableStateOf<Uri?>(null) } // 크롭 대기 중인 갤러리 이미지
     var pickedPath by remember { mutableStateOf<String?>(null) } // 크롭 완료된 512px 파일
     var customTarget by remember { mutableStateOf<String?>(null) } // "name" | "bubble"
+    val stats = remember { androidx.compose.runtime.mutableStateListOf<Pair<String, String>>() }
+    var newStatName by remember { mutableStateOf("") }
+    var newStatValue by remember { mutableStateOf("") }
 
     LaunchedEffect(profileId) {
         existing = vm.load(profileId)
@@ -120,6 +126,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
             name = it.name
             nameColor = it.nameColor ?: PbpPalette.namePresets.first()
             bubbleColor = it.bubbleColor ?: PbpPalette.bubblePresets.first()
+            stats.addAll(ProfileStats.decode(it.stats))
         }
         loaded = true
     }
@@ -149,7 +156,12 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         .clip(RoundedCornerShape(999.dp))
                         .background(tokens.signature)
                         .clickable {
-                            vm.save(existing, name, nameColor, bubbleColor, pickedPath) {
+                            // 추가 버튼을 누르지 않고 저장해도 입력 중인 값은 반영
+                            val pending = newStatName.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.let { listOf(it to newStatValue.trim()) }
+                                .orEmpty()
+                            vm.save(existing, name, nameColor, bubbleColor, pickedPath, stats + pending) {
                                 nav.popBackStack()
                             }
                         }
@@ -231,6 +243,59 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     onSelect = { bubbleColor = it },
                     onCustom = { customTarget = "bubble" },
                 )
+                Spacer(Modifier.height(18.dp))
+
+                FieldLabel("캐릭터 값 — 메시지에 {값이름}을 쓰면 값으로 바뀝니다")
+                stats.forEachIndexed { index, (statName, statValue) ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "{$statName}",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF3B82F6),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(statValue, fontSize = 12.5.sp, color = tokens.ink)
+                        Spacer(Modifier.width(10.dp))
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = .08f))
+                                .clickable { stats.removeAt(index) },
+                            contentAlignment = Alignment.Center,
+                        ) { Text("✕", fontSize = 11.sp, color = tokens.inkDim) }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newStatName,
+                        onValueChange = { newStatName = it },
+                        modifier = Modifier.weight(1.2f),
+                        label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedTextField(
+                        value = newStatValue,
+                        onValueChange = { newStatValue = it },
+                        modifier = Modifier.weight(0.8f),
+                        label = { Text("값 (예: 50)", fontSize = 10.sp) },
+                        singleLine = true,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            stats.add(newStatName.trim() to newStatValue.trim())
+                            newStatName = ""
+                            newStatValue = ""
+                        },
+                        enabled = newStatName.isNotBlank(),
+                    ) { Text("추가", fontSize = 12.sp, color = tokens.signature) }
+                }
                 Spacer(Modifier.height(20.dp))
 
                 // 실시간 미리보기 — 방 배경 위 조합 확인 (스펙 3장 화면3)

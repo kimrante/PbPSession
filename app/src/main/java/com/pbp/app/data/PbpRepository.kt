@@ -58,13 +58,13 @@ class PbpRepository(private val db: AppDatabase) {
         db.roomDao().delete(room)
     }
 
-    /** 마스터 전용: 방 테마 컬러 변경 — 공유 방이면 상대에게 실시간 전파 */
+    /** 방 테마 컬러 변경(누구나 가능) — 공유 방이면 상대에게 실시간 전파 */
     suspend fun setThemeColor(roomId: Long, color: Long) {
         db.roomDao().setThemeColor(roomId, color)
         pushRoomSettings(roomId)
     }
 
-    /** 마스터 전용: 방 배경(프리셋 key 또는 파일 경로) 변경 — 공유 방이면 상대에게 실시간 전파 */
+    /** 방 배경(프리셋 key 또는 파일 경로) 변경(누구나 가능) — 공유 방이면 상대에게 실시간 전파 */
     suspend fun setBackground(roomId: Long, key: String) {
         db.roomDao().setBackground(roomId, key)
         pushRoomSettings(roomId)
@@ -95,12 +95,14 @@ class PbpRepository(private val db: AppDatabase) {
     }
 
     /**
-     * 메시지를 보낸다. 잡담(isOoc)이 아니고 본문이 다이스 명령이면
-     * 다이스봇의 결과 메시지를 이어서 남긴다.
+     * 메시지를 보낸다. 발신 캐릭터의 value가 있으면 {값이름}을 값으로 치환하고,
+     * 잡담(isOoc)이 아니고 본문이 다이스 명령이면 다이스봇의 결과 메시지를 이어서 남긴다.
      */
     suspend fun sendMessage(roomId: Long, sender: CharacterProfile, text: String, isOoc: Boolean = false) {
-        val body = text.trim()
-        if (body.isEmpty()) return
+        val raw = text.trim()
+        if (raw.isEmpty()) return
+        // plain은 다이스 파싱용({은신}→50), body는 저장용({은신}→{{50}} 파란색 마커)
+        val (plain, body) = ProfileStats.substitute(raw, ProfileStats.decode(sender.stats).toMap())
         val inserted = mutableListOf<Message>()
         db.withTransaction {
             val textMessage = Message(
@@ -118,7 +120,7 @@ class PbpRepository(private val db: AppDatabase) {
             )
             inserted += textMessage.copy(id = db.messageDao().insert(textMessage))
             if (!isOoc) {
-                DiceBot.parse(body)?.let { command ->
+                DiceBot.parse(plain)?.let { command ->
                     val result = DiceBot.roll(command)
                     val diceMessage = Message(
                         roomId = roomId,

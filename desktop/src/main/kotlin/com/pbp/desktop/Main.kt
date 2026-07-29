@@ -159,6 +159,7 @@ private fun App() {
                             sender = Profile(name = "다이스봇", emoji = "🎲"),
                             isOoc = false, authorUid = config.deviceId,
                             diceExpr = "${sender.name} · ${command.expr}", isBot = true,
+                            diceOutcome = result.success?.let { if (it) "success" else "fail" },
                         ),
                     )
                 }
@@ -305,10 +306,12 @@ private fun messageValues(
     authorUid: String,
     diceExpr: String? = null,
     isBot: Boolean = false,
+    diceOutcome: String? = null,
 ): Map<String, Any?> = mapOf(
     "type" to type,
     "body" to body,
     "diceExpr" to diceExpr,
+    "diceOutcome" to diceOutcome,
     "senderName" to sender.name,
     "senderEmoji" to sender.emoji,
     "senderIsGm" to sender.isGm,

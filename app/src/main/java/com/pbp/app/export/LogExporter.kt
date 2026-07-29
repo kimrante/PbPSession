@@ -179,6 +179,8 @@ $body</div>
                     if (node.strike) html = "<del>$html</del>"
                     append(html)
                 }
+                is PbpMarkup.Node.Value ->
+                    append("""<b style="color:#2563C9">${escape(node.text)}</b>""")
                 is PbpMarkup.Node.Ruby ->
                     append("<ruby>${escape(node.base)}<rt>${escape(node.ruby)}</rt></ruby>")
             }

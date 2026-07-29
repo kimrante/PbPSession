@@ -206,6 +206,12 @@ private fun buildMarkup(
                         )
                     ) { append(node.text) }
                 }
+                is PbpMarkup.Node.Value -> {
+                    // 캐릭터 value 치환 결과 — 파란색 강조
+                    withStyle(
+                        SpanStyle(color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                    ) { append(node.text) }
+                }
                 is PbpMarkup.Node.Ruby -> {
                     val id = "ruby-$index"
                     // 폭은 본문/독음 중 넓은 쪽 (CJK≈1em, 그 외≈0.55em)

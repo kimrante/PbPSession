@@ -1,0 +1,42 @@
+package com.pbp.app
+
+import com.pbp.app.data.ProfileStats
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class ProfileStatsTest {
+
+    @Test
+    fun `인코딩과 디코딩은 왕복이 된다`() {
+        val stats = listOf("은신" to "50", "근력" to "12")
+        assertEquals(stats, ProfileStats.decode(ProfileStats.encode(stats)))
+        assertEquals(emptyList<Pair<String, String>>(), ProfileStats.decode(""))
+    }
+
+    @Test
+    fun `이름이 빈 항목은 저장하지 않는다`() {
+        assertEquals("", ProfileStats.encode(listOf("" to "50", "  " to "3")))
+    }
+
+    @Test
+    fun `등록된 값이름은 치환되고 파란색 마커로 감싼다`() {
+        val stats = mapOf("은신" to "50")
+        val (plain, marked) = ProfileStats.substitute("나 {은신}할래.", stats)
+        assertEquals("나 50할래.", plain)
+        assertEquals("나 {{50}}할래.", marked)
+    }
+
+    @Test
+    fun `등록되지 않은 이름과 값 없는 캐릭터는 원문 그대로다`() {
+        val (plain, marked) = ProfileStats.substitute("나 {점프}할래.", mapOf("은신" to "50"))
+        assertEquals("나 {점프}할래.", plain)
+        assertEquals("나 {점프}할래.", marked)
+        assertEquals("{은신}" to "{은신}", ProfileStats.substitute("{은신}", emptyMap()))
+    }
+
+    @Test
+    fun `다이스 비교식에 값을 쓸 수 있다 - plain은 순수 숫자`() {
+        val (plain, _) = ProfileStats.substitute("1d100<={은신} 판정", mapOf("은신" to "50"))
+        assertEquals("1d100<=50 판정", plain)
+    }
+}

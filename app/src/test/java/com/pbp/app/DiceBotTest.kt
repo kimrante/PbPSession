@@ -122,7 +122,7 @@ class DiceBotTest {
             assertTrue(result.total in 11..66)
             assertEquals(result.rolls[0] * 10 + result.rolls[1], result.total)
         }
-        // 표시 형식: "30 + 5 = 35"
-        assertEquals("30 + 5 = 35", DiceBot.Result(DiceBot.Command(1, 66), listOf(3, 5)).breakdown)
+        // 표시 형식: 계산식 없이 최종 값만
+        assertEquals("35", DiceBot.Result(DiceBot.Command(1, 66), listOf(3, 5)).breakdown)
     }
 }

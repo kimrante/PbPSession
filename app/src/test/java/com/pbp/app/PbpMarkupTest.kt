@@ -61,6 +61,16 @@ class PbpMarkupTest {
     }
 
     @Test
+    fun `값 마커를 파싱한다 - 캐릭터 value 치환 결과`() {
+        assertEquals(
+            listOf(Node.Span("나 "), Node.Value("50"), Node.Span("할래.")),
+            PbpMarkup.parse("나 {{50}}할래."),
+        )
+        // 한 겹 중괄호(치환 안 된 이름)는 일반 텍스트
+        assertEquals(listOf(Node.Span("나 {점프}할래.")), PbpMarkup.parse("나 {점프}할래."))
+    }
+
+    @Test
     fun `마크다운과 루비 혼합`() {
         assertEquals(
             listOf(

@@ -48,6 +48,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -439,7 +445,8 @@ private fun NarrationBlock(
                     Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
-                MiniActions(message, onEdit, onDelete)
+                // 편집·삭제는 서술을 쓴 본인에게만
+                if (!message.incoming) MiniActions(message, onEdit, onDelete)
             }
         }
     }
@@ -477,7 +484,15 @@ private fun BubbleRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            if (mine) {
+                // 내 메시지: 편집·삭제는 메시지 가장 왼쪽, 시간은 말풍선 왼쪽
+                MiniActions(
+                    message, onEdit, onDelete,
+                    Modifier.align(Alignment.Bottom).padding(bottom = 3.dp),
+                )
+                TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
+            }
             if (!mine) {
                 if (showHeader) {
                     Avatar(
@@ -538,16 +553,15 @@ private fun BubbleRow(
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
-                    if (mine) MiniActions(message, onEdit, onDelete)
-                    Spacer(Modifier.width(5.dp))
-                    Text(formatTime(message.createdAt), fontSize = 9.sp, color = tokens.inkDim)
-                    if (message.editedAt != null) {
-                        Spacer(Modifier.width(4.dp))
-                        Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
-                    }
-                    Spacer(Modifier.width(5.dp))
-                    if (!mine) MiniActions(message, onEdit, onDelete)
+            }
+            if (!mine) {
+                // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽. 편집·삭제는 발신자 본인일 때만
+                TimeStamp(message, alignEnd = false, Modifier.align(Alignment.Bottom))
+                if (!message.incoming) {
+                    MiniActions(
+                        message, onEdit, onDelete,
+                        Modifier.align(Alignment.Bottom).padding(bottom = 3.dp),
+                    )
                 }
             }
             if (mine) {
@@ -566,15 +580,32 @@ private fun BubbleRow(
     }
 }
 
-/** 말풍선 곁 연필·휴지통 마이크로 버튼 */
+/** 말풍선 곁 시간 + (수정됨) — 내 메시지는 왼쪽, 남의 메시지는 오른쪽에 붙는다 */
 @Composable
-private fun MiniActions(message: Message, onEdit: (Message) -> Unit, onDelete: (Message) -> Unit) {
+private fun TimeStamp(message: Message, alignEnd: Boolean, modifier: Modifier = Modifier) {
+    val tokens = Pbp.colors
+    Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        if (message.editedAt != null) {
+            Text("(수정됨)", fontSize = 8.5.sp, color = tokens.inkDim)
+        }
+        Text(formatTime(message.createdAt), fontSize = 9.sp, color = tokens.inkDim)
+    }
+}
+
+/** 말풍선 곁 연필·휴지통 마이크로 버튼 — 발신자 본인의 메시지에만 표시 */
+@Composable
+private fun MiniActions(
+    message: Message,
+    onEdit: (Message) -> Unit,
+    onDelete: (Message) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // 글리프의 폰트 여백 때문에 중앙이 틀어지지 않도록 폰트 패딩 제거 + 라인높이 고정
     val glyphStyle = androidx.compose.ui.text.TextStyle(
         platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
         Box(
             Modifier
                 .size(18.dp)
@@ -709,10 +740,29 @@ private fun InputZone(
                     color = if (oocOn) tokens.signature else tokens.inkDim,
                 )
             }
+            val canSend = input.isNotBlank() && activeId != null
+            val doSend = {
+                if (canSend) {
+                    onSend(input, oocOn)
+                    input = ""
+                }
+            }
             TextField(
                 value = input,
                 onValueChange = onInputChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    // 물리 키보드에서 Ctrl+Enter로 바로 전송
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            event.key == Key.Enter &&
+                            event.isCtrlPressed &&
+                            canSend
+                        ) {
+                            doSend()
+                            true
+                        } else false
+                    },
                 placeholder = {
                     Text(
                         if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
@@ -730,16 +780,12 @@ private fun InputZone(
                 maxLines = 4,
             )
             // 전송 버튼 — 방 테마 컬러 적용 (스펙 5장)
-            val canSend = input.isNotBlank() && activeId != null
             Box(
                 Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(13.dp))
                     .background(if (canSend) themeColor else themeColor.copy(alpha = .35f))
-                    .clickable(enabled = canSend) {
-                        onSend(input, oocOn)
-                        input = ""
-                    },
+                    .clickable(enabled = canSend, onClick = doSend),
                 contentAlignment = Alignment.Center,
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
         }

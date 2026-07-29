@@ -40,11 +40,10 @@ object DiceBot {
         val total: Int
             get() = if (command.sides == D66) rolls[0] * 10 + rolls[1] else rolls.sum()
 
-        /** "7", "3 + 5 = 8", d66은 "30 + 5 = 35" 형태의 표시용 문자열 */
+        /** "7", "3 + 5 = 8" 형태의 표시용 문자열. d66은 계산식 없이 최종 값만 */
         val breakdown: String
             get() = when {
-                command.sides == D66 -> "${rolls[0]}0 + ${rolls[1]} = $total"
-                rolls.size == 1 -> "$total"
+                command.sides == D66 || rolls.size == 1 -> "$total"
                 else -> rolls.joinToString(" + ") + " = $total"
             }
 

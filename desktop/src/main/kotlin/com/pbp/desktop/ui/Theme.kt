@@ -112,6 +112,12 @@ private fun buildMarkup(
                         )
                     ) { append(node.text) }
                 }
+                is PbpMarkup.Node.Value -> {
+                    // 캐릭터 value 치환 결과 — 파란색 강조
+                    withStyle(
+                        SpanStyle(color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                    ) { append(node.text) }
+                }
                 is PbpMarkup.Node.Ruby -> {
                     val id = "ruby-$index"
                     val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.58f) + 0.15f

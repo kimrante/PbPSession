@@ -56,6 +56,10 @@ fun PbpTheme(
         )
     }
     CompositionLocalProvider(LocalPbpColors provides tokens) {
-        MaterialTheme(colorScheme = material, content = content)
+        MaterialTheme(
+            colorScheme = material,
+            typography = typographyWith(AppFonts.fontFamily),
+            content = content,
+        )
     }
 }

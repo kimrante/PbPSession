@@ -162,6 +162,21 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         roomId
     }.getOrNull()
 
+    /**
+     * 방의 서버 메시지를 전부 삭제한다(로그 리셋). 문서 삭제가 상대 기기의
+     * REMOVED 리스너로 전파되어 상대의 로컬 로그도 함께 지워진다.
+     */
+    suspend fun wipeMessages(remoteRoomId: String): Boolean = runCatching {
+        val docs = firestore.collection("rooms").document(remoteRoomId)
+            .collection("messages").get().await().documents
+        docs.chunked(450).forEach { chunk ->
+            val batch = firestore.batch()
+            chunk.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
+        true
+    }.getOrDefault(false)
+
     /** 로컬에 저장된 메시지들을 Firestore로 올린다. 실패해도 로컬은 이미 저장된 상태. */
     fun push(remoteRoomId: String, messages: List<Message>) {
         scope.launch {

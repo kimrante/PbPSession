@@ -121,6 +121,9 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE remoteId = :remoteId")
     suspend fun deleteByRemoteId(remoteId: String)
 
+    @Query("DELETE FROM messages WHERE roomId = :roomId")
+    suspend fun deleteForRoom(roomId: Long)
+
     @Query(
         """SELECT m.roomId AS roomId, COUNT(*) AS count FROM messages m
            JOIN rooms r ON r.id = m.roomId

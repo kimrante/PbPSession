@@ -78,8 +78,8 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .map { list -> list.associate { it.roomId to it.count } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    fun createRoom(name: String, icon: String, rule: String) = viewModelScope.launch {
-        repo.createRoom(name.trim().ifEmpty { "새 세션" }, icon.trim().ifEmpty { "🎲" }, rule = rule)
+    fun createRoom(name: String, rule: String) = viewModelScope.launch {
+        repo.createRoom(name.trim().ifEmpty { "새 세션" }, "🎲", rule = rule)
     }
 
     fun deleteRoom(room: ChatRoom) = viewModelScope.launch { repo.deleteRoom(room) }
@@ -183,8 +183,8 @@ fun RoomListScreen(nav: NavController) {
     if (showCreate) {
         CreateRoomDialog(
             onDismiss = { showCreate = false },
-            onCreate = { name, icon, rule ->
-                vm.createRoom(name, icon, rule)
+            onCreate = { name, rule ->
+                vm.createRoom(name, rule)
                 showCreate = false
             },
         )
@@ -376,10 +376,9 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, String) -> Unit) {
+private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
     val tokens = Pbp.colors
     var name by remember { mutableStateOf("") }
-    var icon by remember { mutableStateOf("") }
     var rule by remember { mutableStateOf(Rules.COC7) }
     var ruleMenuOpen by remember { mutableStateOf(false) }
     AlertDialog(
@@ -391,12 +390,6 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, S
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("방 이름") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = icon,
-                    onValueChange = { icon = it },
-                    label = { Text("아이콘 (이모지, 비우면 🎲)") },
                     singleLine = true,
                 )
                 // TRPG 룰 — 판정 매크로의 다이스 기준
@@ -438,7 +431,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, S
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(name, icon, rule) }) { Text("만들기") } },
+        confirmButton = { TextButton(onClick = { onCreate(name, rule) }) { Text("만들기") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
 }

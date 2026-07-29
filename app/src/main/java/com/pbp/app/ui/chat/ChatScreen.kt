@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -578,6 +579,9 @@ private fun BubbleRow(
     // GM 인용은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
     val mine = !message.incoming && overrideName == null
     val body = overrideBody ?: message.body
+    // 본문 전체가 " "로 감싸이면 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게
+    // (목업 mockup-quote-bubble). 잡담과 GM 인용(???)은 제외.
+    val quoteInner = if (!message.isOoc && overrideName == null) quoteContent(body) else null
     val bubbleColor = when {
         message.isOoc -> tokens.chatterBubble
         else -> Color(overrideBubbleColor ?: message.senderBubbleColor ?: PbpPalette.bubblePresets.first())
@@ -627,7 +631,7 @@ private fun BubbleRow(
                 } else {
                     RoundedCornerShape(topStart = 4.dp, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
-                val bubbleModifier = Modifier
+                val bubbleBase = Modifier
                     .widthIn(max = 240.dp)
                     .clip(shape)
                     .background(bubbleColor)
@@ -640,28 +644,51 @@ private fun BubbleRow(
                         onClick = {},
                         onLongClick = { if (!message.incoming) onLongPress(message) },
                     )
-                    .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2)
-                Box(bubbleModifier) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (message.isOoc) {
-                            Text(
-                                "잡담",
-                                fontSize = 9.sp,
-                                color = inkColor,
-                                modifier = Modifier
-                                    .padding(end = 5.dp)
-                                    .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
-                                    .padding(horizontal = 5.dp),
-                            )
-                        }
+                if (quoteInner != null) {
+                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
+                    // 닫는 따옴표는 글리프 잉크가 글자 상자 위쪽에 몰려 있어 offset으로 보정한다.
+                    Box(bubbleBase) {
+                        QuoteMark(
+                            "“", inkColor,
+                            Modifier.align(Alignment.TopStart).padding(start = 9.dp, top = 5.dp),
+                        )
+                        QuoteMark(
+                            "”", inkColor,
+                            Modifier.align(Alignment.BottomEnd).padding(end = 9.dp).offset(y = 6.dp),
+                        )
                         MarkupText(
-                            text = body,
+                            text = quoteInner,
                             fontSize = 13.sp,
                             color = inkColor,
                             rubyColor = inkColor.copy(alpha = .65f),
                             lineHeight = 20.sp,
-                            fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 26.dp, vertical = 14.dp),
                         )
+                    }
+                } else {
+                    Box(bubbleBase.padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (message.isOoc) {
+                                Text(
+                                    "잡담",
+                                    fontSize = 9.sp,
+                                    color = inkColor,
+                                    modifier = Modifier
+                                        .padding(end = 5.dp)
+                                        .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
+                                        .padding(horizontal = 5.dp),
+                                )
+                            }
+                            MarkupText(
+                                text = body,
+                                fontSize = 13.sp,
+                                color = inkColor,
+                                rubyColor = inkColor.copy(alpha = .65f),
+                                lineHeight = 20.sp,
+                                fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
+                            )
+                        }
                     }
                 }
             }
@@ -683,6 +710,31 @@ private fun BubbleRow(
             }
         }
     }
+}
+
+/**
+ * 본문 전체가 쌍따옴표(" 또는 “ ”)로 감싸인 대사인지 — 감싸였으면 안쪽 내용을 돌려준다.
+ * 인용 말풍선 판정에 사용한다. 따옴표는 장식으로 다시 그려지므로 본문에서 벗긴다.
+ */
+private fun quoteContent(body: String): String? {
+    val trimmed = body.trim()
+    if (trimmed.length < 2) return null
+    if (trimmed.first() !in "\"“" || trimmed.last() !in "\"”") return null
+    return trimmed.substring(1, trimmed.length - 1).trim().ifEmpty { null }
+}
+
+/** 인용 말풍선의 장식 따옴표 — 명조 볼드, 말풍선 잉크의 옅은 톤 */
+@Composable
+private fun QuoteMark(mark: String, inkColor: Color, modifier: Modifier) {
+    Text(
+        mark,
+        fontFamily = GowunBatang,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+        lineHeight = 24.sp,
+        color = inkColor.copy(alpha = .32f),
+        modifier = modifier,
+    )
 }
 
 /** 말풍선 곁 시간 + (수정됨) — 내 메시지는 왼쪽, 남의 메시지는 오른쪽에 붙는다 */

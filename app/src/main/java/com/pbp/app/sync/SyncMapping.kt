@@ -44,5 +44,6 @@ object SyncMapping {
         createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,
         remoteId = remoteId,
         incoming = true,
+        uploaded = true, // 서버에서 온 메시지 — 아웃박스 재전송 대상 아님
     )
 }

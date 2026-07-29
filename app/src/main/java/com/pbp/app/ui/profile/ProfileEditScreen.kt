@@ -110,27 +110,47 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     })
     val tokens = Pbp.colors
 
-    var loaded by remember { mutableStateOf(false) }
+    // 폼 상태는 rememberSaveable — 화면 회전 시 DB 값으로 덮어써 입력이 날아가는 것 방지 (P2-4)
+    var loaded by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var existing by remember { mutableStateOf<CharacterProfile?>(null) }
-    var name by remember { mutableStateOf("") }
-    var nameColor by remember { mutableStateOf<Long?>(PbpPalette.namePresets.first()) }
-    var bubbleColor by remember { mutableStateOf<Long?>(PbpPalette.bubblePresets.first()) }
+    var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var nameColor by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf<Long?>(PbpPalette.namePresets.first())
+    }
+    var bubbleColor by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf<Long?>(PbpPalette.bubblePresets.first())
+    }
     var cropSource by remember { mutableStateOf<Uri?>(null) } // 크롭 대기 중인 갤러리 이미지
-    var pickedPath by remember { mutableStateOf<String?>(null) } // 크롭 완료된 512px 파일
+    var pickedPath by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf<String?>(null) // 크롭 완료된 512px 파일
+    }
     var customTarget by remember { mutableStateOf<String?>(null) } // "name" | "bubble"
-    val stats = remember { androidx.compose.runtime.mutableStateListOf<Pair<String, String>>() }
-    var newStatName by remember { mutableStateOf("") }
-    var newStatValue by remember { mutableStateOf("") }
+    val stats = androidx.compose.runtime.saveable.rememberSaveable(
+        saver = androidx.compose.runtime.saveable.listSaver(
+            save = { listOf(ProfileStats.encode(it)) },
+            restore = { saved ->
+                ProfileStats.decode(saved.first()).let { decoded ->
+                    androidx.compose.runtime.mutableStateListOf<Pair<String, String>>()
+                        .apply { addAll(decoded) }
+                }
+            },
+        ),
+    ) { androidx.compose.runtime.mutableStateListOf<Pair<String, String>>() }
+    var newStatName by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var newStatValue by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(profileId) {
         existing = vm.load(profileId)
-        existing?.let {
-            name = it.name
-            nameColor = it.nameColor ?: PbpPalette.namePresets.first()
-            bubbleColor = it.bubbleColor ?: PbpPalette.bubblePresets.first()
-            stats.addAll(ProfileStats.decode(it.stats))
+        // DB 로드는 최초 1회만 — 회전 후 재실행 시 편집 중이던 폼을 덮어쓰지 않는다 (P2-4)
+        if (!loaded) {
+            existing?.let {
+                name = it.name
+                nameColor = it.nameColor ?: PbpPalette.namePresets.first()
+                bubbleColor = it.bubbleColor ?: PbpPalette.bubblePresets.first()
+                stats.addAll(ProfileStats.decode(it.stats))
+            }
+            loaded = true
         }
-        loaded = true
     }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
@@ -255,7 +275,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Spacer(Modifier.height(PbpDimens.sp5))
 
                 FieldLabel("캐릭터 값 — 메시지에 {값이름}을 쓰면 값으로 바뀝니다")
-                stats.forEachIndexed { index, (statName, statValue) ->
+                stats.forEachIndexed { _, statEntry ->
+                    val (statName, statValue) = statEntry
                     Row(
                         Modifier.fillMaxWidth().padding(bottom = PbpDimens.sp2),
                         verticalAlignment = Alignment.CenterVertically,
@@ -274,7 +295,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 .size(24.dp)
                                 .clip(CircleShape)
                                 .background(Color.White.copy(alpha = .08f))
-                                .clickable { stats.removeAt(index) },
+                                // index 캡처는 연타 시 stale — 항목 자체로 제거 (P3-6)
+                                .clickable { stats.remove(statEntry) },
                             contentAlignment = Alignment.Center,
                         ) { Text("✕", fontSize = 11.sp, color = tokens.inkDim) }
                     }
@@ -298,7 +320,14 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     Spacer(Modifier.width(PbpDimens.sp2))
                     TextButton(
                         onClick = {
-                            stats.add(newStatName.trim() to newStatValue.trim())
+                            val statName = newStatName.trim()
+                            // 같은 이름이 있으면 값을 교체 — 중복 항목 방지 (P1-8)
+                            val existingIdx = stats.indexOfFirst { it.first == statName }
+                            if (existingIdx >= 0) {
+                                stats[existingIdx] = statName to newStatValue.trim()
+                            } else {
+                                stats.add(statName to newStatValue.trim())
+                            }
                             newStatName = ""
                             newStatValue = ""
                         },

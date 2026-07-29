@@ -58,6 +58,10 @@ class PbpMarkupTest {
     @Test
     fun `짝 없는 구분자는 문자 그대로 남긴다`() {
         assertEquals(listOf(Node.Span("별 * 하나")), PbpMarkup.parse("별 * 하나"))
+        // 짝 없는 **도 소실되지 않는다 (P2-6)
+        assertEquals(listOf(Node.Span("별 ** 하나")), PbpMarkup.parse("별 ** 하나"))
+        assertEquals(listOf(Node.Span("**굵게")), PbpMarkup.parse("**굵게"))
+        assertEquals(listOf(Node.Span("~~취소")), PbpMarkup.parse("~~취소"))
     }
 
     @Test

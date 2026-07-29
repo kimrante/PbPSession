@@ -19,6 +19,20 @@ class ProfileStatsTest {
     }
 
     @Test
+    fun `같은 이름은 마지막 값이 이기고 중복 저장되지 않는다`() {
+        val decoded = ProfileStats.decode(ProfileStats.encode(listOf("은신" to "50", "은신" to "70")))
+        assertEquals(listOf("은신" to "70"), decoded)
+    }
+
+    @Test
+    fun `구분자 제어문자와 중괄호는 저장 시 제거된다`() {
+        val decoded = ProfileStats.decode(
+            ProfileStats.encode(listOf("은신" to "50", "{점프}" to "{3}"))
+        )
+        assertEquals(listOf("은신" to "50", "점프" to "3"), decoded)
+    }
+
+    @Test
     fun `등록된 값이름은 치환되고 파란색 마커로 감싼다`() {
         val stats = mapOf("은신" to "50")
         val (plain, marked) = ProfileStats.substitute("나 {은신}할래.", stats)

@@ -14,8 +14,15 @@ object ProfileStats {
 
     private val placeholder = Regex("""\{([^{}]+)\}""")
 
+    /** 구분자(제어문자)와 중괄호는 인코딩·치환을 깨뜨리므로 저장 시 제거 (P3-11) */
+    private fun sanitize(s: String): String =
+        s.filterNot { it == FIELD || it == ENTRY || it == '{' || it == '}' }
+
     fun encode(stats: List<Pair<String, String>>): String =
-        stats.filter { it.first.isNotBlank() }
+        stats.map { sanitize(it.first).trim() to sanitize(it.second) }
+            .filter { it.first.isNotBlank() }
+            // 같은 이름은 마지막 항목이 이긴다 — 편집 중 덮어쓰기·중복 저장 방지 (P1-8)
+            .associateBy { it.first }.values
             .joinToString(ENTRY.toString()) { "${it.first}$FIELD${it.second}" }
 
     fun decode(encoded: String): List<Pair<String, String>> =
@@ -40,6 +47,7 @@ object ProfileStats {
             }
             .sortedByDescending { it.first.startsWith(q, ignoreCase = true) }
             .map { it.first }
+            .distinct() // 같은 이름 값이 중복 저장돼 있어도 LazyRow 키 충돌 방지 (P1-8)
             .take(6)
     }
 

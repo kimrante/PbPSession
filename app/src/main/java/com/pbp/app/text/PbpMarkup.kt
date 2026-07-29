@@ -81,7 +81,10 @@ object PbpMarkup {
                 text.startsWith("~~", i) && (strike || hasClosing(text, i + 2, "~~")) -> {
                     flush(); strike = !strike; i += 2
                 }
-                text[i] == '*' && (italic || hasClosing(text, i + 1, "*")) -> {
+                // 짝 없는 `**`가 이탤릭 분기로 흘러 서로를 닫힘으로 오인해
+                // 조용히 사라지는 버그 방지 — `**`는 굵게 분기에서만 처리 (P2-6)
+                text[i] == '*' && !text.startsWith("**", i) &&
+                    (italic || hasClosing(text, i + 1, "*")) -> {
                     flush(); italic = !italic; i += 1
                 }
                 else -> {

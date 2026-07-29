@@ -109,6 +109,10 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         limit.value += PAGE_SIZE
     }
 
+    /** 총 메시지 수 — '이전 대화 불러오기' 버튼은 실제 남은 게 있을 때만 (P3-7) */
+    val totalCount = repo.observeMessageCount(roomId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val profiles = repo.observeProfilesForRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -166,7 +170,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val tokens = Pbp.colors
     val room by vm.room.collectAsState()
     val messages by vm.messages.collectAsState()
-    val limitValue by vm.limit.collectAsState()
+    val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
@@ -179,10 +183,14 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val incomingCount = messages.count { it.incoming }
     LaunchedEffect(roomId, incomingCount) { vm.markRead() }
 
-    // 새 메시지가 오면 최신 위치로 스크롤 (reverseLayout에서 index 0 = 최신)
+    // 새 메시지가 오면 최신 위치로 스크롤 (reverseLayout에서 index 0 = 최신).
+    // 키는 최신 메시지 id만 — size를 키로 쓰면 '이전 대화 불러오기'나 삭제 때마다
+    // 바닥으로 끌려간다. 위로 스크롤해 읽는 중에는 자동 스크롤하지 않는다. (P1-7)
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.firstOrNull()?.id, messages.size) {
-        if (messages.isNotEmpty()) listState.scrollToItem(0)
+    LaunchedEffect(messages.firstOrNull()?.id) {
+        if (messages.isNotEmpty() && listState.firstVisibleItemIndex <= 1) {
+            listState.scrollToItem(0)
+        }
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -271,8 +279,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             )
                         }
                     }
-                    // 페이지가 가득 찼으면 더 오래된 대화가 있을 수 있다 (reverseLayout이라 최상단)
-                    if (messages.size >= limitValue) {
+                    // 실제로 더 오래된 대화가 있을 때만 (총 개수 기준 — 유령 버튼 방지, P3-7)
+                    if (messages.size < totalCount) {
                         item(key = "load-older") {
                             Box(
                                 Modifier.fillMaxWidth().padding(top = PbpDimens.sp3),
@@ -700,9 +708,10 @@ private fun InputZone(
     rule: String,
 ) {
     val tokens = Pbp.colors
-    // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록
-    var input by remember { mutableStateOf("") }
-    var oocOn by remember { mutableStateOf(false) }
+    // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록.
+    // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
+    var input by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var oocOn by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
@@ -922,7 +931,8 @@ private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
 
 @Composable
 private fun EditMessageDialog(original: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var body by remember { mutableStateOf(original) }
+    // 회전에도 편집 중 텍스트 보존 (P2-4)
+    var body by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(original) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("메시지 수정") },

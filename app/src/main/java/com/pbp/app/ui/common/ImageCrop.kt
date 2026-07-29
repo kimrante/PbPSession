@@ -43,6 +43,7 @@ import com.pbp.app.ui.theme.Pbp
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -129,14 +130,23 @@ fun ImageCropDialog(
             }
         },
         confirmButton = {
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            var saving by remember { mutableStateOf(false) }
             TextButton(
-                enabled = source != null,
+                enabled = source != null && !saving,
                 onClick = {
                     val src = source ?: return@TextButton
-                    val path = cropToFile(context, src, cropPx, zoom, offset)
-                    if (path != null) onCropped(path) else onDismiss()
+                    saving = true
+                    // 512px 렌더링+JPEG 압축은 메인 스레드에서 ANR 위험 (P3-5)
+                    scope.launch {
+                        val path = withContext(Dispatchers.IO) {
+                            cropToFile(context, src, cropPx, zoom, offset)
+                        }
+                        saving = false
+                        if (path != null) onCropped(path) else onDismiss()
+                    }
                 },
-            ) { Text("적용") }
+            ) { Text(if (saving) "저장 중…" else "적용") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = true),
@@ -183,5 +193,11 @@ private fun loadBitmap(context: Context, uri: Uri, maxSize: Int): android.graphi
         while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSize) sample *= 2
         resolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        }?.let { decoded ->
+            // 카메라 세로 사진 회전 보정 (P2-3)
+            com.pbp.app.data.Images.applyExifOrientation(
+                decoded,
+                com.pbp.app.data.Images.exifOrientation(context, uri),
+            )
         }
     }.getOrNull()

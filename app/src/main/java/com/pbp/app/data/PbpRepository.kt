@@ -17,6 +17,7 @@ class PbpRepository(private val db: AppDatabase) {
     fun observeMessages(roomId: Long) = db.messageDao().observeForRoom(roomId)
     fun observeLatestMessages(roomId: Long, limit: Int) =
         db.messageDao().observeLatestForRoom(roomId, limit)
+    fun observeMessageCount(roomId: Long) = db.messageDao().observeCount(roomId)
     suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
     fun observeGlobalProfiles() = db.profileDao().observeGlobal()
@@ -57,6 +58,8 @@ class PbpRepository(private val db: AppDatabase) {
 
     suspend fun deleteRoom(room: ChatRoom) {
         syncManager?.detach(room.id)
+        // 원격 멤버 문서(FCM 토큰) 정리 — 삭제한 방의 유령 푸시 방지 (P2-2)
+        room.remoteId?.let { syncManager?.leaveRoom(it) }
         db.roomDao().delete(room)
     }
 

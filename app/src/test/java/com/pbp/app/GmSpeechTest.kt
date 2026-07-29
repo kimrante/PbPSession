@@ -8,6 +8,14 @@ import org.junit.Test
 class GmSpeechTest {
 
     @Test
+    fun `공백만 있는 인용부는 말풍선을 만들지 않는다`() {
+        assertEquals(
+            listOf(Part.Narration("바람이 분다."), Part.Narration("문이 닫혔다.")),
+            GmSpeech.split("바람이 분다. \" \" 문이 닫혔다."),
+        )
+    }
+
+    @Test
     fun `따옴표가 없으면 전체가 서술`() {
         assertEquals(
             listOf(Part.Narration("밤안개가 방파제를 덮는다.")),

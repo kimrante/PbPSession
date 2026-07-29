@@ -74,7 +74,7 @@ data class CharacterProfile(
         childColumns = ["roomId"],
         onDelete = ForeignKey.CASCADE,
     )],
-    indices = [Index("roomId")],
+    indices = [Index("roomId"), Index(value = ["remoteId"], unique = true)],
 )
 data class Message(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -100,6 +100,8 @@ data class Message(
     val editedAt: Long? = null,
     /** 상대에게서 수신한 메시지 여부(미확인 배지·알림 판정) */
     val incoming: Boolean = false,
+    /** 서버 반영 확인 여부. 0이면 시작 시 아웃박스가 같은 remoteId로 재전송(멱등) */
+    val uploaded: Boolean = false,
 )
 
 class Converters {

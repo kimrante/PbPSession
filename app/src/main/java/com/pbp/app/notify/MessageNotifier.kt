@@ -36,9 +36,6 @@ class MessageNotifier(private val context: Context) {
             .createNotificationChannel(channel)
     }
 
-    fun notify(message: Message) =
-        notify(message.senderName ?: "상대", message.roomId.toInt(), message.senderImagePath)
-
     fun notify(senderName: String, notificationId: Int, imagePath: String?) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED

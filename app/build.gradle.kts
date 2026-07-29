@@ -66,8 +66,10 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.gson) // ccfolia 캐릭터 코드(JSON) 파싱
+    implementation(libs.exifinterface) // 카메라 사진 회전 보정 (P2-3)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.auth) // 익명 인증 (P0-1 보안 규칙 전제)
     implementation(libs.firebase.messaging)
     implementation(libs.coroutines.play.services)
 

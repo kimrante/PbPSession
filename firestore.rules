@@ -1,0 +1,62 @@
+rules_version = '2';
+
+// PbP 보안 규칙 (P0-1)
+// - 모든 접근은 익명 인증(request.auth) 필수
+// - 방 데이터는 멤버(rooms/{id}/members/{uid} 문서 보유자)만 읽기/쓰기
+// - 방 목록(list) 열람 금지 — 초대 참가는 inviteCodes/{code} 단건 조회로만
+// 배포: npx firebase-tools deploy --only firestore:rules --project pbp-session-1195c
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(roomId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/rooms/$(roomId)/members/$(request.auth.uid));
+    }
+
+    match /rooms/{roomId} {
+      // 초대 코드로 참가할 때 방 문서 1건 조회 필요 (문서 ID는 추측 불가 자동 ID)
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn();
+      // 테마·배경 변경은 방 멤버 누구나 (앱 정책과 동일)
+      allow update: if isMember(roomId);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read, create: if isMember(roomId);
+        // 수정은 작성자 본인만
+        allow update: if isMember(roomId) && resource.data.authorUid == request.auth.uid;
+        // 삭제는 멤버 누구나 — '방 로그 초기화'가 상대 메시지도 지워야 하므로
+        allow delete: if isMember(roomId);
+      }
+
+      match /avatars/{avatarId} {
+        allow read, write: if isMember(roomId);
+      }
+
+      match /members/{memberId} {
+        allow read: if signedIn();
+        // 멤버 등록·토큰 갱신은 본인 문서만 (방 문서 ID를 아는 사람 = 초대받은 사람)
+        allow create, update: if signedIn() && request.auth.uid == memberId;
+        // 본인 탈퇴 + 구버전(deviceId 키) 멤버 문서 정리는 멤버가 수행
+        allow delete: if isMember(roomId) || (signedIn() && request.auth.uid == memberId);
+      }
+    }
+
+    // 초대 코드 → 방 문서 ID 매핑. 단건 get만 허용해 방 열거를 차단한다.
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

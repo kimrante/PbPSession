@@ -144,7 +144,9 @@ object PbpMarkup {
                 text.startsWith("~~", i) && (strike || hasClosing(text, i + 2, "~~")) -> {
                     flush(); strike = !strike; i += 2
                 }
-                text[i] == '*' && (italic || hasClosing(text, i + 1, "*")) -> {
+                // 짝 없는 `**` 소실 방지 — `**`는 굵게 분기에서만 처리 (P2-6)
+                text[i] == '*' && !text.startsWith("**", i) &&
+                    (italic || hasClosing(text, i + 1, "*")) -> {
                     flush(); italic = !italic; i += 1
                 }
                 else -> {
@@ -158,6 +160,23 @@ object PbpMarkup {
 
     private fun hasClosing(text: String, from: Int, marker: String): Boolean =
         text.indexOf(marker, from) >= 0
+}
+
+/**
+ * 캐릭터 값 치환 — 안드로이드 ProfileStats.substitute와 동일 (P2-5).
+ * `{값이름}` → 값. 화면 저장용은 `{{값}}` 마커(파란 표시), 다이스 파싱용은 순수 값.
+ */
+object ProfileStats {
+    private val placeholder = Regex("""\{([^{}]+)\}""")
+
+    fun substitute(text: String, stats: Map<String, String>): Pair<String, String> {
+        if (stats.isEmpty() || '{' !in text) return text to text
+        val plain = placeholder.replace(text) { m -> stats[m.groupValues[1]] ?: m.value }
+        val marked = placeholder.replace(text) { m ->
+            stats[m.groupValues[1]]?.let { "{{$it}}" } ?: m.value
+        }
+        return plain to marked
+    }
 }
 
 /** GM 발화에서 " " 인용만 말풍선으로 분리 */
@@ -175,8 +194,9 @@ object GmSpeech {
         for (match in quotePattern.findAll(text)) {
             val before = text.substring(cursor, match.range.first).trim()
             if (before.isNotEmpty()) parts += Part.Narration(before)
-            val quote = match.groupValues[1].ifEmpty { match.groupValues[2] }
-            parts += Part.Quote(quote.trim())
+            val quote = match.groupValues[1].ifEmpty { match.groupValues[2] }.trim()
+            // 공백만 있는 인용부는 빈 말풍선을 만들지 않는다 (P3-8)
+            if (quote.isNotEmpty()) parts += Part.Quote(quote)
             cursor = match.range.last + 1
         }
         val tail = text.substring(cursor).trim()

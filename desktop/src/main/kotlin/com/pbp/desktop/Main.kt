@@ -53,6 +53,7 @@ import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
 import com.pbp.desktop.logic.DiceBot
+import com.pbp.desktop.logic.ProfileStats
 import com.pbp.desktop.logic.GmSpeech
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
@@ -83,8 +84,26 @@ fun main() = application {
 @Composable
 private fun App() {
     val config = remember { AppConfig.load() }
-    val firestore = remember { FirestoreRest(PROJECT_ID, API_KEY) }
+    val firestore = remember {
+        FirestoreRest(
+            PROJECT_ID, API_KEY,
+            initialRefreshToken = config.authRefreshToken,
+            onAuthChanged = { refreshToken, _ ->
+                if (config.authRefreshToken != refreshToken) {
+                    config.authRefreshToken = refreshToken
+                    config.save()
+                }
+            },
+        )
+    }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // 시작 시 1회: 참여 중인 방들에 auth UID 멤버 문서 보강 (보안 규칙의 접근 근거)
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            config.rooms.forEach { runCatching { firestore.ensureMember(it.remoteId) } }
+        }
+    }
 
     var rooms by remember { mutableStateOf(config.rooms.toList()) }
     var selected by remember { mutableStateOf(rooms.firstOrNull()) }
@@ -94,10 +113,14 @@ private fun App() {
 
     var overlay by remember { mutableStateOf<OverlayKind?>(null) }
 
+    // 내 테마/배경 변경 직후 폴링이 옛 서버 값으로 되돌리는 것 방지 (P3-14)
+    var metaFreezeUntil by remember { mutableStateOf(0L) }
+
     fun persist() {
         config.rooms.clear(); config.rooms.addAll(rooms)
         config.profiles.clear(); config.profiles.addAll(profiles)
-        config.save()
+        // 파일 쓰기는 UI 스레드 밖에서 (P3-16)
+        scope.launch(Dispatchers.IO) { config.save() }
     }
 
     // 선택된 방 폴링: 최초 전체 1회 + 이후 증분(createdAt 기준)만 — read 과금 최소화.
@@ -111,7 +134,8 @@ private fun App() {
             val fetched = withContext(Dispatchers.IO) {
                 firestore.listMessagesSince(room.remoteId, lastCreatedAt)
             }
-            if (fetched.isNotEmpty()) {
+            // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
+            if (fetched != null && fetched.isNotEmpty()) {
                 val knownIds = messages.map { it.docId }.toSet()
                 val fresh = fetched.filter { it.docId !in knownIds }
                 if (fresh.isNotEmpty()) {
@@ -119,7 +143,7 @@ private fun App() {
                 }
                 lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
             }
-            if (tick % 4 == 0) {
+            if (tick % 4 == 0 && System.currentTimeMillis() > metaFreezeUntil) {
                 val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                 if (meta != null &&
                     (meta.themeColor != room.themeColor || meta.backgroundKey != room.backgroundKey || meta.name != room.name)
@@ -136,23 +160,27 @@ private fun App() {
         }
     }
 
-    fun sendMessage(text: String, isOoc: Boolean) {
-        val room = selected ?: return
+    // 전송 실패 시 onResult(false) — 입력창 복원·에러 표시용 (P1-5)
+    fun sendMessage(text: String, isOoc: Boolean, onResult: (Boolean) -> Unit) {
+        val room = selected ?: return onResult(false)
         val body = text.trim()
-        if (body.isEmpty()) return
-        val sender = profiles.getOrNull(room.activeProfileIndex) ?: profiles.first()
+        if (body.isEmpty()) return onResult(true)
+        val sender = profiles.getOrNull(room.activeProfileIndex) ?: profiles.firstOrNull()
+            ?: return onResult(false)
+        // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
+        val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
         scope.launch(Dispatchers.IO) {
-            firestore.postMessage(
+            var ok = firestore.postMessage(
                 room.remoteId,
                 messageValues(
-                    type = "TEXT", body = body, sender = sender,
+                    type = "TEXT", body = marked, sender = sender,
                     isOoc = isOoc, authorUid = config.deviceId,
                 ),
             )
-            if (!isOoc) {
-                DiceBot.parse(body)?.let { command ->
+            if (ok && !isOoc) {
+                DiceBot.parse(plain)?.let { command ->
                     val result = DiceBot.roll(command)
-                    firestore.postMessage(
+                    ok = firestore.postMessage(
                         room.remoteId,
                         messageValues(
                             type = "DICE", body = result.breakdown,
@@ -164,6 +192,7 @@ private fun App() {
                     )
                 }
             }
+            onResult(ok)
             // 화면 반영은 증분 폴링(≤2.5초)이 담당 — 전체 재조회 금지
         }
     }
@@ -226,6 +255,7 @@ private fun App() {
                     val meta = firestore.findRoomByCode(code)
                     if (meta == null) onFail()
                     else {
+                        firestore.ensureMember(meta.remoteId) // 규칙상 읽기 전제
                         val existing = rooms.find { it.remoteId == meta.remoteId }
                         val joined = existing ?: JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
@@ -247,6 +277,8 @@ private fun App() {
                     val code = inviteCode()
                     val meta = firestore.createRoom(name.ifBlank { "새 세션" }, icon.ifBlank { "🎲" }, code)
                     if (meta != null) {
+                        firestore.ensureMember(meta.remoteId)
+                        firestore.createInviteCode(code, meta.remoteId)
                         val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
@@ -281,6 +313,8 @@ private fun App() {
                 room.backgroundKey = background
                 rooms = rooms.toList()
                 persist()
+                // PATCH가 서버에 착지하기 전 폴링이 옛 값을 다시 덮지 않도록 유예 (P3-14)
+                metaFreezeUntil = System.currentTimeMillis() + 15_000
                 scope.launch(Dispatchers.IO) {
                     firestore.updateRoomSettings(room.remoteId, theme, background)
                 }
@@ -430,7 +464,7 @@ private fun ChatPane(
     deviceId: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
-    onSend: (String, Boolean) -> Unit,
+    onSend: (String, Boolean, (Boolean) -> Unit) -> Unit,
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
     onShowCode: () -> Unit,
@@ -666,6 +700,9 @@ private fun MessageAvatar(
     val avatarId = message.avatarId
     if (avatarId != null && !avatarCache.containsKey(avatarId)) {
         LaunchedEffect(avatarId) {
+            // 같은 프레임의 다른 말풍선이 이미 시작했으면 중복 fetch 방지 (P3-15)
+            if (avatarCache.containsKey(avatarId)) return@LaunchedEffect
+            avatarCache[avatarId] = null // in-flight 표식
             val bitmap = withContext(Dispatchers.IO) {
                 firestore.fetchAvatar(room.remoteId, avatarId)?.let { bytes ->
                     runCatching {
@@ -673,7 +710,12 @@ private fun MessageAvatar(
                     }.getOrNull()
                 }
             }
-            avatarCache[avatarId] = bitmap
+            if (bitmap != null) {
+                avatarCache[avatarId] = bitmap
+            } else {
+                // 실패를 영구 캐시하지 않는다 — 다음 리컴포지션에서 재시도 (P3-15)
+                avatarCache.remove(avatarId)
+            }
         }
     }
     val bitmap = avatarId?.let { avatarCache[it] }
@@ -704,12 +746,13 @@ private fun InputZone(
     room: JoinedRoom,
     profiles: List<Profile>,
     theme: Color,
-    onSend: (String, Boolean) -> Unit,
+    onSend: (String, Boolean, (Boolean) -> Unit) -> Unit,
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
+    var sendFailed by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxWidth().background(Color(0xE0090C11)).padding(horizontal = 14.dp, vertical = 10.dp),
@@ -805,11 +848,29 @@ private fun InputZone(
                 Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
                     .background(if (input.isNotBlank()) theme else theme.copy(alpha = .35f))
                     .clickable(enabled = input.isNotBlank()) {
-                        onSend(input, oocOn)
+                        val text = input
+                        val ooc = oocOn
                         input = ""
+                        sendFailed = false
+                        // 전송 실패 시 입력을 복원해 무통보 소실을 막는다 (P1-5)
+                        onSend(text, ooc) { ok ->
+                            if (!ok) {
+                                input = text
+                                oocOn = ooc
+                                sendFailed = true
+                            }
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
+        }
+        if (sendFailed) {
+            Text(
+                "전송에 실패했습니다 — 네트워크를 확인해주세요",
+                fontSize = 11.sp,
+                color = Color(0xFFF2A1A8),
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }

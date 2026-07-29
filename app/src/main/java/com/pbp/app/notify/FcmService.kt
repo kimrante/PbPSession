@@ -20,8 +20,10 @@ class FcmService : FirebaseMessagingService() {
         val app = application as PbpApp
         // 앱이 화면에 떠 있으면 Firestore 리스너가 이미 처리하므로 중복 알림을 막는다
         if (app.isForeground) return
+        // 프로세스가 살아 있고 이 방의 리스너가 붙어 있으면 리스너 경로가 알림을 담당 (P2-2)
+        val remoteRoomId = message.data["roomId"]
+        if (remoteRoomId != null && app.syncManager.isAttached(remoteRoomId)) return
         val senderName = message.data["senderName"] ?: "상대"
-        val notificationId = message.data["roomId"]?.hashCode() ?: 0
-        MessageNotifier(this).notify(senderName, notificationId, imagePath = null)
+        MessageNotifier(this).notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null)
     }
 }

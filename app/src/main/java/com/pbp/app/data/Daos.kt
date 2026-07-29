@@ -89,6 +89,10 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id IN (SELECT MAX(id) FROM messages GROUP BY roomId)")
     fun observeLastPerRoom(): Flow<List<Message>>
 
+    /** '이전 대화 불러오기' 버튼 표시 판정용 총 개수 (P3-7) */
+    @Query("SELECT COUNT(*) FROM messages WHERE roomId = :roomId")
+    fun observeCount(roomId: Long): Flow<Int>
+
     @Query("SELECT * FROM messages WHERE roomId = :roomId ORDER BY createdAt ASC, id ASC")
     suspend fun listForRoom(roomId: Long): List<Message>
 
@@ -99,12 +103,19 @@ interface MessageDao {
     @Query("SELECT remoteId FROM messages WHERE remoteId IN (:ids)")
     suspend fun existingRemoteIds(ids: List<String>): List<String>
 
-    /** 전송 실패(remoteId 미기록) 메시지 — 시작 시 재전송용 아웃박스 */
-    @Query("SELECT * FROM messages WHERE roomId = :roomId AND remoteId IS NULL ORDER BY createdAt ASC, id ASC")
+    /** 서버 반영이 확인되지 않은 메시지 — 시작 시 재전송용 아웃박스 (멱등: remoteId 고정) */
+    @Query("SELECT * FROM messages WHERE roomId = :roomId AND uploaded = 0 ORDER BY createdAt ASC, id ASC")
     suspend fun listUnsent(roomId: Long): List<Message>
 
     @Query("UPDATE messages SET remoteId = :remoteId WHERE id = :id")
     suspend fun setRemoteId(id: Long, remoteId: String)
+
+    @Query("UPDATE messages SET uploaded = 1 WHERE id = :id")
+    suspend fun setUploaded(id: Long)
+
+    /** 삭제 동기화 대조용 — 서버에 존재해야 하는(업로드 확인된) remoteId 전체 */
+    @Query("SELECT remoteId FROM messages WHERE roomId = :roomId AND remoteId IS NOT NULL AND uploaded = 1")
+    suspend fun listRemoteIdsForRoom(roomId: Long): List<String>
 
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun get(id: Long): Message?
@@ -132,6 +143,7 @@ interface MessageDao {
     )
     fun observeUnreadCounts(): Flow<List<UnreadCount>>
 
-    @Insert
+    // remoteId 유니크 인덱스와 조합해 수신 레이스의 중복 삽입을 DB 차원에서 차단
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
     suspend fun insert(message: Message): Long
 }

@@ -148,10 +148,10 @@ body{background:#E9E4D8;color:#2A2620;font-family:'Noto Sans KR','Malgun Gothic'
 .lname{font-size:10.5px;font-weight:700}
 .lname time{font-size:9px;color:#A39A86;font-weight:400;margin-left:5px}
 .ed{font-size:8.5px;color:#A39A86;font-style:normal}
-.lbubble{display:inline-block;border-radius:3px 12px 12px 12px;padding:6px 10px;font-size:11.5px;margin-top:3px;color:#10151C;line-height:1.5;text-align:left}
+.lbubble{display:inline-block;border-radius:3px 12px 12px 12px;padding:6px 10px;font-size:11.5px;margin-top:3px;color:#10151C;line-height:1.5;text-align:left;white-space:pre-wrap}
 .lrow.me .lbubble{border-radius:12px 3px 12px 12px}
 .lbubble.lchat{background:#E3DED2!important;color:#8B8474!important;border:1px dashed #C5BDA9}
-.lnarr{font-family:'Gowun Batang','Batang',serif;font-size:11.5px;line-height:1.8;color:#3D3628;border-left:2px solid #C9A227;padding:2px 0 2px 12px;margin:4px 4px 12px}
+.lnarr{font-family:'Gowun Batang','Batang',serif;font-size:11.5px;line-height:1.8;color:#3D3628;border-left:2px solid #C9A227;padding:2px 0 2px 12px;margin:4px 4px 12px;white-space:pre-wrap}
 .lnarr .nmeta{font-family:'Noto Sans KR',sans-serif;font-size:8.5px;color:#A39A86}
 ruby rt{font-size:7px;color:#C9A227}
 </style>
@@ -220,11 +220,19 @@ $body</div>
         "data:$mime;base64," + Base64.getEncoder().encodeToString(bytes)
     }.getOrNull()
 
-    private fun sniffMime(bytes: ByteArray): String? = when {
-        bytes.size > 3 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() -> "image/png"
-        bytes.size > 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() -> "image/jpeg"
-        bytes.size > 3 && bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() -> "image/gif"
-        bytes.size > 11 && bytes[8] == 'W'.code.toByte() && bytes[9] == 'E'.code.toByte() -> "image/webp"
-        else -> null
+    /** 전체 시그니처 검사 — 짧은 접두 판별의 오탐으로 깨진 <img>가 생기지 않게 (P3-9) */
+    private fun sniffMime(bytes: ByteArray): String? {
+        fun startsWith(prefix: ByteArray, offset: Int = 0): Boolean =
+            bytes.size >= offset + prefix.size &&
+                prefix.indices.all { bytes[offset + it] == prefix[it] }
+        return when {
+            startsWith(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)) ->
+                "image/png"
+            startsWith(byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())) -> "image/jpeg"
+            startsWith("GIF87a".toByteArray()) || startsWith("GIF89a".toByteArray()) -> "image/gif"
+            startsWith("RIFF".toByteArray()) && startsWith("WEBP".toByteArray(), offset = 8) ->
+                "image/webp"
+            else -> null
+        }
     }
 }

@@ -12,6 +12,8 @@ data class Profile(
     val nameColor: Long = 0xFFFFC46B,
     val bubbleColor: Long = 0xFFFFD9A8,
     val isGm: Boolean = false,
+    /** 캐릭터 값(모바일과 동일 개념). config.json에서 직접 편집 — {값이름} 치환에 쓰인다 */
+    val stats: Map<String, String>? = null,
 )
 
 data class JoinedRoom(
@@ -30,6 +32,8 @@ class AppConfig private constructor(
     val deviceId: String,
     val profiles: MutableList<Profile>,
     val rooms: MutableList<JoinedRoom>,
+    /** 익명 인증 리프레시 토큰 — 재시작해도 같은 auth UID 유지 (P0-1) */
+    @Volatile var authRefreshToken: String? = null,
 ) {
     companion object {
         private val file = File(System.getProperty("user.home"), ".pbp-desktop/config.json")
@@ -39,10 +43,21 @@ class AppConfig private constructor(
             val loaded = runCatching {
                 gson.fromJson(file.readText(Charsets.UTF_8), Saved::class.java)
             }.getOrNull()
+            // 파싱 실패한 기존 파일은 덮어쓰기 전에 백업 — 무통보 초기화 방지 (P2-8)
+            if (loaded == null && file.exists()) {
+                runCatching {
+                    val backup = File(file.parentFile, "config.json.bak")
+                    file.copyTo(backup, overwrite = true)
+                    System.err.println(
+                        "config.json을 읽지 못해 기본값으로 시작합니다. 원본은 ${backup.absolutePath}에 보관됨"
+                    )
+                }
+            }
             return AppConfig(
                 deviceId = loaded?.deviceId ?: "desktop-${UUID.randomUUID()}",
                 profiles = (loaded?.profiles ?: defaultProfiles()).toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
+                authRefreshToken = loaded?.authRefreshToken,
             ).also { it.save() }
         }
 
@@ -56,14 +71,30 @@ class AppConfig private constructor(
         val deviceId: String?,
         val profiles: List<Profile>?,
         val rooms: List<JoinedRoom>?,
+        val authRefreshToken: String? = null,
     )
 
     @Synchronized
     fun save() {
         file.parentFile?.mkdirs()
-        file.writeText(
-            gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList())),
+        // 임시 파일에 쓴 뒤 원자적 이동 — 쓰다 죽어도 기존 config가 깨지지 않는다 (P2-8)
+        val tmp = File(file.parentFile, "config.json.tmp")
+        tmp.writeText(
+            gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken)),
             Charsets.UTF_8,
         )
+        runCatching {
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            )
+        }.recoverCatching {
+            // 일부 파일시스템은 ATOMIC_MOVE 미지원 — 일반 교체로 폴백
+            java.nio.file.Files.move(
+                tmp.toPath(), file.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            )
+        }
     }
 }

@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -67,10 +67,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** 아웃박스 uploaded 플래그 + remoteId 유니크 인덱스 (P1-2, P3-1) */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN uploaded INTEGER NOT NULL DEFAULT 0")
+                // 기존 데이터: remoteId가 있으면 이미 서버에 있는 메시지
+                db.execSQL("UPDATE messages SET uploaded = 1 WHERE remoteId IS NOT NULL")
+                // 과거 중복 전송 버그로 남았을 수 있는 중복 remoteId 정리 후 유니크 인덱스
+                db.execSQL(
+                    """DELETE FROM messages WHERE remoteId IS NOT NULL AND id NOT IN (
+                         SELECT MIN(id) FROM messages WHERE remoteId IS NOT NULL GROUP BY remoteId
+                       )"""
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_messages_remoteId ON messages(remoteId)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "pbp.db")
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                    MIGRATION_6_7,
                 )
                 .build()
     }

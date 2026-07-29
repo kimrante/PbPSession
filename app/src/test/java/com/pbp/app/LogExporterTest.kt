@@ -41,6 +41,14 @@ class LogExporterTest {
     )
 
     @Test
+    fun `다중행 본문의 줄바꿈이 보존된다 - pre-wrap`() {
+        val html = LogExporter.buildHtml("방", "🎲", listOf(message(body = "첫 줄\n둘째 줄")))
+        // 줄바꿈 문자가 본문에 그대로 있고, CSS가 pre-wrap으로 렌더링한다 (P2-7)
+        assertTrue(html.contains("첫 줄\n둘째 줄"))
+        assertTrue(html.contains("white-space:pre-wrap"))
+    }
+
+    @Test
     fun `방 이름과 본문이 들어가고 특수문자는 이스케이프된다`() {
         val html = LogExporter.buildHtml("잿빛 등대의 밤", "🕯️", listOf(message(body = "<script>x</script>")))
         assertTrue(html.contains("잿빛 등대의 밤"))

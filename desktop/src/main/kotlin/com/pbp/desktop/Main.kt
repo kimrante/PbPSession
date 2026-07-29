@@ -33,7 +33,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,12 +179,15 @@ private fun App() {
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
+                    // 커스텀 배경(파일 경로)은 기기 로컬 전용 — 서버 값은 preset_일 때만 반영 (모바일과 동일)
+                    val serverBg = meta?.backgroundKey?.takeIf { it.startsWith("preset_") }
                     if (meta != null && cur != null &&
-                        (meta.themeColor != cur.themeColor || meta.backgroundKey != cur.backgroundKey || meta.name != cur.name)
+                        (meta.themeColor != cur.themeColor || meta.name != cur.name ||
+                            (serverBg != null && serverBg != cur.backgroundKey))
                     ) {
                         val updated = cur.copy(
                             themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey,
+                            backgroundKey = serverBg ?: cur.backgroundKey,
                             name = meta.name,
                         )
                         rooms = rooms.map { if (it.remoteId == cur.remoteId) updated else it }
@@ -312,7 +317,7 @@ private fun App() {
                         val joined = existing ?: JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey, isMaster = false,
+                            backgroundKey = meta.backgroundKey ?: "preset_lighthouse", isMaster = false,
                             rule = meta.rule,
                         )
                         if (existing == null) rooms = rooms + joined
@@ -338,7 +343,7 @@ private fun App() {
                         val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey, isMaster = true,
+                            backgroundKey = meta.backgroundKey ?: "preset_lighthouse", isMaster = true,
                             rule = meta.rule ?: "coc7",
                         )
                         rooms = rooms + joined
@@ -503,17 +508,10 @@ private fun LeftPane(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(48.dp)) {
-                        val preset = Tokens.backgroundPresets[room.backgroundKey]
-                            ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
-                        Box(
-                            Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(Color(preset.first), Color(preset.second))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) { /* 방 아이콘 폐지 — 배경으로만 구분 */ }
+                        // 방 아이콘 폐지 — 배경(프리셋 그라데이션 또는 커스텀 이미지)으로만 구분
+                        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))) {
+                            BackgroundLayer(room.backgroundKey, Modifier.fillMaxSize())
+                        }
                         Box(
                             Modifier.size(14.dp)
                                 .align(Alignment.BottomEnd)
@@ -541,6 +539,34 @@ private fun LeftPane(
             GhostButton("코드로 참여", Modifier.weight(1f), onJoin)
         }
     }
+}
+
+/**
+ * 방 배경 — backgroundKey가 preset_*이면 그라데이션, 아니면 로컬 이미지 파일(커스텀).
+ * 파일이 없거나 읽기 실패면 등대 프리셋으로 폴백 (모바일 RoomBackdrop과 동일 규칙)
+ */
+@Composable
+private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier) {
+    val preset = Tokens.backgroundPresets[backgroundKey]
+    if (preset == null) {
+        val bitmap by produceState<ImageBitmap?>(null, backgroundKey) {
+            value = withContext(Dispatchers.IO) {
+                runCatching {
+                    org.jetbrains.skia.Image.makeFromEncoded(java.io.File(backgroundKey).readBytes())
+                        .toComposeImageBitmap()
+                }.getOrNull()
+            }
+        }
+        bitmap?.let {
+            androidx.compose.foundation.Image(
+                bitmap = it, contentDescription = null, modifier = modifier,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+            return
+        }
+    }
+    val colors = preset ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
+    Box(modifier.background(Brush.verticalGradient(listOf(Color(colors.first), Color(colors.second)))))
 }
 
 @Composable
@@ -572,12 +598,7 @@ private fun ChatPane(
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
-        val preset = Tokens.backgroundPresets[room.backgroundKey]
-            ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
-        Box(
-            Modifier.fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(preset.first), Color(preset.second))))
-        )
+        BackgroundLayer(room.backgroundKey, Modifier.fillMaxSize())
         Box(
             Modifier.fillMaxSize()
                 .background(Brush.verticalGradient(listOf(Tokens.VeilTop, Tokens.VeilMid, Tokens.VeilTop)))
@@ -1405,12 +1426,60 @@ private fun CodeOverlay(code: String, onDismiss: () -> Unit) {
 @Composable
 private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (Long, String) -> Unit) {
     if (room == null) return
+    val scope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(room.themeColor) }
     var background by remember { mutableStateOf(room.backgroundKey) }
+    var hexOpen by remember {
+        mutableStateOf(Tokens.themePresets.none { it.first == room.themeColor })
+    }
+    var hex by remember { mutableStateOf("") }
+    // 모바일 HexColorDialog와 동일 규칙 — 6자리 HEX만 유효
+    val hexParsed = hex.trim().removePrefix("#").let {
+        if (it.length == 6) it.toLongOrNull(16)?.or(0xFF000000) else null
+    }
     OverlayScaffold("방 설정 · ${room.name}", onDismiss) {
         Text("테마 컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
-        SwatchRow(Tokens.themePresets.map { it.first }, theme) { theme = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(Tokens.themePresets.map { it.first }, theme) {
+                theme = it
+                hexOpen = false
+            }
+            // 커스텀 — 무지개 스와치, 프리셋 밖의 색이 선택되어 있으면 선택 표시 (모바일과 동일)
+            val customOn = Tokens.themePresets.none { it.first == theme }
+            Box(
+                Modifier.size(32.dp)
+                    .border(2.dp, if (customOn) Tokens.Ink else Color.Transparent, CircleShape)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.sweepGradient(
+                            listOf(
+                                Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
+                                Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
+                            )
+                        )
+                    )
+                    .clickable { hexOpen = !hexOpen },
+            )
+        }
+        if (hexOpen) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f)) {
+                    OverlayField(hex, { hex = it }, "HEX 색상 (예: 8EC5E8)")
+                }
+                hexParsed?.let { color ->
+                    Box(
+                        Modifier.size(width = 40.dp, height = 24.dp)
+                            .clip(RoundedCornerShape(6.dp)).background(Color(color))
+                    )
+                    YellowButton("적용") { theme = color }
+                }
+            }
+        }
         Spacer(Modifier.height(14.dp))
         Text("배경", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
@@ -1432,12 +1501,62 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
                 )
             }
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 현재 커스텀 배경 미리보기 (모바일 '커스텀 · 사용 중' 셀과 동일 역할)
+            if (Tokens.backgroundPresets[background] == null) {
+                Box(
+                    Modifier.size(width = 64.dp, height = 44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.5.dp, Tokens.Signature, RoundedCornerShape(10.dp))
+                ) {
+                    BackgroundLayer(background, Modifier.fillMaxSize())
+                }
+            }
+            // 파일에서 선택 — 이미지를 ~/.pbp-desktop/backgrounds/에 복사해 경로를 보관
+            Box(
+                Modifier.size(width = 64.dp, height = 44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, Tokens.Line, RoundedCornerShape(10.dp))
+                    .clickable {
+                        scope.launch(Dispatchers.IO) {
+                            pickBackgroundFile()?.let { background = it }
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("파일\n선택", fontSize = 10.sp, color = Tokens.InkDim, lineHeight = 13.sp)
+            }
+        }
+        Text(
+            "커스텀 배경은 이 PC에서만 보입니다 (모바일과 동일)",
+            fontSize = 10.sp, color = Tokens.InkDim, modifier = Modifier.padding(top = 6.dp),
+        )
+        Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("적용", Modifier.weight(1f)) { onApply(theme, background) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }
+}
+
+/** OS 파일 선택창으로 배경 이미지를 골라 설정 폴더에 복사, 복사본 경로를 돌려준다 */
+private fun pickBackgroundFile(): String? {
+    val fd = java.awt.FileDialog(null as java.awt.Frame?, "배경 이미지 선택", java.awt.FileDialog.LOAD)
+    fd.setFilenameFilter { _, name ->
+        name.lowercase().substringAfterLast('.', "") in setOf("png", "jpg", "jpeg", "webp", "bmp")
+    }
+    fd.isVisible = true // 선택할 때까지 블록
+    val dir = fd.directory ?: return null
+    val file = fd.file ?: return null
+    val src = java.io.File(dir, file)
+    val destDir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/backgrounds")
+    return runCatching {
+        destDir.mkdirs()
+        val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.${src.extension.ifEmpty { "img" }}")
+        src.copyTo(dest, overwrite = true)
+        dest.absolutePath
+    }.onFailure { System.err.println("배경 이미지 복사 실패: $it") }.getOrNull()
 }
 
 /** 앱 전체 글꼴 선택 — 모바일 FontSettingDialog와 동일 선택지, 즉시 반영·config.json 유지 */

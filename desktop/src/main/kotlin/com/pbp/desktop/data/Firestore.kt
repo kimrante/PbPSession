@@ -36,7 +36,8 @@ data class RoomMeta(
     val icon: String,
     val inviteCode: String?,
     val themeColor: Long,
-    val backgroundKey: String,
+    /** null = 서버에 배경이 없음(상대가 커스텀 사용 중) — 수신 측은 자기 배경 유지 */
+    val backgroundKey: String?,
     val rule: String? = null,
 )
 
@@ -339,7 +340,7 @@ class FirestoreRest(
         icon = "", // 방 아이콘 폐지 — 배경으로만 구분 (모바일과 동일)
         inviteCode = doc.str("inviteCode"),
         themeColor = doc.long("themeColor") ?: 0xFF8EC5E8,
-        backgroundKey = doc.str("backgroundKey") ?: "preset_lighthouse",
+        backgroundKey = doc.str("backgroundKey"),
         rule = doc.str("rule"),
     )
 
@@ -355,7 +356,14 @@ class FirestoreRest(
     }
 
     fun updateRoomSettings(remoteId: String, themeColor: Long, backgroundKey: String): Boolean {
-        val body = fields(mapOf("themeColor" to themeColor, "backgroundKey" to backgroundKey))
+        // 커스텀 배경(파일 경로)은 기기 로컬 전용 — 모바일과 동일하게 preset_만 서버에 쓴다.
+        // 커스텀이면 필드가 mask에만 있어 서버 값이 삭제되고, 수신 측은 자기 배경을 유지한다.
+        val body = fields(
+            mapOf(
+                "themeColor" to themeColor,
+                "backgroundKey" to backgroundKey.takeIf { it.startsWith("preset_") },
+            )
+        )
         return patch(
             "$base/rooms/$remoteId?key=$apiKey" +
                 "&updateMask.fieldPaths=themeColor&updateMask.fieldPaths=backgroundKey",

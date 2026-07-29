@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -52,6 +54,7 @@ import com.pbp.app.PbpApp
 import com.pbp.app.data.ChatRoom
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
+import com.pbp.app.dice.Rules
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
@@ -75,8 +78,8 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .map { list -> list.associate { it.roomId to it.count } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    fun createRoom(name: String, icon: String) = viewModelScope.launch {
-        repo.createRoom(name.trim().ifEmpty { "새 세션" }, icon.trim().ifEmpty { "🎲" })
+    fun createRoom(name: String, icon: String, rule: String) = viewModelScope.launch {
+        repo.createRoom(name.trim().ifEmpty { "새 세션" }, icon.trim().ifEmpty { "🎲" }, rule = rule)
     }
 
     fun deleteRoom(room: ChatRoom) = viewModelScope.launch { repo.deleteRoom(room) }
@@ -180,8 +183,8 @@ fun RoomListScreen(nav: NavController) {
     if (showCreate) {
         CreateRoomDialog(
             onDismiss = { showCreate = false },
-            onCreate = { name, icon ->
-                vm.createRoom(name, icon)
+            onCreate = { name, icon, rule ->
+                vm.createRoom(name, icon, rule)
                 showCreate = false
             },
         )
@@ -246,19 +249,34 @@ private fun RoomCard(
             .padding(horizontal = 12.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // 썸네일: 방 배경 그라데이션 + 테마 컬러 점 (스펙 3장 화면1)
+        // 썸네일: 방 배경(프리셋 그라데이션 또는 갤러리 이미지 크롭) + 테마 컬러 점
         Box(Modifier.size(48.dp)) {
             val preset = PbpPalette.backgroundPresets[room.backgroundKey]
-                ?: PbpPalette.backgroundPresets.getValue(PbpPalette.DEFAULT_BACKGROUND)
             Box(
                 Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(
-                        Brush.linearGradient(listOf(Color(preset.first), Color(preset.second)))
+                    .then(
+                        if (preset != null) {
+                            Modifier.background(
+                                Brush.linearGradient(
+                                    listOf(Color(preset.first), Color(preset.second))
+                                )
+                            )
+                        } else Modifier
                     ),
                 contentAlignment = Alignment.Center,
-            ) { Text(room.icon, fontSize = 17.sp) }
+            ) {
+                if (preset == null) {
+                    coil3.compose.AsyncImage(
+                        model = java.io.File(room.backgroundKey),
+                        contentDescription = null,
+                        modifier = Modifier.matchParentSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    )
+                }
+                Text(room.icon, fontSize = 17.sp)
+            }
             Box(
                 Modifier
                     .size(14.dp)
@@ -358,9 +376,12 @@ private fun FontSettingDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String, String) -> Unit) {
+    val tokens = Pbp.colors
     var name by remember { mutableStateOf("") }
     var icon by remember { mutableStateOf("") }
+    var rule by remember { mutableStateOf(Rules.COC7) }
+    var ruleMenuOpen by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("새 세션") },
@@ -378,6 +399,38 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
                     label = { Text("아이콘 (이모지, 비우면 🎲)") },
                     singleLine = true,
                 )
+                // TRPG 룰 — 판정 매크로의 다이스 기준
+                Box {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, tokens.line, RoundedCornerShape(10.dp))
+                            .combinedClickable(onClick = { ruleMenuOpen = true })
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("TRPG 룰", fontSize = 10.sp, color = tokens.inkDim)
+                            Text(Rules.label(rule), fontSize = 13.sp, color = tokens.ink)
+                        }
+                        Text("▾", fontSize = 13.sp, color = tokens.inkDim)
+                    }
+                    DropdownMenu(
+                        expanded = ruleMenuOpen,
+                        onDismissRequest = { ruleMenuOpen = false },
+                    ) {
+                        Rules.all.forEach { (key, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontSize = 13.sp) },
+                                onClick = {
+                                    rule = key
+                                    ruleMenuOpen = false
+                                },
+                            )
+                        }
+                    }
+                }
                 Text(
                     "방을 만들면 서술자(GM) 프로필과 마스터 권한이 자동 부여됩니다.",
                     fontSize = 12.sp,
@@ -385,7 +438,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(name, icon) }) { Text("만들기") } },
+        confirmButton = { TextButton(onClick = { onCreate(name, icon, rule) }) { Text("만들기") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
 }

@@ -24,8 +24,10 @@ data class ChatRoom(
     val themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
     /** 배경: 프리셋 key(preset_*) 또는 갤러리 이미지의 로컬 파일 경로 */
     val backgroundKey: String = PbpPalette.DEFAULT_BACKGROUND,
-    /** 방 생성자(마스터) 여부. 테마·배경 변경 권한 */
+    /** 방 생성자(마스터) 여부 */
     val isMaster: Boolean = true,
+    /** 이 방의 TRPG 룰(Rules 참조). 판정 매크로의 다이스 기준 */
+    val rule: String = com.pbp.app.dice.Rules.COC7,
     /** 이 시각 이후의 수신 메시지가 '미확인'(옐로 배지·푸시 대상) */
     val lastReadAt: Long = 0,
 )

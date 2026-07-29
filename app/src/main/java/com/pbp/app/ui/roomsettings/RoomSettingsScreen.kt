@@ -327,10 +327,11 @@ private fun ThemeCell(
     Column(
         Modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) Color(0x1A8EC5E8) else Color(0x08FFFFFF))
+            // 선택 표시는 배경 그리드와 동일하게 시그니처 옐로로 통일
+            .background(if (selected) tokens.signature.copy(alpha = .12f) else Color(0x08FFFFFF))
             .border(
                 1.5.dp,
-                if (selected) tokens.themeDefault else tokens.line,
+                if (selected) tokens.signature else tokens.line,
                 RoundedCornerShape(12.dp),
             )
             .clickable(onClick = onClick)
@@ -347,7 +348,7 @@ private fun ThemeCell(
         Text(
             label,
             fontSize = 9.sp,
-            color = if (selected) tokens.themeDefault else tokens.inkDim,
+            color = if (selected) tokens.signature else tokens.inkDim,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }

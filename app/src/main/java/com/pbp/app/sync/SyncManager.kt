@@ -112,6 +112,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 "createdAt" to room.createdAt,
                 "inviteCode" to code,
                 "themeColor" to room.themeColor,
+                "rule" to room.rule,
                 // 갤러리 이미지는 기기 로컬 파일이라 프리셋만 상대에게 전달
                 "backgroundKey" to room.backgroundKey.takeIf { it.startsWith("preset_") },
             )
@@ -153,6 +154,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_THEME_COLOR,
             backgroundKey = roomDoc.getString("backgroundKey")
                 ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_BACKGROUND,
+            rule = roomDoc.getString("rule") ?: com.pbp.app.dice.Rules.COC7,
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다

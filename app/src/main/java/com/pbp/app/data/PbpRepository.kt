@@ -28,6 +28,7 @@ class PbpRepository(private val db: AppDatabase) {
         isMaster: Boolean = true,
         themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
         backgroundKey: String = PbpPalette.DEFAULT_BACKGROUND,
+        rule: String = com.pbp.app.dice.Rules.COC7,
     ): Long = db.withTransaction {
         val roomId = db.roomDao().insert(
             ChatRoom(
@@ -37,6 +38,7 @@ class PbpRepository(private val db: AppDatabase) {
                 isMaster = isMaster,
                 themeColor = themeColor,
                 backgroundKey = backgroundKey,
+                rule = rule,
             )
         )
         val gmId = db.profileDao().insert(

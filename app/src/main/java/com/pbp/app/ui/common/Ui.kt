@@ -179,6 +179,15 @@ fun MarkupText(
         fontWeight = fontWeight,
         lineHeight = lineHeight,
         inlineContent = inline,
+        // 굵게·기울임 등 스타일에 따라 위아래 폰트 여백이 달라져 말풍선 높이가
+        // 들쭉날쭉해지지 않도록: 폰트 패딩 제거 + 줄 상자를 lineHeight로 고정
+        style = androidx.compose.ui.text.TextStyle(
+            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+            lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+            ),
+        ),
     )
 }
 

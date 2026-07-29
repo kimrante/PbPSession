@@ -170,6 +170,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     var editTarget by remember { mutableStateOf<Message?>(null) }
     var deleteTarget by remember { mutableStateOf<Message?>(null) }
+    var actionTarget by remember { mutableStateOf<Message?>(null) } // 길게 누른 내 메시지
     var showAddProfile by remember { mutableStateOf(false) }
 
     // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
@@ -256,8 +257,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
-                                onEdit = { editTarget = it },
-                                onDelete = { deleteTarget = it },
+                                onLongPress = { actionTarget = it },
                             )
                         }
                     }
@@ -292,6 +292,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     onEditProfile = { nav.navigate("profile/${it.id}") },
                     onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc -> vm.send(text, ooc) },
+                    rule = room?.rule ?: com.pbp.app.dice.Rules.COC7,
                 )
             }
         }
@@ -325,6 +326,47 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     ).show()
                 }
             },
+        )
+    }
+
+    // 길게 누른 메시지의 편집·삭제 메뉴 (발신자 본인만 진입 가능)
+    actionTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { actionTarget = null },
+            title = { Text("메시지") },
+            text = {
+                Column {
+                    Text(
+                        "편집",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Pbp.colors.signature,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                editTarget = target
+                                actionTarget = null
+                            }
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                    )
+                    Text(
+                        "삭제",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFF6B6B),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                deleteTarget = target
+                                actionTarget = null
+                            }
+                            .padding(horizontal = 10.dp, vertical = 12.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { actionTarget = null }) { Text("취소") } },
         )
     }
 
@@ -370,8 +412,7 @@ private fun isContinuation(prev: Message?, current: Message): Boolean {
 private fun MessageBlock(
     message: Message,
     grouped: Boolean = false,
-    onEdit: (Message) -> Unit,
-    onDelete: (Message) -> Unit,
+    onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
     when {
@@ -424,14 +465,13 @@ private fun MessageBlock(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 GmSpeech.split(message.body).forEach { part ->
                     when (part) {
-                        is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onEdit, onDelete)
+                        is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
                             overrideBody = part.text,
                             overrideName = "???",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
-                            onEdit = onEdit,
-                            onDelete = onDelete,
+                            onLongPress = onLongPress,
                         )
                     }
                 }
@@ -440,19 +480,18 @@ private fun MessageBlock(
         else -> BubbleRow(
             message = message,
             showHeader = !grouped,
-            onEdit = onEdit,
-            onDelete = onDelete,
+            onLongPress = onLongPress,
         )
     }
 }
 
-/** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만) */
+/** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만). 본인은 길게 눌러 편집·삭제 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NarrationBlock(
     message: Message,
     text: String,
-    onEdit: (Message) -> Unit,
-    onDelete: (Message) -> Unit,
+    onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
     Box(Modifier.padding(horizontal = 8.dp)) {
@@ -461,6 +500,10 @@ private fun NarrationBlock(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
                 .background(tokens.narrBg)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { if (!message.incoming) onLongPress(message) },
+                )
                 .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
         ) {
             MarkupText(
@@ -487,14 +530,12 @@ private fun NarrationBlock(
                     Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
-                // 편집·삭제는 서술을 쓴 본인에게만
-                if (!message.incoming) MiniActions(message, onEdit, onDelete)
             }
         }
     }
 }
 
-/** 카카오톡형 좌/우 말풍선. 내 발신(incoming=false)은 오른쪽 정렬 */
+/** 카카오톡형 좌/우 말풍선. 내 발신(incoming=false)은 오른쪽 정렬, 길게 눌러 편집·삭제 */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BubbleRow(
@@ -503,8 +544,7 @@ private fun BubbleRow(
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
-    onEdit: (Message) -> Unit,
-    onDelete: (Message) -> Unit,
+    onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
     // GM 인용("???")은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
@@ -528,11 +568,7 @@ private fun BubbleRow(
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             if (mine) {
-                // 내 메시지: 편집·삭제는 메시지 가장 왼쪽, 시간은 말풍선 왼쪽
-                MiniActions(
-                    message, onEdit, onDelete,
-                    Modifier.align(Alignment.Bottom).padding(bottom = 3.dp),
-                )
+                // 내 메시지: 시간은 말풍선 왼쪽
                 TimeStamp(message, alignEnd = true, Modifier.align(Alignment.Bottom))
             }
             if (!mine) {
@@ -571,16 +607,20 @@ private fun BubbleRow(
                             Modifier.dashedBorder(Color.White.copy(alpha = .18f), 15.dp)
                         } else Modifier
                     )
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                    )
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                 Box(bubbleModifier) {
-                    Row {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         if (message.isOoc) {
                             Text(
                                 "잡담",
                                 fontSize = 8.5.sp,
                                 color = inkColor,
                                 modifier = Modifier
-                                    .padding(end = 5.dp, top = 2.dp)
+                                    .padding(end = 5.dp)
                                     .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
                                     .padding(horizontal = 5.dp),
                             )
@@ -597,14 +637,8 @@ private fun BubbleRow(
                 }
             }
             if (!mine) {
-                // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽. 편집·삭제는 발신자 본인일 때만
+                // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽
                 TimeStamp(message, alignEnd = false, Modifier.align(Alignment.Bottom))
-                if (!message.incoming) {
-                    MiniActions(
-                        message, onEdit, onDelete,
-                        Modifier.align(Alignment.Bottom).padding(bottom = 3.dp),
-                    )
-                }
             }
             if (mine) {
                 if (showHeader) {
@@ -634,49 +668,6 @@ private fun TimeStamp(message: Message, alignEnd: Boolean, modifier: Modifier = 
     }
 }
 
-/** 말풍선 곁 연필·휴지통 마이크로 버튼 — 발신자 본인의 메시지에만 표시 */
-@Composable
-private fun MiniActions(
-    message: Message,
-    onEdit: (Message) -> Unit,
-    onDelete: (Message) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    // 글리프의 폰트 여백 때문에 중앙이 틀어지지 않도록 폰트 패딩 제거 + 라인높이 고정
-    val glyphStyle = androidx.compose.ui.text.TextStyle(
-        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
-        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-    )
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        Box(
-            Modifier
-                .size(18.dp)
-                .clip(RoundedCornerShape(5.dp))
-                .background(Color.Black.copy(alpha = .38f))
-                .clickable { onEdit(message) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "✎",
-                fontSize = 10.sp,
-                lineHeight = 10.sp,
-                color = Color.White.copy(alpha = .75f),
-                style = glyphStyle,
-            )
-        }
-        Box(
-            Modifier
-                .size(18.dp)
-                .clip(RoundedCornerShape(5.dp))
-                .background(Color.Black.copy(alpha = .38f))
-                .clickable { onDelete(message) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("🗑", fontSize = 9.sp, lineHeight = 9.sp, style = glyphStyle)
-        }
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InputZone(
@@ -687,6 +678,7 @@ private fun InputZone(
     onEditProfile: (CharacterProfile) -> Unit,
     onAddProfile: () -> Unit,
     onSend: (String, Boolean) -> Unit,
+    rule: String,
 ) {
     val tokens = Pbp.colors
     // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록
@@ -765,7 +757,9 @@ private fun InputZone(
                             .background(tokens.signature.copy(alpha = .14f))
                             .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
                             .clickable {
-                                onSend("1d100<={$name}", false)
+                                // 예: "1d100<={LUK} LUK 판정" — 무엇을 판정했는지 함께 남긴다
+                                val command = com.pbp.app.dice.Rules.judgeCommand(rule, name)
+                                onSend("$command $name 판정", false)
                                 input = ""
                             }
                             .padding(horizontal = 10.dp, vertical = 5.dp),

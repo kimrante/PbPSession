@@ -40,6 +40,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,7 +81,7 @@ fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         title = "PbP — 1:1 TRPG 채팅",
-        state = rememberWindowState(width = 980.dp, height = 620.dp),
+        state = rememberWindowState(width = 1200.dp, height = 760.dp),
     ) {
         App()
     }
@@ -395,75 +401,88 @@ private fun LeftPane(
     onCreate: () -> Unit,
     onJoin: () -> Unit,
 ) {
-    Column(Modifier.width(320.dp).fillMaxHeight().background(Tokens.Bg).padding(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
+    Column(
+        Modifier.width(280.dp).fillMaxHeight()
+            .background(Brush.verticalGradient(listOf(Color(0xFFFBF9F4), Color(0xFFF0EDE5)))),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Box(
-                Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
+                Modifier.size(36.dp).clip(RoundedCornerShape(10.dp))
                     .background(Brush.linearGradient(listOf(Color(0xFF2A3340), Color(0xFF171D26)))),
                 contentAlignment = Alignment.Center,
             ) { Text("⬦", color = Color(0xFFEFE8D6), fontSize = 17.sp) }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column {
+                // 라이트 모드 "PbP" 강조색 = 잉크 블랙 (스펙 2장)
                 Text(
                     "PbP", fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp, color = Tokens.Signature,
+                    fontSize = 18.sp, color = Tokens.Ink,
                 )
                 Text("진행 중인 세션 ${rooms.size} · PC", fontSize = 11.sp, color = Tokens.InkDim)
             }
         }
-        Spacer(Modifier.height(14.dp))
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(
+            Modifier.weight(1f).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp),
+        ) {
             items(rooms, key = { it.remoteId }) { room ->
                 val active = room.remoteId == selected?.remoteId
                 Row(
                     Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (active) Color(0x1F8EC5E8) else Color(0x09FFFFFF))
+                        .background(
+                            if (active) Color(room.themeColor).copy(alpha = .14f)
+                            else Color(0x0914191F)
+                        )
                         .border(
                             1.dp,
-                            if (active) Color(room.themeColor).copy(alpha = .5f) else Tokens.Line,
+                            if (active) Color(room.themeColor).copy(alpha = .45f) else Tokens.Line,
                             RoundedCornerShape(16.dp),
                         )
                         .clickable { onSelect(room) }
-                        .padding(12.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(44.dp)) {
+                    Box(Modifier.size(48.dp)) {
                         val preset = Tokens.backgroundPresets[room.backgroundKey]
                             ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
                         Box(
-                            Modifier.size(44.dp).clip(RoundedCornerShape(13.dp))
+                            Modifier.size(48.dp).clip(RoundedCornerShape(12.dp))
                                 .background(
                                     Brush.linearGradient(
                                         listOf(Color(preset.first), Color(preset.second))
                                     )
                                 ),
                             contentAlignment = Alignment.Center,
-                        ) { Text(room.icon, fontSize = 16.sp) }
+                        ) { Text(room.icon, fontSize = 17.sp) }
                         Box(
-                            Modifier.size(13.dp)
+                            Modifier.size(14.dp)
                                 .align(Alignment.BottomEnd)
-                                .border(2.5.dp, Tokens.Bg, CircleShape)
+                                .border(3.dp, Color(0xFFFBF9F4), CircleShape)
                                 .clip(CircleShape)
                                 .background(Color(room.themeColor))
                         )
                     }
-                    Spacer(Modifier.width(11.dp))
+                    Spacer(Modifier.width(12.dp))
                     Column {
                         Text(
-                            room.name, fontSize = 13.5.sp, fontWeight = FontWeight.Bold,
+                            room.name, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                             color = Tokens.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         Text(
                             if (room.isMaster) "마스터 · 코드 ${room.inviteCode ?: "-"}" else "참여자",
-                            fontSize = 10.5.sp, color = Tokens.InkDim,
+                            fontSize = 11.sp, color = Tokens.InkDim,
                         )
                     }
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("＋ 새 세션", Modifier.weight(1f), onCreate)
             GhostButton("코드로 참여", Modifier.weight(1f), onJoin)
         }
@@ -510,22 +529,26 @@ private fun ChatPane(
                 .background(Brush.verticalGradient(listOf(Tokens.VeilTop, Tokens.VeilMid, Tokens.VeilTop)))
         )
         Column(Modifier.fillMaxSize()) {
-            // 상단 바
+            // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션
             Row(
-                Modifier.fillMaxWidth().background(Color(0x73080B10)).padding(horizontal = 16.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().height(56.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(Color(0xD9FFFFFF), Color(0x59FFFFFF)))
+                    )
+                    .padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         room.name, fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp, color = Tokens.Ink, maxLines = 1,
+                        fontSize = 15.sp, color = Tokens.Ink, maxLines = 1,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).clip(RoundedCornerShape(3.dp)).background(theme))
                         Spacer(Modifier.width(5.dp))
                         Text(
                             if (room.isMaster) "마스터" else "참여자",
-                            fontSize = 10.5.sp, color = Tokens.InkDim,
+                            fontSize = 10.sp, color = Tokens.InkDim,
                         )
                     }
                 }
@@ -544,14 +567,17 @@ private fun ChatPane(
                 val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
                 if (lastVisible >= messages.size - 2) listState.scrollToItem(messages.size - 1)
             }
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(messages, key = { it.docId }) { message ->
-                    MessageBlock(message, deviceId, room, avatarCache, firestore)
+            // 본문 최대 폭 720dp 중앙 정렬 — 초광폭에서 말풍선이 늘어지지 않게 (PC 규격)
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(messages, key = { it.docId }) { message ->
+                        MessageBlock(message, deviceId, room, avatarCache, firestore)
+                    }
                 }
             }
 
@@ -580,18 +606,19 @@ private fun MessageBlock(
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
-                    Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0x59000000))
+                    Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0xBFFFFFFF))
+                        .border(1.dp, Color(0x1214191F), RoundedCornerShape(999.dp))
                         .padding(horizontal = 12.dp, vertical = 3.dp)
                 ) {
-                    Text(message.body, fontSize = 10.5.sp, color = Color(0x99FFFFFF))
+                    Text(message.body, fontSize = 10.sp, color = Color(0x8C23272E))
                 }
             }
         }
         message.type == "DICE" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Row(
-                    Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0x80000000))
-                        .border(1.dp, Tokens.Signature.copy(alpha = .35f), RoundedCornerShape(12.dp))
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD9FFFFFF))
+                        .border(1.dp, Color(0x80C89E34), RoundedCornerShape(12.dp))
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -599,7 +626,7 @@ private fun MessageBlock(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "${message.diceExpr} → ${message.body}",
-                        fontSize = 11.5.sp, color = Color(0xFFFFE9AE), fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = Color(0xFF7A5B12), fontWeight = FontWeight.Bold,
                     )
                 }
             }
@@ -626,21 +653,21 @@ private fun MessageBlock(
 @Composable
 private fun NarrationBlock(message: Message, text: String) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 6.dp)
-            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp))
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp))
             .background(Tokens.NarrBg)
-            .padding(start = 16.dp, end = 14.dp, top = 10.dp, bottom = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         MarkupText(
-            text = text, fontSize = 13.5.sp, color = Tokens.NarrInk,
-            rubyColor = Tokens.Signature, fontFamily = GowunBatang, lineHeight = 25.sp,
+            text = text, fontSize = 13.sp, color = Tokens.NarrInk,
+            rubyColor = Tokens.SignatureInk, fontFamily = GowunBatang, lineHeight = 24.sp,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             val gmLabel = message.senderName?.let { if (it.startsWith("GM")) it else "GM $it" } ?: "GM"
-            Text("$gmLabel · 서술", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Tokens.Signature)
+            Text("$gmLabel · 서술", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk)
             Spacer(Modifier.width(6.dp))
-            Text(formatTime(message.createdAt), fontSize = 9.5.sp, color = Tokens.InkDim)
+            Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
         }
     }
 }
@@ -664,8 +691,9 @@ private fun BubbleRow(
     }
     val nameColor = when {
         message.isOoc -> Tokens.InkDim
-        overrideName != null -> Tokens.Signature
-        message.senderNameColor != null -> Color(message.senderNameColor)
+        overrideName != null -> Tokens.SignatureInk
+        // 밝은 배경 위에서는 저장된 밝은 이름색을 진한 색으로 치환 (스펙 2장)
+        message.senderNameColor != null -> Color(Tokens.nameColorForLight(message.senderNameColor))
         else -> Tokens.Ink
     }
     val inkColor = if (message.isOoc) Tokens.ChatterInk else Tokens.BubbleInk
@@ -674,18 +702,18 @@ private fun BubbleRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!mine) MessageAvatar(message, room, avatarCache, firestore)
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
                 Text(
                     overrideName ?: message.senderName ?: "",
-                    fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = nameColor,
+                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = nameColor,
                 )
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(4.dp))
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = 15.dp, topEnd = 4.dp, bottomEnd = 15.dp, bottomStart = 15.dp)
+                    RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
                 } else {
-                    RoundedCornerShape(topStart = 4.dp, topEnd = 15.dp, bottomEnd = 15.dp, bottomStart = 15.dp)
+                    RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
                 }
                 Box(
                     Modifier.widthIn(max = 420.dp).clip(shape).background(bubbleColor)
@@ -707,11 +735,11 @@ private fun BubbleRow(
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
-                    Text(formatTime(message.createdAt), fontSize = 9.5.sp, color = Tokens.InkDim)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
                     if (message.editedAt != null) {
                         Spacer(Modifier.width(4.dp))
-                        Text("(수정됨)", fontSize = 9.5.sp, color = Tokens.InkDim)
+                        Text("(수정됨)", fontSize = 10.sp, color = Tokens.InkDim)
                     }
                 }
             }
@@ -751,7 +779,7 @@ private fun MessageAvatar(
     val bitmap = avatarId?.let { avatarCache[it] }
     Box(
         Modifier.size(38.dp)
-            .border(1.5.dp, Color.White.copy(alpha = .22f), CircleShape)
+            .border(1.5.dp, Color.White.copy(alpha = .85f), CircleShape)
             .clip(CircleShape)
             .background(Tokens.Panel2)
             .alpha(if (message.isOoc) 0.55f else 1f),
@@ -784,130 +812,161 @@ private fun InputZone(
     var oocOn by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        Modifier.fillMaxWidth().background(Color(0xE0090C11)).padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            items(profiles.size) { index ->
-                val profile = profiles[index]
-                val on = index == room.activeProfileIndex
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable { onSwitchProfile(index) },
-                ) {
-                    Box(
-                        Modifier.size(34.dp)
-                            .border(
-                                2.dp,
-                                if (on) Tokens.Signature else Color.White.copy(alpha = .2f),
-                                CircleShape,
-                            )
-                            .clip(CircleShape)
-                            .background(Tokens.Panel2),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            profile.emoji, fontSize = 14.sp,
-                            fontFamily = if (profile.isGm) GowunBatang else null,
-                            color = if (profile.isGm) Tokens.Signature else Tokens.Ink,
-                        )
+    // 전송 — 버튼과 Ctrl+Enter가 공유
+    val doSend = send@{
+        if (input.isBlank()) return@send
+        val text = input
+        val ooc = oocOn
+        input = ""
+        errorMessage = null
+        // 전송 실패 시 입력을 복원해 무통보 소실을 막는다 (P1-5).
+        // 단 본문이 이미 올라갔으면 복원하지 않는다 — 재전송 시 2건이 된다 (N3)
+        onSend(text, ooc) { textOk, diceOk ->
+            when {
+                !textOk -> {
+                    // 늦게 도착한 실패 콜백이 새로 친 글을 덮지 않도록 (N3)
+                    if (input.isEmpty()) {
+                        input = text
+                        oocOn = ooc
                     }
-                    Text(
-                        profile.name, fontSize = 9.sp,
-                        color = if (on) Tokens.Signature else Tokens.InkDim,
-                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                    )
+                    errorMessage = "전송에 실패했습니다 — 네트워크를 확인해주세요"
                 }
-            }
-            item {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(34.dp)
-                            .border(1.dp, Color.White.copy(alpha = .3f), CircleShape)
-                            .clip(CircleShape)
-                            .clickable(onClick = onAddProfile),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("＋", color = Tokens.InkDim, fontSize = 14.sp) }
-                    Text("추가", fontSize = 9.sp, color = Tokens.InkDim)
-                }
+                !diceOk -> errorMessage = "메시지는 전송됐지만 다이스 결과 전송에 실패했습니다"
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                Modifier.clip(RoundedCornerShape(999.dp))
-                    .background(if (oocOn) Tokens.Signature.copy(alpha = .16f) else Color.White.copy(alpha = .07f))
-                    .border(
-                        1.dp,
-                        if (oocOn) Tokens.Signature.copy(alpha = .4f) else Tokens.Line,
-                        RoundedCornerShape(999.dp),
-                    )
-                    .clickable { oocOn = !oocOn }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "잡담", fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                    color = if (oocOn) Tokens.Signature else Tokens.InkDim,
-                )
-            }
-            androidx.compose.foundation.text.BasicTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = .08f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                textStyle = androidx.compose.ui.text.TextStyle(color = Tokens.Ink, fontSize = 13.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.Signature),
-                maxLines = 4,
-                decorationBox = { inner ->
-                    Box {
-                        if (input.isEmpty()) {
+    }
+
+    Column(Modifier.fillMaxWidth().background(Color(0xEBFFFFFF))) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
+        // 본문과 같은 720dp 중앙 정렬 (PC 규격)
+        Column(
+            Modifier.align(Alignment.CenterHorizontally)
+                .widthIn(max = 720.dp).fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 12.dp),
+        ) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                items(profiles.size) { index ->
+                    val profile = profiles[index]
+                    val on = index == room.activeProfileIndex
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable { onSwitchProfile(index) },
+                    ) {
+                        Box(
+                            Modifier.size(36.dp)
+                                .border(
+                                    2.dp,
+                                    when {
+                                        on -> Tokens.SignatureRing
+                                        profile.isGm -> Color(0x99C89E34) // GM 금테
+                                        else -> Color(0x2614191F)
+                                    },
+                                    CircleShape,
+                                )
+                                .clip(CircleShape)
+                                .background(Tokens.Panel2),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Text(
-                                if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
-                                fontSize = 12.sp, color = Tokens.InkDim,
+                                profile.emoji, fontSize = 15.sp,
+                                fontFamily = if (profile.isGm) GowunBatang else null,
+                                color = if (profile.isGm) Tokens.SignatureInk else Tokens.Ink,
                             )
                         }
-                        inner()
+                        Text(
+                            profile.name, fontSize = 10.sp,
+                            color = if (on) Tokens.SignatureInk else Tokens.InkDim,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                        )
                     }
-                },
-            )
-            Box(
-                Modifier.size(38.dp).clip(RoundedCornerShape(13.dp))
-                    .background(if (input.isNotBlank()) theme else theme.copy(alpha = .35f))
-                    .clickable(enabled = input.isNotBlank()) {
-                        val text = input
-                        val ooc = oocOn
-                        input = ""
-                        errorMessage = null
-                        // 전송 실패 시 입력을 복원해 무통보 소실을 막는다 (P1-5).
-                        // 단 본문이 이미 올라갔으면 복원하지 않는다 — 재전송 시 2건이 된다 (N3)
-                        onSend(text, ooc) { textOk, diceOk ->
-                            when {
-                                !textOk -> {
-                                    // 늦게 도착한 실패 콜백이 새로 친 글을 덮지 않도록 (N3)
-                                    if (input.isEmpty()) {
-                                        input = text
-                                        oocOn = ooc
-                                    }
-                                    errorMessage = "전송에 실패했습니다 — 네트워크를 확인해주세요"
+                }
+                item {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(
+                            Modifier.size(36.dp)
+                                .border(1.dp, Color(0x4714191F), CircleShape)
+                                .clip(CircleShape)
+                                .clickable(onClick = onAddProfile),
+                            contentAlignment = Alignment.Center,
+                        ) { Text("＋", color = Tokens.InkDim, fontSize = 15.sp) }
+                        Text("추가", fontSize = 10.sp, color = Tokens.InkDim)
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(999.dp))
+                        .background(if (oocOn) Color(0x47FFD05C) else Color(0x0D14191F))
+                        .border(
+                            1.dp,
+                            if (oocOn) Color(0x8CC89E34) else Tokens.Line,
+                            RoundedCornerShape(999.dp),
+                        )
+                        .clickable { oocOn = !oocOn }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "잡담", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        color = if (oocOn) Color(0xFF7A5B12) else Tokens.InkDim,
+                    )
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.weight(1f)
+                        .onPreviewKeyEvent { event ->
+                            // PC는 Ctrl+Enter로 바로 전송 (모바일과 동일 규칙)
+                            if (event.type == KeyEventType.KeyDown &&
+                                event.key == Key.Enter &&
+                                event.isCtrlPressed &&
+                                input.isNotBlank()
+                            ) {
+                                doSend()
+                                true
+                            } else false
+                        }
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x0D14191F))
+                        .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Tokens.Ink, fontSize = 13.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.SignatureRing),
+                    maxLines = 4,
+                    decorationBox = { inner ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) {
+                                if (input.isEmpty()) {
+                                    Text(
+                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
+                                        fontSize = 12.sp, color = Tokens.InkDim,
+                                    )
                                 }
-                                !diceOk -> errorMessage = "메시지는 전송됐지만 다이스 결과 전송에 실패했습니다"
+                                inner()
+                            }
+                            if (input.isEmpty()) {
+                                Text("Ctrl+Enter 전송", fontSize = 10.sp, color = Color(0x5914191F))
                             }
                         }
                     },
-                contentAlignment = Alignment.Center,
-            ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
-        }
-        errorMessage?.let { message ->
-            Text(
-                message,
-                fontSize = 11.sp,
-                color = Color(0xFFF2A1A8),
-                modifier = Modifier.padding(top = 4.dp),
-            )
+                )
+                Box(
+                    Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (input.isNotBlank()) theme else theme.copy(alpha = .35f))
+                        .clickable(enabled = input.isNotBlank()) { doSend() },
+                    contentAlignment = Alignment.Center,
+                ) { Text("➤", fontSize = 15.sp, color = Color.White) }
+            }
+            errorMessage?.let { message ->
+                Text(
+                    message,
+                    fontSize = 11.sp,
+                    color = Tokens.Danger,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
     }
 }
@@ -917,7 +976,8 @@ private fun InputZone(
 @Composable
 private fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Box(
-        Modifier.fillMaxSize().background(Color(0x99000000)).clickable(onClick = onDismiss),
+        // 라이트 모드 딤 — rgba(30,35,45,.38) (목업 mockup-message-actions)
+        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -942,11 +1002,11 @@ private fun OverlayField(value: String, onChange: (String) -> Unit, placeholder:
         onValueChange = onChange,
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = .06f))
+            .background(Color(0x0A14191F))
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
             .padding(horizontal = 13.dp, vertical = 11.dp),
         textStyle = androidx.compose.ui.text.TextStyle(color = Tokens.Ink, fontSize = 14.sp),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.Signature),
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.SignatureRing),
         singleLine = true,
         decorationBox = { inner ->
             Box {
@@ -972,12 +1032,12 @@ private fun YellowButton(label: String, modifier: Modifier = Modifier, onClick: 
 private fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier.clip(RoundedCornerShape(999.dp))
-            .border(1.dp, Tokens.Line, RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = .06f))
+            .border(1.dp, Color(0x4014191F), RoundedCornerShape(999.dp))
+            .background(Tokens.Panel)
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 12.sp, color = Tokens.InkDim)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
     }
 }
 
@@ -989,7 +1049,7 @@ private fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> Un
         OverlayField(code, { code = it; failed = false }, "초대 코드 (6자리)")
         if (failed) {
             Spacer(Modifier.height(8.dp))
-            Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 12.sp, color = Color(0xFFF2A1A8))
+            Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 12.sp, color = Tokens.Danger)
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1058,8 +1118,9 @@ private fun SwatchRow(presets: List<Long>, selected: Long, onSelect: (Long) -> U
         presets.forEach { color ->
             val on = selected == color
             Box(
-                Modifier.size(30.dp)
-                    .border(2.dp, if (on) Color.White else Color.Transparent, CircleShape)
+                Modifier.size(32.dp)
+                    // 밝은 다이얼로그 위 선택 표시는 잉크색 아웃라인 (라이트 목업 03장)
+                    .border(2.dp, if (on) Tokens.Ink else Color.Transparent, CircleShape)
                     .clip(CircleShape)
                     .background(Color(color))
                     .clickable { onSelect(color) },
@@ -1073,7 +1134,7 @@ private fun SwatchRow(presets: List<Long>, selected: Long, onSelect: (Long) -> U
 private fun CodeOverlay(code: String, onDismiss: () -> Unit) {
     OverlayScaffold("초대 코드", onDismiss) {
         Text(
-            code, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Tokens.Signature,
+            code, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))

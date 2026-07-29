@@ -23,22 +23,28 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import com.pbp.desktop.logic.PbpMarkup
 
-/** 디자인 토큰 (docs/PbP-design-spec.md 2장, 다크 모드) — 모바일과 동일 값 */
+/**
+ * 디자인 토큰 — 기본 디자인은 라이트 모드 (docs/PbP-design-spec.md 0장,
+ * trpg-app-mockup-pc-light.html). 색 값은 모바일 PbpLightColors와 동일.
+ */
 object Tokens {
-    val Bg = Color(0xFF0D1117)
-    val Panel = Color(0xFF161C24)
-    val Panel2 = Color(0xFF1D2530)
-    val Line = Color(0x14FFFFFF)
-    val Ink = Color(0xFFE8ECF2)
-    val InkDim = Color(0xFF8B95A5)
-    val Signature = Color(0xFFFFD972)
-    val ChatterBubble = Color(0x24FFFFFF)
-    val ChatterInk = Color(0x9EFFFFFF)
+    val Bg = Color(0xFFF4F2EC)
+    val Panel = Color(0xFFFFFFFF)
+    val Panel2 = Color(0xFFF7F4EC)
+    val Line = Color(0x1414191F)
+    val Ink = Color(0xFF23272E)
+    val InkDim = Color(0xFF6E7683)
+    val Signature = Color(0xFFFFD05C)     // 면(버튼 배경)용 — 옐로 텍스트 금지
+    val SignatureRing = Color(0xFFE0B13E) // 링·테두리용 진한 골드
+    val SignatureInk = Color(0xFFA3781A)  // 밝은 배경 위 옐로 '텍스트'용
+    val Danger = Color(0xFFC94F4F)
+    val ChatterBubble = Color(0x0F141920)
+    val ChatterInk = Color(0x9923272E)
     val BubbleInk = Color(0xFF10151C)
-    val NarrInk = Color(0xFFF0EAD8)
-    val NarrBg = Color(0x73060A0E)
-    val VeilTop = Color(0x9E0A0E14)
-    val VeilMid = Color(0x470A0E14)
+    val NarrInk = Color(0xFF3D3628)
+    val NarrBg = Color(0xB3FFFFFF)
+    val VeilTop = Color(0x8CF4F2EC)
+    val VeilMid = Color(0x40F4F2EC)
 
     val themePresets = listOf(
         0xFF8EC5E8 to "새벽 하늘", 0xFFC9A7E8 to "라일락", 0xFFE8B48E to "호박등",
@@ -54,6 +60,22 @@ object Tokens {
         "preset_ember" to (0xFF3A1F22 to 0xFF140B0C),
     )
     const val gmQuoteBubble = 0xFFE7E2D4
+
+    /** 다크용 밝은 이름색 → 라이트 진한 색 치환 — 모바일 PbpPalette.nameColorForLight와 동일 */
+    private val nameColorLightMap = mapOf(
+        0xFFFFC46B to 0xFFC07B1F,
+        0xFF8EC5E8 to 0xFF33719C,
+        0xFFFFD972 to 0xFF8A6D1C,
+    )
+
+    fun nameColorForLight(argb: Long): Long = nameColorLightMap[argb] ?: darken(argb, 0.55f)
+
+    private fun darken(argb: Long, factor: Float): Long {
+        val r = ((argb shr 16 and 0xFF) * factor).toInt()
+        val g = ((argb shr 8 and 0xFF) * factor).toInt()
+        val b = ((argb and 0xFF) * factor).toInt()
+        return 0xFF000000 or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong()
+    }
 }
 
 /** 서술(내레이션)용 명조 — Gowun Batang 번들 */

@@ -2,7 +2,7 @@
   "name": "pbp-functions",
   "description": "PbP FCM push notifications",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {

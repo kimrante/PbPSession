@@ -164,6 +164,29 @@ class PbpRepository(private val db: AppDatabase) {
         syncManager?.pushDelete(remoteRoom, remoteMessage)
     }
 
+    /**
+     * 방 로그 전체 리셋 — 로컬·서버의 모든 메시지를 삭제한다.
+     * 서버 문서가 지워지면 상대 기기의 리스너(REMOVED)가 상대 로그도 지운다.
+     * @return 서버 삭제까지 성공했는지 (로컬 전용 방이면 true)
+     */
+    suspend fun resetLogs(roomId: Long): Boolean {
+        val room = db.roomDao().get(roomId) ?: return false
+        db.messageDao().deleteForRoom(roomId)
+        val serverOk = room.remoteId?.let { remoteId ->
+            syncManager?.wipeMessages(remoteId) ?: false
+        } ?: true
+        // 리셋 흔적을 양쪽에 남긴다 (서버 삭제가 끝난 뒤에 보내야 함께 지워지지 않는다)
+        val notice = Message(
+            roomId = roomId,
+            type = MessageType.SYSTEM,
+            body = "방 로그가 초기화되었습니다",
+            createdAt = System.currentTimeMillis(),
+        )
+        val inserted = notice.copy(id = db.messageDao().insert(notice))
+        pushIfSynced(roomId, listOf(inserted))
+        return serverOk
+    }
+
     suspend fun saveProfile(profile: CharacterProfile) {
         if (profile.id == 0L) db.profileDao().insert(profile) else db.profileDao().update(profile)
     }

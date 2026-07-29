@@ -82,6 +82,11 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
     fun share(onResult: (String?) -> Unit) = viewModelScope.launch {
         onResult(app.syncManager.shareRoom(roomId))
     }
+
+    /** 방 로그 전체 리셋 — 로컬·서버·상대 로그까지 삭제 */
+    fun resetLogs(onResult: (Boolean) -> Unit) = viewModelScope.launch {
+        onResult(repo.resetLogs(roomId))
+    }
 }
 
 @Composable
@@ -95,6 +100,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     val room by vm.room.collectAsState()
     var showCustomTheme by remember { mutableStateOf(false) }
     var shareCode by remember { mutableStateOf<String?>(null) }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) vm.importBackground(it)
@@ -259,8 +265,39 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 title = "알림",
                 subtitle = "미확인 메시지 도착 시 푸시 · 본문은 표시되지 않습니다",
             ) { }
+            SettingRow(
+                title = "방 로그 초기화",
+                subtitle = "모든 메시지를 삭제합니다 · 상대방의 로그도 함께 삭제됩니다",
+            ) { showResetConfirm = true }
             Spacer(Modifier.height(PbpDimens.sp6))
         }
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            title = { Text("방 로그 초기화") },
+            text = {
+                Text(
+                    "이 방의 모든 메시지가 삭제됩니다.\n" +
+                        "공유된 방이면 서버와 상대방의 로그도 전부 삭제되며, 되돌릴 수 없습니다."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showResetConfirm = false
+                    vm.resetLogs { ok ->
+                        Toast.makeText(
+                            context,
+                            if (ok) "방 로그를 초기화했습니다"
+                            else "로컬 로그는 지웠지만 서버 삭제에 실패했습니다. 네트워크를 확인해주세요.",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }) { Text("전부 삭제", color = Color(0xFFFF6B6B)) }
+            },
+            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("취소") } },
+        )
     }
 
     if (showCustomTheme) {

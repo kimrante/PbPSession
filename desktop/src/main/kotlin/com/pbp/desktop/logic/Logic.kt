@@ -185,11 +185,30 @@ object ProfileStats {
         }
         return plain to marked
     }
+
+    /** 채팅 팔레트 추천 — 모바일 ProfileStats.paletteSuggestions와 동일 규칙 */
+    fun paletteSuggestions(query: String, stats: Map<String, String>): List<String> {
+        val q = query.trim()
+        if (q.isEmpty() || q.length > 12 || q.any { it.isWhitespace() }) return emptyList()
+        return sanitize(stats).entries
+            .filter { (name, value) ->
+                value.trim().toIntOrNull() != null && name.contains(q, ignoreCase = true)
+            }
+            .sortedByDescending { it.key.startsWith(q, ignoreCase = true) }
+            .map { it.key }
+            .distinct()
+            .take(6)
+    }
 }
 
 /** 판정 등급 — 안드로이드 Rules와 동일 규칙 (COC7 하향 판정의 성공 단계) */
 object Rules {
     const val COC7 = "coc7"
+
+    /** 룰별 판정 매크로 — 모바일 Rules.judgeCommand와 동일 */
+    fun judgeCommand(rule: String, statName: String): String = when (rule) {
+        else -> "1d100<={$statName}"
+    }
 
     fun judgeOutcome(rule: String, result: DiceBot.Result): String? {
         val success = result.success ?: return null

@@ -212,8 +212,7 @@ private fun App() {
                             sender = Profile(name = "다이스봇", emoji = "🎲"),
                             isOoc = false, authorUid = authorUid(),
                             diceExpr = "${sender.name} · ${command.expr}", isBot = true,
-                            // 방 룰은 데스크톱 config에 없으므로 기본 COC7 기준 (모바일과 동일 규칙)
-                            diceOutcome = Rules.judgeOutcome(Rules.COC7, result),
+                            diceOutcome = Rules.judgeOutcome(room.rule ?: Rules.COC7, result),
                         ),
                     )
                 }
@@ -291,6 +290,7 @@ private fun App() {
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
                             backgroundKey = meta.backgroundKey, isMaster = false,
+                            rule = meta.rule,
                         )
                         if (existing == null) rooms = rooms + joined
                         selected = joined
@@ -302,10 +302,10 @@ private fun App() {
         )
         OverlayKind.CreateRoom -> CreateOverlay(
             onDismiss = { overlay = null },
-            onCreate = { name, icon ->
+            onCreate = { name ->
                 scope.launch(Dispatchers.IO) {
                     val code = inviteCode()
-                    val meta = firestore.createRoom(name.ifBlank { "새 세션" }, icon.ifBlank { "🎲" }, code)
+                    val meta = firestore.createRoom(name.ifBlank { "새 세션" }, code, "coc7")
                     if (meta != null) {
                         firestore.ensureMember(meta.remoteId)
                         // 매핑 생성 실패 = 아무도 참가할 수 없는 초대코드 — 알린다 (C13)
@@ -316,6 +316,7 @@ private fun App() {
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
                             backgroundKey = meta.backgroundKey, isMaster = true,
+                            rule = meta.rule ?: "coc7",
                         )
                         rooms = rooms + joined
                         selected = joined
@@ -467,7 +468,7 @@ private fun LeftPane(
                                     )
                                 ),
                             contentAlignment = Alignment.Center,
-                        ) { Text(room.icon, fontSize = 17.sp) }
+                        ) { /* 방 아이콘 폐지 — 배경으로만 구분 */ }
                         Box(
                             Modifier.size(14.dp)
                                 .align(Alignment.BottomEnd)
@@ -561,10 +562,9 @@ private fun ChatPane(
                     }
                 }
                 GhostButton("초대 코드", Modifier, onShowCode)
-                if (room.isMaster) {
-                    Spacer(Modifier.width(8.dp))
-                    GhostButton("방 설정", Modifier, onOpenSettings)
-                }
+                // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
+                Spacer(Modifier.width(8.dp))
+                GhostButton("방 설정", Modifier, onOpenSettings)
             }
 
             // 메시지 목록 — 최신 메시지가 바뀔 때만, 바닥 근처를 보고 있을 때만 따라간다
@@ -589,10 +589,16 @@ private fun ChatPane(
                     state = listState,
                     modifier = Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(messages, key = { it.docId }) { message ->
-                        MessageBlock(message, deviceId, room, avatarCache, firestore)
+                    // 같은 인물의 연속 메시지는 아바타·이름 생략 + 간격 축소 (모바일과 동일)
+                    items(messages.size, key = { messages[it].docId }) { index ->
+                        val message = messages[index]
+                        val grouped = isContinuation(messages.getOrNull(index - 1), message)
+                        Box(
+                            Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
+                        ) {
+                            MessageBlock(message, deviceId, room, avatarCache, firestore, grouped)
+                        }
                     }
                 }
             }
@@ -617,6 +623,7 @@ private fun MessageBlock(
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
+    grouped: Boolean = false,
 ) {
     when {
         message.type == "SYSTEM" -> {
@@ -658,7 +665,25 @@ private fun MessageBlock(
                 }
             }
         }
-        message.senderIsGm && !message.isOoc -> {
+        // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 '이름 : 내용',
+        // 배경은 그 캐릭터의 말풍선 색 반투명 (모바일과 동일)
+        message.isOoc -> {
+            val chatterColor = Color(message.senderBubbleColor ?: Tokens.bubblePresets.first())
+                .copy(alpha = .55f)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.clip(RoundedCornerShape(999.dp)).background(chatterColor)
+                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        "${message.senderName ?: ""} : ${message.body}",
+                        fontSize = 10.sp,
+                        color = Tokens.BubbleInk.copy(alpha = .85f),
+                    )
+                }
+            }
+        }
+        message.senderIsGm -> {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 GmSpeech.split(message.body).forEach { part ->
                     when (part) {
@@ -677,21 +702,34 @@ private fun MessageBlock(
             // 캐릭터 발화도 GM과 같은 규칙 — 문장 중간의 " " 대사만 인용 말풍선으로 분리
             val parts = GmSpeech.split(message.body)
             if (parts.size <= 1) {
-                BubbleRow(message, deviceId, room, avatarCache, firestore)
+                BubbleRow(
+                    message, deviceId, room, avatarCache, firestore,
+                    showHeader = !grouped,
+                )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    parts.forEach { part ->
+                    parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message, deviceId = deviceId, room = room,
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text(),
                             quoteBubble = part is GmSpeech.Part.Quote,
+                            showHeader = !grouped && index == 0,
+                            showTime = index == parts.lastIndex,
                         )
                     }
                 }
             }
         }
     }
+}
+
+/** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 (모바일과 동일 규칙) */
+private fun isContinuation(prev: Message?, current: Message): Boolean {
+    if (prev == null) return false
+    fun isBubble(m: Message) = m.type == "TEXT" && !m.senderIsGm && !m.isOoc
+    if (!isBubble(prev) || !isBubble(current)) return false
+    return prev.senderName == current.senderName && prev.authorUid == current.authorUid
 }
 
 private fun GmSpeech.Part.text(): String = when (this) {
@@ -707,17 +745,11 @@ private fun NarrationBlock(message: Message, text: String) {
             .background(Tokens.NarrBg)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
+        // 서술은 문단 자체가 화면 — 서술자·시간 등 메타 표기는 두지 않는다 (모바일과 동일)
         MarkupText(
             text = text, fontSize = 13.sp, color = Tokens.NarrInk,
             rubyColor = Tokens.SignatureInk, fontFamily = GowunBatang, lineHeight = 24.sp,
         )
-        Spacer(Modifier.height(8.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val gmLabel = message.senderName?.let { if (it.startsWith("GM")) it else "GM $it" } ?: "GM"
-            Text("$gmLabel · 서술", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk)
-            Spacer(Modifier.width(6.dp))
-            Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
-        }
     }
 }
 
@@ -733,6 +765,8 @@ private fun BubbleRow(
     overrideBubbleColor: Long? = null,
     /** 이 조각이 대사(인용)임을 호출부가 이미 판정한 경우 */
     quoteBubble: Boolean = false,
+    showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
+    showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
 ) {
     val mine = message.authorUid == deviceId && overrideName == null
     val body = overrideBody ?: message.body
@@ -761,13 +795,25 @@ private fun BubbleRow(
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!mine) MessageAvatar(message, room, avatarCache, firestore)
+            if (mine && showTime) {
+                // 내 메시지: 시간은 말풍선 왼쪽 (모바일과 동일)
+                TimeStamp(message, Modifier.align(Alignment.Bottom))
+            }
+            if (!mine) {
+                if (showHeader) {
+                    MessageAvatar(message, room, avatarCache, firestore)
+                } else {
+                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
+                }
+            }
             Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-                Text(
-                    overrideName ?: message.senderName ?: "",
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold, color = nameColor,
-                )
-                Spacer(Modifier.height(4.dp))
+                if (showHeader) {
+                    Text(
+                        overrideName ?: message.senderName ?: "",
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold, color = nameColor,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
                 val shape = if (mine) {
                     RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
                 } else {
@@ -816,16 +862,30 @@ private fun BubbleRow(
                         }
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
-                    if (message.editedAt != null) {
-                        Spacer(Modifier.width(4.dp))
-                        Text("(수정됨)", fontSize = 10.sp, color = Tokens.InkDim)
-                    }
+            }
+            if (!mine && showTime) {
+                // 남의 메시지: 시간은 말풍선 오른쪽 (모바일과 동일)
+                TimeStamp(message, Modifier.align(Alignment.Bottom))
+            }
+            if (mine) {
+                if (showHeader) {
+                    MessageAvatar(message, room, avatarCache, firestore)
+                } else {
+                    Box(Modifier.size(38.dp)) // 연속 메시지 — 자리만 유지
                 }
             }
-            if (mine) MessageAvatar(message, room, avatarCache, firestore)
         }
+    }
+}
+
+/** 말풍선 곁 시간 + (수정됨) — 모바일 TimeStamp와 동일 */
+@Composable
+private fun TimeStamp(message: Message, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        if (message.editedAt != null) {
+            Text("(수정됨)", fontSize = 9.sp, color = Tokens.InkDim)
+        }
+        Text(formatTime(message.createdAt), fontSize = 10.sp, color = Tokens.InkDim)
     }
 }
 
@@ -1005,6 +1065,36 @@ private fun InputZone(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름 부분 입력 시 판정 매크로 (모바일과 동일)
+            val activeStats = profiles.getOrNull(room.activeProfileIndex)?.stats ?: emptyMap()
+            val suggestions = ProfileStats.paletteSuggestions(input, activeStats)
+            if (suggestions.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    suggestions.forEach { name ->
+                        Text(
+                            "$name 판정",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Tokens.SignatureInk,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Color(0x2EFFD05C))
+                                .border(1.dp, Color(0x66C89E34), RoundedCornerShape(999.dp))
+                                .clickable {
+                                    val command =
+                                        Rules.judgeCommand(room.rule ?: Rules.COC7, name)
+                                    input = ""
+                                    errorMessage = null
+                                    onSend("$command $name 판정", false) { textOk, _ ->
+                                        if (!textOk) errorMessage = "판정 전송에 실패했습니다"
+                                    }
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     Modifier.clip(RoundedCornerShape(999.dp))
@@ -1170,18 +1260,18 @@ private fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> Un
 }
 
 @Composable
-private fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String, String) -> Unit) {
+private fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    var icon by remember { mutableStateOf("") }
     OverlayScaffold("새 세션", onDismiss) {
         OverlayField(name, { name = it }, "방 이름")
-        Spacer(Modifier.height(10.dp))
-        OverlayField(icon, { icon = it }, "아이콘 (이모지, 비우면 🎲)")
         Spacer(Modifier.height(8.dp))
+        // 방 아이콘 폐지 — 배경으로만 구분. TRPG 룰은 크툴루의 부름 7판 고정 (모바일과 동일)
+        Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 12.sp, color = Tokens.Ink)
+        Spacer(Modifier.height(4.dp))
         Text("방을 만들면 마스터 권한과 초대 코드가 부여됩니다.", fontSize = 12.sp, color = Tokens.InkDim)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            YellowButton("만들기", Modifier.weight(1f)) { onCreate(name, icon) }
+            YellowButton("만들기", Modifier.weight(1f)) { onCreate(name) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }

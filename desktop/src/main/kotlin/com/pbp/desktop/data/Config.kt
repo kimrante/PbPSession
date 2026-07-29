@@ -25,6 +25,8 @@ data class JoinedRoom(
     var backgroundKey: String,
     val isMaster: Boolean,
     var activeProfileIndex: Int = 0,
+    /** 방의 TRPG 룰 — 판정 매크로·판정 등급 기준. 구 config에는 없어 null 허용 */
+    val rule: String? = null,
 )
 
 /** ~/.pbp-desktop/config.json — 기기 ID, 프로필, 참여한 방 목록 */

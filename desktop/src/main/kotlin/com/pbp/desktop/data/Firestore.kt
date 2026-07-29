@@ -37,6 +37,7 @@ data class RoomMeta(
     val inviteCode: String?,
     val themeColor: Long,
     val backgroundKey: String,
+    val rule: String? = null,
 )
 
 /**
@@ -335,17 +336,18 @@ class FirestoreRest(
     private fun roomMeta(doc: JsonObject) = RoomMeta(
         remoteId = doc.docId(),
         name = doc.str("name") ?: "이름 없는 방",
-        icon = doc.str("icon") ?: "🎲",
+        icon = "", // 방 아이콘 폐지 — 배경으로만 구분 (모바일과 동일)
         inviteCode = doc.str("inviteCode"),
         themeColor = doc.long("themeColor") ?: 0xFF8EC5E8,
         backgroundKey = doc.str("backgroundKey") ?: "preset_lighthouse",
+        rule = doc.str("rule"),
     )
 
-    fun createRoom(name: String, icon: String, inviteCode: String): RoomMeta? {
+    fun createRoom(name: String, inviteCode: String, rule: String): RoomMeta? {
         val body = fields(
             mapOf(
-                "name" to name, "icon" to icon, "createdAt" to System.currentTimeMillis(),
-                "inviteCode" to inviteCode,
+                "name" to name, "icon" to "", "createdAt" to System.currentTimeMillis(),
+                "inviteCode" to inviteCode, "rule" to rule,
                 "themeColor" to 0xFF8EC5E8, "backgroundKey" to "preset_lighthouse",
             )
         )

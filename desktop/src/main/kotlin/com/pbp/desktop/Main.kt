@@ -145,7 +145,6 @@ fun main() = application {
 
 @Composable
 private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
-    // 파일 읽기+쓰기라 UI 스레드에서 하면 첫 프레임이 지연된다 — 별도 스레드에서 로드 (C8)
     val config = remember { runBlockingIo { AppConfig.load() } }
     val firestore = remember {
         FirestoreRest(

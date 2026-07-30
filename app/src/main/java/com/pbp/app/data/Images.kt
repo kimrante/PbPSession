@@ -12,6 +12,21 @@ import java.util.UUID
  * 원본(수 MB)을 그대로 복사하면 아바타(24~92dp) 렌더링마다 풀사이즈 디코딩이
  * 일어나므로, 가져오는 시점에 용도별 최대 크기로 줄인다.
  */
+/**
+ * 이미지 축소 크기(긴 변, px) — 여러 화면에 흩어져 있던 리터럴을 한 곳에 (리뷰 D5).
+ * AVATAR_UPLOAD는 와이어 정합 필수라 Protocol에서 가져온다.
+ */
+object ImageSizes {
+    /** 프로필·오너 이미지 로컬 저장 */
+    const val PROFILE = 512
+    /** 방 배경 로컬 저장 */
+    const val BACKGROUND = 1600
+    /** 크롭 편집기가 읽어들이는 원본 상한 */
+    const val CROP_SOURCE = 2048
+    /** 동기화 업로드용 축소 — 양 클라이언트 동일해야 해시가 같다 */
+    const val AVATAR_UPLOAD = com.pbp.shared.Protocol.AVATAR_MAX_PX
+}
+
 object Images {
 
     /**

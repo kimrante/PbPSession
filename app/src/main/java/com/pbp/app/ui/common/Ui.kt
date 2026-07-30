@@ -430,6 +430,33 @@ fun HexColorDialog(
     )
 }
 
+/**
+ * 클립보드의 ccfolia식 캐릭터 코드를 읽어 생성하고 결과를 토스트로 알린다 (리뷰 C1).
+ * 채팅 화면·프로필 관리 두 진입점이 같은 문구·같은 동작을 쓰도록 한 곳에 둔다.
+ */
+fun importCharacterFromClipboard(
+    context: android.content.Context,
+    onImported: (com.pbp.shared.CharacterCodec.Imported) -> Unit,
+) {
+    val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as android.content.ClipboardManager)
+        .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+    val imported = clip?.let { com.pbp.shared.CharacterCodec.parse(it) }
+    if (imported != null) {
+        onImported(imported)
+        android.widget.Toast.makeText(
+            context,
+            "'${imported.name}' 캐릭터를 만들었습니다 (값 ${imported.stats.size}개)",
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    } else {
+        android.widget.Toast.makeText(
+            context, "클립보드에서 캐릭터 코드를 찾지 못했습니다",
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
 /** 캐릭터 추가 방식 선택 — 신규 작성이 위, 클립보드 코드가 아래 (프로필 관리 요구) */
 @Composable
 fun AddProfileDialog(

@@ -76,6 +76,7 @@ import com.pbp.app.export.LogExporter
 import com.pbp.shared.GmSpeech
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
+import com.pbp.app.ui.common.importCharacterFromClipboard
 import com.pbp.app.ui.common.MarkupText
 import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.dashedBorder
@@ -157,15 +158,8 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     fun delete(message: Message) = viewModelScope.launch { repo.deleteMessage(message) }
 
-    /** 클립보드의 ccfolia식 캐릭터 코드로 새 캐릭터 생성 */
-    fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) = viewModelScope.launch {
-        repo.saveProfile(
-            CharacterProfile(
-                name = imported.name,
-                stats = com.pbp.shared.ProfileStats.encode(imported.stats),
-            )
-        )
-    }
+    fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
+        viewModelScope.launch { repo.createFromCode(imported) }
 
     fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
         val ok = withContext(Dispatchers.IO) {
@@ -427,24 +421,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
             },
             onClipboard = {
                 showAddProfile = false
-                val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                        as android.content.ClipboardManager)
-                    .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                val imported = clip?.let { com.pbp.shared.CharacterCodec.parse(it) }
-                if (imported != null) {
-                    vm.createFromCode(imported)
-                    Toast.makeText(
-                        context,
-                        "'${imported.name}' 캐릭터를 만들었습니다 (값 ${imported.stats.size}개)",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    Toast.makeText(
-                        context,
-                        "클립보드에서 캐릭터 코드를 찾지 못했습니다",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
+                importCharacterFromClipboard(context) { vm.createFromCode(it) }
             },
         )
     }
@@ -1180,8 +1157,6 @@ private fun MessageActionRow(
         }
     }
 }
-
-// AddProfileDialog는 프로필 관리(방 목록)와 공용 — ui/common/Ui.kt로 이동
 
 @Composable
 private fun EditMessageDialog(

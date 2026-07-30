@@ -834,7 +834,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 긴 변 256px 이하로 축소 (Firestore 1MB 문서 제한을 넉넉히 하회).
      * 투명 영역이 있으면 PNG, 아니면 JPEG — JPEG는 알파를 검정으로 채운다.
      */
-    private fun downscaleToJpeg(path: String, maxSize: Int = Protocol.AVATAR_MAX_PX): ByteArray? {
+    private fun downscaleToJpeg(path: String, maxSize: Int = com.pbp.app.data.ImageSizes.AVATAR_UPLOAD): ByteArray? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

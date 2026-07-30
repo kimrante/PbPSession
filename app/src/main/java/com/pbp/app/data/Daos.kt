@@ -68,9 +68,6 @@ data class RemoteMessageRow(val remoteId: String, val body: String, val editedAt
 
 @Dao
 interface ProfileDao {
-    @Query("SELECT * FROM profiles WHERE roomId IS NULL ORDER BY name")
-    fun observeGlobal(): Flow<List<CharacterProfile>>
-
     /** 프로필 관리 목록 — 전역·방 귀속(GM 포함) 전부 */
     @Query("SELECT * FROM profiles ORDER BY isGm DESC, name")
     fun observeAllProfiles(): Flow<List<CharacterProfile>>

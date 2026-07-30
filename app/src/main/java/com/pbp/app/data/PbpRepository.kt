@@ -16,14 +16,22 @@ class PbpRepository(private val db: AppDatabase) {
     fun observeRoom(id: Long) = db.roomDao().observe(id)
     fun observeLastMessages() = db.messageDao().observeLastPerRoom()
     fun observeUnreadCounts() = db.messageDao().observeUnreadCounts()
-    fun observeMessages(roomId: Long) = db.messageDao().observeForRoom(roomId)
     fun observeLatestMessages(roomId: Long, limit: Int) =
         db.messageDao().observeLatestForRoom(roomId, limit)
     fun observeMessageCount(roomId: Long) = db.messageDao().observeCount(roomId)
     suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
-    fun observeGlobalProfiles() = db.profileDao().observeGlobal()
     fun observeAllProfiles() = db.profileDao().observeAllProfiles()
+
+    /** 클립보드에서 가져온 ccfolia 캐릭터를 전역 프로필로 등록 (리뷰 C1) */
+    suspend fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) {
+        saveProfile(
+            CharacterProfile(
+                name = imported.name,
+                stats = ProfileStats.encode(imported.stats),
+            )
+        )
+    }
 
     /**
      * 방을 만든다. 마스터면 방에 귀속된 GM 프로필을 함께 생성해 기본 발화 프로필로,

@@ -75,7 +75,7 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
 
     fun importBackground(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
         // 배경은 최대 1600px로 축소 저장
-        Images.importDownscaled(app, uri, "backgrounds", maxSize = 1600)
+        Images.importDownscaled(app, uri, "backgrounds", maxSize = com.pbp.app.data.ImageSizes.BACKGROUND)
             ?.let { repo.setBackground(roomId, it) }
     }
 

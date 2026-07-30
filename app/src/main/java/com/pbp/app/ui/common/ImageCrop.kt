@@ -68,7 +68,7 @@ fun ImageCropDialog(
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     LaunchedEffect(uri) {
-        bitmap = withContext(Dispatchers.IO) { loadBitmap(context, uri, maxSize = 2048) }
+        bitmap = withContext(Dispatchers.IO) { loadBitmap(context, uri, maxSize = com.pbp.app.data.ImageSizes.CROP_SOURCE) }
     }
 
     val source = bitmap
@@ -162,7 +162,7 @@ private fun cropToFile(
     zoom: Float,
     offset: Offset,
 ): String? = runCatching {
-    val outSize = 512
+    val outSize = com.pbp.app.data.ImageSizes.PROFILE
     val k = outSize / cropPx
     val baseScale = cropPx / minOf(source.width, source.height)
     val total = baseScale * zoom

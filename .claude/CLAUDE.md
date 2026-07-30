@@ -4,6 +4,15 @@ Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-s
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
+## 0. 디자인 원칙 (사용자 지정, 2026-07-29)
+
+디자인 시안·목업을 만들 때 특별한 사유가 없는 한:
+
+- **센터 정렬을 기본**으로 한다 (대부분의 매체).
+- **패딩·마진의 위아래 간격은 항상 동일**하게 제한한다 (상하 비대칭 금지).
+- **비슷한 항목들끼리는 여백 설정값이 달라선 안 된다** — 동류 컴포넌트는 같은 스페이싱 토큰을 공유.
+- 기본 디자인은 라이트 모드 (docs/PbP-design-spec.md 0장), 스페이싱 토큰은 docs/trpg-app-mockup-v2.html 0장.
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**

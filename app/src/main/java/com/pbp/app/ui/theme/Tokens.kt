@@ -129,15 +129,11 @@ object PbpDimens {
 
 /** 프리셋 팔레트 (목업 03·04 화면) */
 object PbpPalette {
-    /** 방 테마 컬러 7종 (+ 커스텀은 UI에서 별도 처리) */
+    /** 방 테마 컬러 3종 — 이름·말풍선과 같은 개수로 (+ 커스텀은 UI에서 별도 처리) */
     val themePresets = listOf(
         0xFF8EC5E8 to "새벽 하늘",
         0xFFC9A7E8 to "라일락",
         0xFFE8B48E to "호박등",
-        0xFF9FE0B8 to "이끼",
-        0xFFF2A1A8 to "동백",
-        0xFFE8D48E to "사금",
-        0xFFA8B4C8 to "잿빛",
     )
 
     // 팔레트 값·변환은 :shared Palette가 단일 출처 — 내보내기 색과 갈라지지 않게 (리뷰 A3)

@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
         // 내용(imePadding)만 밀어올린다
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         com.pbp.app.ui.theme.AppFonts.load(this)
+        com.pbp.app.data.OwnerProfile.load(this)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {

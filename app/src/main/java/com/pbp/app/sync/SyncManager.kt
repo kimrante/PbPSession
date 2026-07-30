@@ -300,6 +300,15 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             rule = roomDoc.getString("rule") ?: com.pbp.app.dice.Rules.COC7,
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
+        // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번)
+        val greeting = Message(
+            roomId = roomId,
+            type = com.pbp.app.data.MessageType.SYSTEM,
+            body = "'${com.pbp.app.data.OwnerProfile.name.ifBlank { "플레이어" }}' 님이 참여하셨습니다.",
+            createdAt = System.currentTimeMillis(),
+        )
+        val insertedGreeting = greeting.copy(id = db.messageDao().insert(greeting))
+        push(roomDoc.id, listOf(insertedGreeting))
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
         registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
         roomId

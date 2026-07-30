@@ -1,5 +1,8 @@
 package com.pbp.app.ui.roomlist
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,14 +60,18 @@ import androidx.navigation.NavController
 import com.pbp.app.PbpApp
 import com.pbp.app.R
 import com.pbp.app.data.ChatRoom
+import com.pbp.app.data.Images
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
+import com.pbp.app.data.OwnerProfile
 import com.pbp.app.dice.Rules
+import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -110,6 +118,8 @@ fun RoomListScreen(nav: NavController) {
     var showJoin by remember { mutableStateOf(false) }
     var showFont by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ChatRoom?>(null) }
+    // 오너 프로필 미설정이면 먼저 설정하게 한다 (첫 실행 포함)
+    var showOwner by remember { mutableStateOf(!OwnerProfile.isSet) }
 
     Scaffold(
         containerColor = tokens.bg,
@@ -154,6 +164,32 @@ fun RoomListScreen(nav: NavController) {
                     Text("진행 중인 세션 ${rooms.size}", fontSize = 11.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
+                // 오너 프로필 — 탭하여 편집 (미설정이면 진입 시 자동 팝업)
+                Box(
+                    Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(Color(OwnerProfile.color))
+                        .combinedClickable(onClick = { showOwner = true }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val ownerImage = OwnerProfile.imagePath
+                    if (ownerImage != null) {
+                        coil3.compose.AsyncImage(
+                            model = java.io.File(ownerImage),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        )
+                    } else {
+                        Text(
+                            OwnerProfile.name.take(1).ifEmpty { "?" },
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            color = Color(0xFF10151C),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(4.dp))
                 TextButton(onClick = { showFont = true }) {
                     Text("Aa", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
@@ -224,6 +260,13 @@ fun RoomListScreen(nav: NavController) {
 
     if (showFont) {
         FontSettingDialog(onDismiss = { showFont = false })
+    }
+
+    if (showOwner) {
+        OwnerProfileDialog(
+            forced = !OwnerProfile.isSet, // 미설정이면 저장 전에는 닫을 수 없다
+            onClose = { showOwner = false },
+        )
     }
 
     deleteTarget?.let { room ->
@@ -342,6 +385,147 @@ private fun previewText(message: Message?): String = when {
     message.type == MessageType.SYSTEM -> message.body
     message.type == MessageType.DICE -> "🎲 ${message.diceExpr} → ${message.body}"
     else -> "${message.senderName} · ${message.body}"
+}
+
+/**
+ * 오너 프로필 설정 — 이미지·이름·컬러만 (캐릭터 프로필 편집의 축소판).
+ * 잡담과 참여 인사에 쓰이는 '플레이어 본인' 프로필. forced면 저장 전 닫기 불가.
+ */
+@Composable
+private fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val tokens = Pbp.colors
+    var name by remember { mutableStateOf(OwnerProfile.name) }
+    var color by remember { mutableStateOf(OwnerProfile.color) }
+    var imagePath by remember { mutableStateOf(OwnerProfile.imagePath) }
+    var showCustomColor by remember { mutableStateOf(false) }
+    val imagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                Images.importDownscaled(context, uri, "owner", maxSize = 512)
+                    ?.let { imagePath = it }
+            }
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { if (!forced) onClose() },
+        title = { Text("오너 프로필") },
+        text = {
+            Column {
+                Text(
+                    "잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다. " +
+                        "세션 캐릭터 목록에는 나타나지 않습니다.",
+                    fontSize = 12.sp, color = tokens.inkDim,
+                )
+                Spacer(Modifier.height(PbpDimens.sp3))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Color(color)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val preview = imagePath
+                        if (preview != null) {
+                            coil3.compose.AsyncImage(
+                                model = java.io.File(preview),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            )
+                        } else {
+                            Text(
+                                name.take(1).ifEmpty { "?" },
+                                fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10151C),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(PbpDimens.sp3))
+                    TextButton(onClick = {
+                        imagePicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }) { Text(if (imagePath == null) "이미지 선택" else "이미지 변경") }
+                    if (imagePath != null) {
+                        TextButton(onClick = { imagePath = null }) { Text("제거") }
+                    }
+                }
+                Spacer(Modifier.height(PbpDimens.sp2))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("이름") },
+                    singleLine = true,
+                )
+                Spacer(Modifier.height(PbpDimens.sp3))
+                Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkDim)
+                Spacer(Modifier.height(PbpDimens.sp2))
+                Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+                    PbpPalette.bubblePresets.forEach { preset ->
+                        Box(
+                            Modifier
+                                .size(32.dp)
+                                .border(
+                                    2.dp,
+                                    if (color == preset) tokens.ink else Color.Transparent,
+                                    CircleShape,
+                                )
+                                .clip(CircleShape)
+                                .background(Color(preset))
+                                .combinedClickable(onClick = { color = preset }),
+                        )
+                    }
+                    // 커스텀 — 드래그 팔레트로
+                    Box(
+                        Modifier
+                            .size(32.dp)
+                            .border(
+                                2.dp,
+                                if (PbpPalette.bubblePresets.none { it == color }) tokens.ink
+                                else Color.Transparent,
+                                CircleShape,
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                Brush.sweepGradient(
+                                    listOf(
+                                        Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
+                                        Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
+                                    )
+                                )
+                            )
+                            .combinedClickable(onClick = { showCustomColor = true }),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = {
+                    OwnerProfile.set(context, name, color, imagePath)
+                    onClose()
+                },
+            ) { Text("저장") }
+        },
+        dismissButton = { if (!forced) TextButton(onClick = onClose) { Text("취소") } },
+    )
+    if (showCustomColor) {
+        HexColorDialog(
+            title = "오너 컬러 (커스텀)",
+            onDismiss = { showCustomColor = false },
+            onPick = { picked ->
+                color = picked
+                showCustomColor = false
+            },
+            initial = color,
+        )
+    }
 }
 
 /** 앱 전체 글꼴 선택 — 시스템 기본 / 고운 바탕(명조), 즉시 반영·유지 */

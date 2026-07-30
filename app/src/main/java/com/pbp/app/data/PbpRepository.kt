@@ -120,18 +120,20 @@ class PbpRepository(private val db: AppDatabase) {
         if (raw.isEmpty()) return
         // plain은 다이스 파싱용({은신}→50), body는 저장용({은신}→{{50}} 파란색 마커)
         val (plain, body) = ProfileStats.substitute(raw, ProfileStats.decode(sender.stats).toMap())
+        // 잡담은 극 밖의 대화 — 어떤 캐릭터(GM 포함)가 활성이든 오너 프로필로 나간다
+        val asOwner = isOoc && OwnerProfile.isSet
         val inserted = mutableListOf<Message>()
         db.withTransaction {
             val textMessage = Message(
                 roomId = roomId,
                 type = MessageType.TEXT,
                 body = body,
-                senderName = sender.name,
+                senderName = if (asOwner) OwnerProfile.name else sender.name,
                 senderEmoji = sender.emoji,
-                senderImagePath = sender.imagePath,
-                senderIsGm = sender.isGm,
-                senderNameColor = sender.nameColor,
-                senderBubbleColor = sender.bubbleColor,
+                senderImagePath = if (asOwner) OwnerProfile.imagePath else sender.imagePath,
+                senderIsGm = if (isOoc) false else sender.isGm,
+                senderNameColor = if (asOwner) OwnerProfile.color else sender.nameColor,
+                senderBubbleColor = if (asOwner) OwnerProfile.color else sender.bubbleColor,
                 isOoc = isOoc,
                 createdAt = System.currentTimeMillis(),
             )

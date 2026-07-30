@@ -174,7 +174,16 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var profiles by remember { mutableStateOf(config.profiles.toList()) }
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
-    var overlay by remember { mutableStateOf<OverlayKind?>(null) }
+    // 오너 프로필 — 미설정이면 먼저 설정하게 한다 (첫 실행 포함, 모바일과 동일)
+    var ownerName by remember { mutableStateOf(config.ownerName) }
+    var ownerColor by remember { mutableStateOf(config.ownerColor) }
+    var ownerImagePath by remember { mutableStateOf(config.ownerImagePath) }
+
+    var overlay by remember {
+        mutableStateOf<OverlayKind?>(
+            if (config.ownerName.isBlank()) OverlayKind.OwnerProfile else null
+        )
+    }
 
     // 내 메시지 길게 눌러 편집/삭제 — 앱과 동일 흐름 (팝업 → 편집/삭제)
     var messageAction by remember { mutableStateOf<Message?>(null) }
@@ -352,10 +361,18 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ?: return onResult(false, true)
         // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
         val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
+        // 잡담은 극 밖의 대화 — 어떤 캐릭터(GM 포함)가 활성이든 오너 프로필로 나간다
+        val effectiveSender = if (isOoc && ownerName.isNotBlank()) {
+            Profile(
+                name = ownerName, emoji = "🙂",
+                nameColor = ownerColor, bubbleColor = ownerColor,
+                isGm = false, imagePath = ownerImagePath,
+            )
+        } else sender
         lastLocalSendAt.set(System.currentTimeMillis()) // 폴 주기 즉시 복귀 신호 (P2)
         scope.launch(Dispatchers.IO) {
             // 프로필 이미지가 있으면 축소본을 방 avatars 문서로 업로드 (모바일과 동일 스키마)
-            val avatarId = sender.imagePath?.let { path ->
+            val avatarId = effectiveSender.imagePath?.let { path ->
                 runCatching {
                     val (bytes, hash) = encodedAvatarFor(path) ?: return@runCatching null
                     val key = "${room.remoteId}/$hash"
@@ -373,7 +390,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             val textOk = firestore.postMessage(
                 room.remoteId,
                 messageValues(
-                    type = "TEXT", body = marked, sender = sender,
+                    type = "TEXT", body = marked, sender = effectiveSender,
                     isOoc = isOoc, authorUid = authorUid(),
                     avatarId = avatarId,
                 ),
@@ -554,6 +571,10 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             onJoin = { overlay = OverlayKind.JoinRoom },
             onFontSetting = { overlay = OverlayKind.FontSetting },
             onLeave = { leaveTarget = it },
+            ownerName = ownerName,
+            ownerColor = ownerColor,
+            ownerImagePath = ownerImagePath,
+            onOwnerProfile = { overlay = OverlayKind.OwnerProfile },
         )
         Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.Line))
         val room = selected
@@ -599,7 +620,20 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
                         )
-                        if (existing == null) rooms = rooms + joined
+                        if (existing == null) {
+                            rooms = rooms + joined
+                            // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번, 모바일과 동일)
+                            firestore.postMessage(
+                                meta.remoteId,
+                                mapOf(
+                                    "type" to "SYSTEM",
+                                    "body" to "'${ownerName.ifBlank { "플레이어" }}' 님이 참여하셨습니다.",
+                                    "createdAt" to System.currentTimeMillis(),
+                                    "authorUid" to authorUid(),
+                                    "isOoc" to false, "senderIsGm" to false, "senderIsBot" to false,
+                                ),
+                            )
+                        }
                         selected = joined
                         persist()
                         overlay = null
@@ -685,6 +719,23 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 appFont = value
                 config.appFont = value
                 persist()
+            },
+        )
+        OverlayKind.OwnerProfile -> OwnerProfileOverlay(
+            initialName = ownerName,
+            initialColor = ownerColor,
+            initialImage = ownerImagePath,
+            forced = ownerName.isBlank(), // 미설정이면 저장 전에는 닫을 수 없다
+            onDismiss = { overlay = null },
+            onSave = { name, color, image ->
+                ownerName = name
+                ownerColor = color
+                ownerImagePath = image
+                config.ownerName = name
+                config.ownerColor = color
+                config.ownerImagePath = image
+                persist()
+                overlay = null
             },
         )
         null -> {}
@@ -782,7 +833,9 @@ private fun <T> runBlockingIo(block: () -> T): T =
 private val avatarsInFlight: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()
 
-private enum class OverlayKind { JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting }
+private enum class OverlayKind {
+    JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting, OwnerProfile,
+}
 
 private fun inviteCode(): String {
     val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -828,6 +881,10 @@ private fun LeftPane(
     onJoin: () -> Unit,
     onFontSetting: () -> Unit,
     onLeave: (JoinedRoom) -> Unit,
+    ownerName: String,
+    ownerColor: Long,
+    ownerImagePath: String?,
+    onOwnerProfile: () -> Unit,
 ) {
     // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
     Column(
@@ -853,6 +910,24 @@ private fun LeftPane(
                 )
                 Text("진행 중인 세션 ${rooms.size} · PC", fontSize = 11.sp, color = Tokens.InkDim)
             }
+            // 오너 프로필 — 탭하여 편집 (모바일 방 목록의 오너 칩과 동일)
+            Box(
+                Modifier.size(32.dp).clip(CircleShape)
+                    .background(Color(ownerColor))
+                    .clickable(onClick = onOwnerProfile),
+                contentAlignment = Alignment.Center,
+            ) {
+                val ownerImage = rememberLocalBitmap(ownerImagePath)
+                if (ownerImage != null) {
+                    Image(ownerImage, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Text(
+                        ownerName.take(1).ifEmpty { "?" },
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10151C),
+                    )
+                }
+            }
+            Spacer(Modifier.width(6.dp))
             // 앱 글꼴 설정 — 모바일 방 목록의 'Aa' 버튼과 동일 위계
             Box(
                 Modifier.size(32.dp).clip(CircleShape)
@@ -2501,6 +2576,98 @@ private fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: (
                 if (body.isNotBlank()) onSave(body)
             }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
+        }
+    }
+}
+
+/**
+ * 오너 프로필 설정 — 이미지·이름·컬러만 (캐릭터 프로필 편집의 축소판, 모바일과 동일).
+ * 잡담과 참여 인사에 쓰이는 '플레이어 본인' 프로필. forced면 저장 전 닫기 불가.
+ */
+@Composable
+private fun OwnerProfileOverlay(
+    initialName: String,
+    initialColor: Long,
+    initialImage: String?,
+    forced: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String, Long, String?) -> Unit,
+) {
+    var name by remember { mutableStateOf(initialName) }
+    var color by remember { mutableStateOf(initialColor) }
+    var imagePath by remember { mutableStateOf(initialImage) }
+    var customOpen by remember { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    OverlayScaffold("오너 프로필", onDismiss = { if (!forced) onDismiss() }) {
+        Text(
+            "잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다. " +
+                "세션 캐릭터 목록에는 나타나지 않습니다.",
+            fontSize = 12.sp, color = Tokens.InkDim,
+        )
+        Spacer(Modifier.height(12.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier.size(48.dp).clip(CircleShape).background(Color(color)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val preview = rememberLocalBitmap(imagePath)
+                if (preview != null) {
+                    Image(preview, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Text(
+                        name.take(1).ifEmpty { "?" },
+                        fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10151C),
+                    )
+                }
+            }
+            GhostButton(
+                if (imagePath == null) "이미지 선택" else "이미지 변경",
+                Modifier.weight(1f),
+            ) {
+                if (!picking) {
+                    picking = true
+                    scope.launch(Dispatchers.IO) {
+                        try {
+                            pickAndStoreImage("오너 프로필 이미지 선택", "owner", 512)
+                                ?.let { imagePath = it }
+                        } finally {
+                            picking = false
+                        }
+                    }
+                }
+            }
+            if (imagePath != null) {
+                GhostButton("제거") { imagePath = null }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        OverlayField(name, { name = it }, "이름")
+        Spacer(Modifier.height(14.dp))
+        Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Spacer(Modifier.height(7.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(Tokens.bubblePresets, color) {
+                color = it
+                customOpen = false
+            }
+            CustomSwatch(on = color !in Tokens.bubblePresets) { customOpen = !customOpen }
+        }
+        if (customOpen) {
+            Spacer(Modifier.height(8.dp))
+            ColorPalettePicker(color) { color = it }
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            YellowButton("저장", Modifier.weight(1f)) {
+                if (name.isNotBlank()) onSave(name.trim(), color, imagePath)
+            }
+            if (!forced) {
+                GhostButton("취소", Modifier.weight(1f), onDismiss)
+            }
         }
     }
 }

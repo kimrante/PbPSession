@@ -40,6 +40,10 @@ class AppConfig private constructor(
     @Volatile var authRefreshToken: String? = null,
     /** 앱 전체 글꼴 — "system" / "gowun" / "pretendard" (모바일 AppFonts와 동일 값) */
     @Volatile var appFont: String = "system",
+    /** 오너 프로필 — 잡담·참여 인사에 쓰이는 플레이어 본인 (모바일 OwnerProfile과 동일 개념) */
+    @Volatile var ownerName: String = "",
+    @Volatile var ownerColor: Long = 0xFFFFD9A8,
+    @Volatile var ownerImagePath: String? = null,
 ) {
     companion object {
         private val file = File(System.getProperty("user.home"), ".pbp-desktop/config.json")
@@ -65,6 +69,9 @@ class AppConfig private constructor(
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
                 appFont = loaded?.appFont ?: "system",
+                ownerName = loaded?.ownerName ?: "",
+                ownerColor = loaded?.ownerColor ?: 0xFFFFD9A8,
+                ownerImagePath = loaded?.ownerImagePath,
             ).also { it.save() }
         }
 
@@ -80,6 +87,9 @@ class AppConfig private constructor(
         val rooms: List<JoinedRoom>?,
         val authRefreshToken: String? = null,
         val appFont: String? = null,
+        val ownerName: String? = null,
+        val ownerColor: Long? = null,
+        val ownerImagePath: String? = null,
     )
 
     /**
@@ -88,8 +98,12 @@ class AppConfig private constructor(
      * ConcurrentModificationException으로 스코프 전체가 죽을 수 있다 (N8).
      */
     @Synchronized
-    fun snapshot(): String =
-        gson.toJson(Saved(deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont))
+    fun snapshot(): String = gson.toJson(
+        Saved(
+            deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont,
+            ownerName, ownerColor, ownerImagePath,
+        )
+    )
 
     /**
      * 목록 교체와 스냅샷을 한 락 안에서 원자적으로 (C1) — 어느 스레드에서 불러도

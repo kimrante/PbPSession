@@ -178,7 +178,7 @@ internal fun ProfileOverlay(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(Tokens.Panel2)
+                Modifier.size(48.dp).clip(CircleShape).background(Tokens.Panel2) // 오너 편집(48)과 동일 규격 (감사 P3)
                     .border(1.dp, Tokens.Line, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
@@ -359,7 +359,7 @@ private fun DesktopSwatch(
             .then(if (outlined) Modifier.border(1.dp, Tokens.Line, CircleShape) else Modifier)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
+    ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Tokens.BubbleInk) }
 }
 
 /** 커스텀 컬러 진입용 무지개 스와치 — on이면 프리셋 밖의 색이 선택된 상태 */
@@ -432,7 +432,7 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     )
                 }
                     .size(16.dp)
-                    .border(2.dp, Color.White, CircleShape)
+                    .border(2.dp, Tokens.Ink, CircleShape)
                     .clip(CircleShape)
                     .background(Color(current))
             )
@@ -470,7 +470,7 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
                 }
                     .size(16.dp)
-                    .border(2.dp, Color.White, CircleShape)
+                    .border(2.dp, Tokens.Ink, CircleShape)
                     .clip(CircleShape)
                     .background(Color(hsvToArgb(hue, 1f, 1f)))
             )
@@ -560,7 +560,7 @@ internal fun ProfileManagerOverlay(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OwnerAvatar(ownerName, ownerColor, ownerImagePath, 36.dp)
+            OwnerAvatar(ownerName, ownerColor, ownerImagePath, DesktopDimens.avatarStrip)
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(
@@ -579,10 +579,10 @@ internal fun ProfileManagerOverlay(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(Tokens.Panel2)
+                    Modifier.size(DesktopDimens.avatarStrip).clip(CircleShape).background(Tokens.Panel2)
                         .border(
                             1.dp,
-                            if (profile.isGm) Color(0x99C89E34) else Tokens.Line,
+                            if (profile.isGm) Tokens.GmRing else Tokens.Line,
                             CircleShape,
                         ),
                     contentAlignment = Alignment.Center,

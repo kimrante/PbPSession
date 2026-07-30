@@ -83,6 +83,7 @@ import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDarkColors
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
@@ -134,7 +135,8 @@ internal fun MessageBlock(
                         message.body,
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = .6f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        // 표시용 필 패딩 (ui-guidelines 5장 '필·칩')
+                        modifier = Modifier.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap1),
                     )
                 }
             }
@@ -158,7 +160,8 @@ internal fun MessageBlock(
                         "${message.senderName ?: ""} : ${message.body}",
                         fontSize = 10.sp,
                         color = tokens.bubbleInk.copy(alpha = .85f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        // 표시용 필 패딩 — 시스템 필과 동일 (ui-guidelines 5장 '필·칩')
+                        modifier = Modifier.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap1),
                     )
                 }
             }
@@ -170,7 +173,7 @@ internal fun MessageBlock(
                         .clip(RoundedCornerShape(PbpDimens.rCell))
                         .background(Color.Black.copy(alpha = .5f))
                         .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(PbpDimens.rCell))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
@@ -178,7 +181,8 @@ internal fun MessageBlock(
                     Text(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp,
-                        color = Color(0xFFFFE9AE),
+                        // 칩 배경이 모드 무관 어두운 면이라 다크용 시그니처 옐로가 항상 맞다
+                        color = PbpDarkColors.signature,
                         fontWeight = FontWeight.Bold,
                     )
                     // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
@@ -190,7 +194,7 @@ internal fun MessageBlock(
                             label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (success) Color(0xFF5E9EFF) else Color(0xFFFF6B6B),
+                            color = if (success) tokens.statBlue else tokens.danger,
                         )
                     }
                 }
@@ -200,7 +204,8 @@ internal fun MessageBlock(
         message.senderIsGm && !message.isOoc -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // 조각 간격은 캐릭터 발화와 같은 gap2 (동류 동일 스페이싱)
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 parts.forEach { part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
@@ -228,7 +233,7 @@ internal fun MessageBlock(
                     showRead = showRead, themeColor = themeColor, onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap1)) {
+                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message,
@@ -266,10 +271,10 @@ internal fun NarrationBlock(
                 .fillMaxWidth()
                 .clip(
                     RoundedCornerShape(
-                        topStart = 4.dp,
+                        topStart = PbpDimens.rTail,
                         topEnd = PbpDimens.rCard,
                         bottomEnd = PbpDimens.rCard,
-                        bottomStart = 4.dp,
+                        bottomStart = PbpDimens.rTail,
                     )
                 )
                 .background(tokens.narrBg)
@@ -374,10 +379,11 @@ internal fun BubbleRow(
                     Spacer(Modifier.height(PbpDimens.gap1))
                 }
                 val r = PbpDimens.rCard
+                val tail = PbpDimens.rTail
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = r, topEnd = 4.dp, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = r, topEnd = tail, bottomEnd = r, bottomStart = r)
                 } else {
-                    RoundedCornerShape(topStart = 4.dp, topEnd = r, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = tail, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
                 val bubbleBase = Modifier
                     .widthIn(max = 240.dp)

@@ -298,7 +298,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
-                }) { Text("전부 삭제", color = Color(0xFFFF6B6B)) }
+                }) { Text("전부 삭제", color = tokens.danger) }
             },
             dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("취소") } },
         )
@@ -400,13 +400,16 @@ private fun ThemeCell(
 
 @Composable
 private fun SectionTitle(text: String) {
+    // 섹션 간격 gap5(24) = 위 Spacer(gap4) + 라벨 상하 대칭 gap2 — 시각 리듬은 그대로,
+    // 패딩은 상하 동일 (ui-guidelines 1장 원칙 3)
+    Spacer(Modifier.height(PbpDimens.gap4))
     Text(
         text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp,
         color = Pbp.colors.inkDim,
-        modifier = Modifier.padding(start = PbpDimens.gap4, top = PbpDimens.gap5, bottom = PbpDimens.gap2),
+        modifier = Modifier.padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
     )
 }
 

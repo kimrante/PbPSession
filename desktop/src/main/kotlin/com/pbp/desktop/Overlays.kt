@@ -139,7 +139,7 @@ internal fun OverlayField(value: String, onChange: (String) -> Unit, placeholder
             .clip(RoundedCornerShape(12.dp))
             .background(Tokens.FieldBg)
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-            .padding(horizontal = 13.dp, vertical = 11.dp),
+            .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
         textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
         cursorBrush = SolidColor(Tokens.SignatureRing),
         singleLine = true,
@@ -159,7 +159,7 @@ internal fun YellowButton(label: String, modifier: Modifier = Modifier, onClick:
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.OnSignature)
     }
 }
 
@@ -216,8 +216,9 @@ internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
 internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
     OverlayScaffold("초대 코드", onDismiss) {
         Text(
-            code, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+            code, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
             modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center, // 모바일과 동일 (감사 P4·센터 정렬)
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -375,7 +376,7 @@ internal fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: 
                 .clip(RoundedCornerShape(12.dp))
                 .background(Tokens.FieldBg)
                 .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-                .padding(horizontal = 13.dp, vertical = 11.dp),
+                .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
             textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
             cursorBrush = SolidColor(Tokens.SignatureRing),
             maxLines = 8,

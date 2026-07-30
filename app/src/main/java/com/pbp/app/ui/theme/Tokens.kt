@@ -110,12 +110,15 @@ object PbpDimens {
     val rCell = 12.dp  // 그리드 셀, 입력 필드, 썸네일
     val rCard = 16.dp  // 카드, 말풍선, 패널
     val rSheet = 20.dp // 다이얼로그, 시트
+    val rTail = 4.dp   // 말풍선 꼬리 (내/상대/인용 공통, 데스크톱 동일)
 
     // 고정 규격
     val appBarHeight = 56.dp // 상단 바 — 전 화면 동일
     val touchTarget = 40.dp  // 아이콘·전송 버튼
     val avatarChat = 38.dp   // 채팅 말풍선 아바타
     val avatarStrip = 36.dp  // 프로필 교체 스트립 아바타
+    val avatarBar = 32.dp    // 상단 바 오너 아바타 (데스크톱과 동일 값)
+    val avatarProfile = 92.dp // 프로필 편집·오너 화면 대표 사진
     val logoTile = 22.dp     // 상단 바 로고 타일 (앱 아이콘과 같은 d10)
 
     /**
@@ -129,12 +132,8 @@ object PbpDimens {
 
 /** 프리셋 팔레트 (목업 03·04 화면) */
 object PbpPalette {
-    /** 방 테마 컬러 3종 — 이름·말풍선과 같은 개수로 (+ 커스텀은 UI에서 별도 처리) */
-    val themePresets = listOf(
-        0xFF8EC5E8 to "새벽 하늘",
-        0xFFC9A7E8 to "라일락",
-        0xFFE8B48E to "호박등",
-    )
+    /** 방 테마 컬러 3종 — :shared Palette 단일 출처 (데스크톱과 드리프트 방지) */
+    val themePresets = com.pbp.shared.Palette.themePresets
 
     // 팔레트 값·변환은 :shared Palette가 단일 출처 — 내보내기 색과 갈라지지 않게 (리뷰 A3)
     val namePresets = com.pbp.shared.Palette.namePresets

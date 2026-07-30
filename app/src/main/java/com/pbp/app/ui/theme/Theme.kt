@@ -23,7 +23,7 @@ fun PbpTheme(
     val material = if (darkTheme) {
         darkColorScheme(
             primary = tokens.signature,
-            onPrimary = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
+            onPrimary = tokens.onSignature,
             secondary = tokens.themeDefault,
             background = tokens.bg,
             onBackground = tokens.ink,
@@ -40,7 +40,7 @@ fun PbpTheme(
     } else {
         lightColorScheme(
             primary = tokens.signature,
-            onPrimary = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
+            onPrimary = tokens.onSignature,
             secondary = tokens.themeDefault,
             background = tokens.bg,
             onBackground = tokens.ink,
@@ -66,6 +66,11 @@ fun PbpTheme(
         MaterialTheme(
             colorScheme = material,
             typography = typographyWith(AppFonts.fontFamily),
+            // 다이얼로그·시트가 M3 기본 28 대신 rSheet(20)를 쓰도록 — 커스텀 Dialog와
+            // 스톡 AlertDialog가 한 가족이 된다 (ui-guidelines 5장)
+            shapes = androidx.compose.material3.Shapes(
+                extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(PbpDimens.rSheet),
+            ),
             content = content,
         )
     }

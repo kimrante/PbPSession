@@ -204,7 +204,7 @@ internal fun ChatPane(
                         val message = messages[index]
                         val grouped = isContinuation(messages.getOrNull(index - 1), message)
                         Box(
-                            Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
+                            Modifier.padding(top = if (index == 0) 0.dp else if (grouped) DesktopDimens.gap1 else DesktopDimens.gap3)
                         ) {
                             MessageBlock(
                                 message, myUid, room, avatarCache, firestore, grouped,
@@ -263,14 +263,14 @@ internal fun MessageBlock(
                 Row(
                     Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD9FFFFFF))
                         .border(1.dp, Color(0x80C89E34), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "${message.diceExpr} → ${message.body}",
-                        fontSize = 11.sp, color = Color(0xFF7A5B12), fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = Tokens.DiceInk, fontWeight = FontWeight.Bold,
                     )
                     // 판정 등급 — 성공 계열 파랑, 실패 빨강 (모바일과 동일 표기)
                     Rules.outcomeLabel(message.diceOutcome)?.let { label ->
@@ -279,8 +279,8 @@ internal fun MessageBlock(
                             label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (Rules.isSuccess(message.diceOutcome)) Color(0xFF5E9EFF)
-                            else Color(0xFFFF6B6B),
+                            color = if (Rules.isSuccess(message.diceOutcome)) Tokens.StatBlue
+                            else Tokens.Danger,
                         )
                     }
                 }
@@ -311,7 +311,7 @@ internal fun MessageBlock(
         message.senderIsGm -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
                 parts.forEach { part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
@@ -340,7 +340,7 @@ internal fun MessageBlock(
                     onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -384,7 +384,7 @@ internal fun GmSpeech.Part.text(): String = when (this) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun NarrationBlock(message: Message, text: String, onLongPress: () -> Unit = {}) {
-    val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
+    val shape = RoundedCornerShape(topStart = DesktopDimens.rTail, topEnd = DesktopDimens.rCard, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rTail)
     Column(
         Modifier.fillMaxWidth()
             .shadow(3.dp, shape) // 목업 box-shadow 0 3px 12px
@@ -472,9 +472,9 @@ internal fun BubbleRow(
                     Spacer(Modifier.height(4.dp))
                 }
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+                    RoundedCornerShape(topStart = DesktopDimens.rCard, topEnd = DesktopDimens.rTail, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rCard)
                 } else {
-                    RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+                    RoundedCornerShape(topStart = DesktopDimens.rTail, topEnd = DesktopDimens.rCard, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rCard)
                 }
                 if (quoteInner != null) {
                     // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
@@ -520,7 +520,7 @@ internal fun BubbleRow(
                             if (message.isOoc) {
                                 Text(
                                     "잡담", fontSize = 9.sp, color = inkColor,
-                                    modifier = Modifier.padding(end = 6.dp, top = 2.dp)
+                                    modifier = Modifier.padding(end = 6.dp)
                                         .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
                                         .padding(horizontal = 5.dp),
                                 )
@@ -693,7 +693,7 @@ internal fun InputZone(
         Column(
             Modifier.align(Alignment.CenterHorizontally)
                 .widthIn(max = DesktopDimens.contentMax).fillMaxWidth()
-                .padding(start = DesktopDimens.edge, end = DesktopDimens.edge, top = 8.dp, bottom = 12.dp),
+                .padding(horizontal = DesktopDimens.edge, vertical = DesktopDimens.gap3),
         ) {
             // 참여자에게는 GM 프로필을 숨긴다 — 서술 권한은 마스터 전용 (모바일과 동일)
             val visible = profiles.withIndex().filter { room.isMaster || !it.value.isGm }
@@ -710,12 +710,12 @@ internal fun InputZone(
                         ),
                     ) {
                         Box(
-                            Modifier.size(36.dp)
+                            Modifier.size(DesktopDimens.avatarStrip)
                                 .border(
                                     2.dp,
                                     when {
                                         on -> Tokens.SignatureRing
-                                        profile.isGm -> Color(0x99C89E34) // GM 금테
+                                        profile.isGm -> Tokens.GmRing
                                         else -> Color(0x2614191F)
                                     },
                                     CircleShape,
@@ -749,7 +749,7 @@ internal fun InputZone(
                 item {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            Modifier.size(36.dp)
+                            Modifier.size(DesktopDimens.avatarStrip)
                                 .border(1.dp, Color(0x4714191F), CircleShape)
                                 .clip(CircleShape)
                                 .clickable(onClick = onAddProfile),
@@ -805,7 +805,7 @@ internal fun InputZone(
                 ) {
                     Text(
                         "잡담", fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        color = if (oocOn) Color(0xFF7A5B12) else Tokens.InkDim,
+                        color = if (oocOn) Tokens.DiceInk else Tokens.InkDim,
                     )
                 }
                 BasicTextField(
@@ -824,7 +824,7 @@ internal fun InputZone(
                         .clip(RoundedCornerShape(12.dp))
                         .background(Tokens.FieldBg)
                         .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
                     textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
                     cursorBrush = SolidColor(Tokens.SignatureRing),
                     maxLines = 4,

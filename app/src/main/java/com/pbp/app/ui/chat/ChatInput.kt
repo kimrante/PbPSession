@@ -125,7 +125,7 @@ internal fun InputZone(
         Modifier
             .fillMaxWidth()
             .background(if (tokens.isDark) Color(0xE0090C11) else tokens.panel.copy(alpha = .93f))
-            .padding(start = PbpDimens.gap4, end = PbpDimens.gap4, top = PbpDimens.gap2, bottom = PbpDimens.gap3),
+            .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
     ) {
         // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
         LazyRow(
@@ -189,7 +189,8 @@ internal fun InputZone(
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }
-                            .padding(horizontal = PbpDimens.gap3, vertical = 5.dp),
+                            // 터치용 칩 패딩 (ui-guidelines 5장 '필·칩')
+                            .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     )
                 }
             }
@@ -200,21 +201,23 @@ internal fun InputZone(
             Row(
                 Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(if (oocOn) tokens.signature.copy(alpha = .16f) else Color.White.copy(alpha = .07f))
+                    // off 배경은 흰색-알파 대신 잡담 토큰 — 라이트 모드의 흰 입력바 위에서도 보인다
+                    .background(if (oocOn) tokens.signature.copy(alpha = .16f) else tokens.chatterBubble)
                     .border(
                         1.dp,
                         if (oocOn) tokens.signature.copy(alpha = .4f) else tokens.line,
                         RoundedCornerShape(999.dp),
                     )
                     .clickable(onClick = onOocToggle)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    // 터치용 칩 패딩 (ui-guidelines 5장 '필·칩')
+                    .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
                         .size(width = 22.dp, height = 12.dp)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(if (oocOn) tokens.signature else Color.White.copy(alpha = .2f)),
+                        .background(if (oocOn) tokens.signature else tokens.chatterInk.copy(alpha = .35f)),
                     contentAlignment = if (oocOn) Alignment.CenterEnd else Alignment.CenterStart,
                 ) {
                     Box(
@@ -222,7 +225,7 @@ internal fun InputZone(
                             .padding(2.dp)
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (oocOn) Color(0xFF1A1A1A) else Color.White)
+                            .background(if (oocOn) tokens.onSignature else tokens.panel)
                     )
                 }
                 Spacer(Modifier.width(5.dp))
@@ -264,8 +267,9 @@ internal fun InputZone(
                     )
                 },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = .08f),
-                    unfocusedContainerColor = Color.White.copy(alpha = .08f),
+                    // 흰색-알파 컨테이너는 라이트 모드에서 배경과 구분 불가 — 잡담 토큰으로
+                    focusedContainerColor = tokens.chatterBubble,
+                    unfocusedContainerColor = tokens.chatterBubble,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
@@ -280,7 +284,7 @@ internal fun InputZone(
                     .background(if (canSend) themeColor else themeColor.copy(alpha = .35f))
                     .clickable(enabled = canSend, onClick = doSend),
                 contentAlignment = Alignment.Center,
-            ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
+            ) { Text("➤", fontSize = 15.sp, color = tokens.bubbleInk) }
         }
     }
 }

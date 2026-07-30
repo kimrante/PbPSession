@@ -77,7 +77,8 @@ fun ProfileManagerDialog(
                     onClick = onOwner,
                 ) {
                     com.pbp.app.ui.common.OwnerAvatar(
-                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 36.dp,
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath,
+                        PbpDimens.avatarStrip,
                     )
                 }
                 profiles.forEach { profile ->
@@ -96,7 +97,7 @@ fun ProfileManagerDialog(
                         com.pbp.app.ui.common.Avatar(
                             emoji = profile.emoji,
                             imagePath = profile.imagePath,
-                            size = 36.dp,
+                            size = PbpDimens.avatarStrip,
                         )
                     }
                 }
@@ -111,7 +112,8 @@ fun ProfileManagerDialog(
                     Text(
                         "＋ 프로필 추가하기",
                         fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                        color = tokens.signature,
+                        // 밝은 다이얼로그 면 위 옐로 텍스트는 signatureInk (스펙 0장)
+                        color = tokens.signatureInk,
                     )
                 }
             }
@@ -133,7 +135,7 @@ private fun ManagerRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCell))
             .combinedClickable(onClick = onClick)
-            .padding(PbpDimens.gap2),
+            .padding(PbpDimens.gap3), // 다이얼로그 탭 행 공통 패딩 (프로필 추가 행과 동일)
         verticalAlignment = Alignment.CenterVertically,
     ) {
         avatar()

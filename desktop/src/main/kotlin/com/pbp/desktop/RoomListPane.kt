@@ -137,7 +137,7 @@ internal fun LeftPane(
                 Spacer(Modifier.weight(1f))
                 // 오너 프로필 — 탭하여 편집 (모바일 방 목록의 오너 칩과 동일)
                 OwnerAvatar(
-                    ownerName, ownerColor, ownerImagePath, 32.dp,
+                    ownerName, ownerColor, ownerImagePath, DesktopDimens.avatarBar,
                     Modifier.clickable(onClick = onOwnerProfile),
                 )
                 Spacer(Modifier.width(6.dp))
@@ -187,7 +187,7 @@ internal fun LeftPane(
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(top = 8.dp),
+            contentPadding = PaddingValues(vertical = DesktopDimens.gap2), // 상하 대칭 (감사 P2)
         ) {
             items(rooms, key = { it.remoteId }) { room ->
                 val active = room.remoteId == selected?.remoteId
@@ -315,8 +315,8 @@ internal fun D10Mark(modifier: Modifier = Modifier) {
 internal fun EmptyPane() {
     Box(Modifier.fillMaxSize().background(Tokens.Bg), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🎲", fontSize = 44.sp)
-            Spacer(Modifier.height(10.dp))
+            Text("🎲", fontSize = 40.sp) // 모바일과 동일 (감사 P4)
+            Spacer(Modifier.height(DesktopDimens.gap2))
             Text("왼쪽에서 세션을 만들거나 초대 코드로 참여하세요", color = Tokens.InkDim, fontSize = 13.sp)
         }
     }

@@ -111,7 +111,7 @@ internal fun MessageActionDialog(
     val tokens = Pbp.colors
     val bubbleShape = RoundedCornerShape(
         topStart = PbpDimens.rCard,
-        topEnd = 4.dp,
+        topEnd = PbpDimens.rTail,
         bottomEnd = PbpDimens.rCard,
         bottomStart = PbpDimens.rCard,
     )

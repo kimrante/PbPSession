@@ -29,7 +29,7 @@ import com.pbp.app.ui.theme.Pbp
 
 /** 스와치 지름 — 프리셋 3 + 커스텀 1 + 최근 5 = 9개가 한 줄에 들어가는 크기 (목업 01장) */
 private val SWATCH = 26.dp
-private val GAP = 4.dp
+private val GAP = com.pbp.app.ui.theme.PbpDimens.gap1
 
 /**
  * 색 선택 줄 — **프리셋 → 커스텀(＋) → 구분선 → 최근 5개** 순서 (목업 01장).
@@ -144,7 +144,8 @@ private fun Swatch(
     Box(
         Modifier
             .size(SWATCH)
-            .then(if (selected) Modifier.border(2.dp, Color.White, CircleShape) else Modifier)
+            // 선택 링은 잉크 계열 — 흰 패널·흰 스와치 위에서도 보인다 (라이트 모드)
+            .then(if (selected) Modifier.border(2.dp, Pbp.colors.ink, CircleShape) else Modifier)
             .clip(CircleShape)
             .background(Color(color))
             .then(
@@ -154,7 +155,7 @@ private fun Swatch(
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
-            Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C))
+            Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Pbp.colors.bubbleInk)
         }
     }
 }

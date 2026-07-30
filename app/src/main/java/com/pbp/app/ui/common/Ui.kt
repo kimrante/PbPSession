@@ -89,7 +89,8 @@ fun Avatar(
     val ring = if (ringColor != null) {
         Modifier.border(2.dp, ringColor, CircleShape)
     } else {
-        Modifier.border(1.5.dp, Color.White.copy(alpha = .22f), CircleShape)
+        // 기본 링은 line 토큰 — 흰색 고정은 라이트 모드에서 의미가 없다 (감사 P1-2)
+        Modifier.border(1.5.dp, Pbp.colors.line, CircleShape)
     }
     Box(
         modifier = Modifier
@@ -188,9 +189,11 @@ fun MarkupText(
 ) {
     // 지정이 없으면 앱 글꼴 설정을 따른다 — GM 서술만 명조를 명시적으로 넘긴다
     val family = fontFamily ?: com.pbp.app.ui.theme.AppFonts.fontFamily
+    // 값 치환 강조색 — buildMarkup은 non-composable이라 여기서 토큰을 읽어 내린다
+    val statColor = Pbp.colors.statBlue
     // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight) {
-        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight)
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, statColor, family, fontWeight) {
+        buildMarkup(text, fontSize, color, rubyColor, statColor, family, fontWeight)
     }
     Text(
         annotated,
@@ -218,6 +221,7 @@ private fun buildMarkup(
     fontSize: TextUnit,
     color: Color,
     rubyColor: Color,
+    statColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
 ): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
@@ -238,9 +242,9 @@ private fun buildMarkup(
                     ) { append(node.text) }
                 }
                 is PbpMarkup.Node.Value -> {
-                    // 캐릭터 value 치환 결과 — 파란색 강조
+                    // 캐릭터 value 치환 결과 — statBlue 토큰 강조
                     withStyle(
-                        SpanStyle(color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold)
+                        SpanStyle(color = statColor, fontWeight = FontWeight.Bold)
                     ) { append(node.text) }
                 }
                 is PbpMarkup.Node.Ruby -> {
@@ -337,7 +341,7 @@ fun HexColorDialog(
     onPick: (Long) -> Unit,
     initial: Long? = null,
 ) {
-    val seed = initial ?: 0xFF8EC5E8
+    val seed = initial ?: com.pbp.app.ui.theme.PbpPalette.themePresets.first().first
     val seedHsv = remember { argbToHsv(seed) }
     var hue by remember { mutableStateOf(seedHsv.first) }
     var sat by remember { mutableStateOf(seedHsv.second) }
@@ -396,7 +400,8 @@ fun HexColorDialog(
                                 )
                             }
                             .size(16.dp)
-                            .border(2.dp, Color.White, CircleShape)
+                            // 밝은 색 위에서도 보이도록 잉크 링 (라이트 모드)
+                            .border(2.dp, Pbp.colors.ink, CircleShape)
                             .clip(CircleShape)
                             .background(Color(current))
                     )
@@ -440,7 +445,7 @@ fun HexColorDialog(
                                 IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
                             }
                             .size(16.dp, 18.dp)
-                            .border(2.dp, Color.White, CircleShape)
+                            .border(2.dp, Pbp.colors.ink, CircleShape)
                             .clip(CircleShape)
                             .background(Color(hsvToArgb(hue, 1f, 1f)))
                     )
@@ -583,7 +588,8 @@ private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(PbpDimens.gap3),
     ) {
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
+        // 밝은 다이얼로그 면 위 옐로 텍스트는 signatureInk (스펙 0장)
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signatureInk)
         Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
     }
 }

@@ -4,15 +4,34 @@ import androidx.compose.ui.unit.dp
 
 /**
  * 데스크톱 치수 토큰 — Android PbpDimens와 의미가 겹치는 값 + PC 전용 규격 (리뷰 D1).
- * 일회성 패딩까지 옮기지는 않는다; 의미 있고 반복되는 것만.
+ * 여백·반경은 모바일과 같은 4dp 그리드 스케일을 쓴다 — 이 밖의 값이 필요하면
+ * 먼저 여기 등재한다 (플랫폼 드리프트의 근본 원인 차단, 감사 P4).
  */
 object DesktopDimens {
+    // ── 여백 스케일 (PbpDimens.gap1~6과 동일) ──
+    val gap1 = 4.dp
+    val gap2 = 8.dp
+    val gap3 = 12.dp
+    val gap4 = 16.dp
+    val gap5 = 24.dp
+    val gap6 = 32.dp
+
+    // ── 반경 스케일 (PbpDimens와 동일, pill은 999.dp 리터럴) ──
+    val rCell = 12.dp
+    val rCard = 16.dp
+    val rSheet = 20.dp
+    val rTail = 4.dp // 말풍선 꼬리
+
     /** 상단 바 높이 (모바일과 동일 규격) */
     val appBar = 56.dp
 
-    /** 채팅 아바타 / 프로필 스트립 아바타 */
+    /** 아이콘·전송 버튼 히트 타깃 (모바일과 동일) */
+    val touchTarget = 40.dp
+
+    /** 채팅 아바타 / 프로필 스트립 아바타 / 상단 바 오너 아바타 */
     val avatarChat = 38.dp
     val avatarStrip = 36.dp
+    val avatarBar = 32.dp
 
     // ── PC 전용 (trpg-app-mockup-pc-light.html) ──
     /** 좌측 사이드바 고정 폭 */

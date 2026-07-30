@@ -18,6 +18,13 @@ object Palette {
     /** GM 발화 중 " " 대사 말풍선 색 */
     const val gmQuoteBubble = 0xFFE7E2D4
 
+    /** 방 테마 컬러 3종 — 이름·말풍선과 같은 개수 (+ 커스텀은 UI에서 별도 처리) */
+    val themePresets = listOf(
+        0xFF8EC5E8 to "새벽 하늘",
+        0xFFC9A7E8 to "라일락",
+        0xFFE8B48E to "호박등",
+    )
+
     /**
      * 다크 모드용 밝은 이름색 → 화이트 모드(및 종이 톤 로그)용 진한 색 치환.
      * 스펙 명시 매핑 외의 색은 알고리즘으로 어둡게 낮춘다.

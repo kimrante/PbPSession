@@ -146,8 +146,8 @@ fun RoomListScreen(nav: NavController) {
             FloatingActionButton(
                 onClick = { showCreate = true },
                 containerColor = tokens.signature,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.rotate(-4f),
+                shape = RoundedCornerShape(PbpDimens.rCard),
+                modifier = Modifier.rotate(-4f), // -4° 포스트잇 모티프 — 브랜드 예외 (가이드 5장)
             ) { Text("＋", fontSize = 24.sp, color = Pbp.colors.onSignature) }
         },
     ) { padding ->
@@ -165,7 +165,8 @@ fun RoomListScreen(nav: NavController) {
                     Spacer(Modifier.width(PbpDimens.gap1))
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                     com.pbp.app.ui.common.OwnerAvatar(
-                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 30.dp,
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath,
+                        PbpDimens.avatarBar, // 데스크톱과 동일 규격 (ui-guidelines 7장)
                         Modifier.combinedClickable(onClick = { showManager = true }),
                     )
                 }
@@ -222,15 +223,17 @@ fun RoomListScreen(nav: NavController) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🎲", fontSize = 40.sp)
-                        Spacer(Modifier.size(8.dp))
-                        Text("첫 세션을 만들어보세요", color = tokens.inkDim)
+                        Spacer(Modifier.size(PbpDimens.gap2))
+                        Text("첫 세션을 만들어보세요", fontSize = 13.sp, color = tokens.inkDim)
                     }
                 }
             } else {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = PbpDimens.gap4, end = PbpDimens.gap4, bottom = 88.dp, // FAB 높이 + 여백×2
+                        start = PbpDimens.gap4, end = PbpDimens.gap4,
+                        top = PbpDimens.gap3, // 카드 사이 간격과 같은 리듬 — 상단 바 밀착 방지
+                        bottom = 88.dp, // FAB 56 + gap4×2 (스크롤 끝 여유 — 파생식 예외)
                     ),
                     verticalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
                 ) {
@@ -327,7 +330,7 @@ fun RoomListScreen(nav: NavController) {
                 TextButton(onClick = {
                     vm.deleteRoom(room)
                     deleteTarget = null
-                }) { Text("삭제", color = Pbp.colors.signature) }
+                }) { Text("삭제", color = Pbp.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소") } },
         )
@@ -400,10 +403,12 @@ private fun RoomCard(
                     )
                 }
             }
+            // 테마 점 — 좌표 하드코딩 대신 우하단 정렬 + 3dp 돌출 (목업 mockup-home-header)
             Box(
                 Modifier
+                    .align(Alignment.BottomEnd)
                     .size(14.dp)
-                    .offset(x = 38.dp, y = 37.dp)
+                    .offset(x = 3.dp, y = 3.dp)
                     .border(3.dp, tokens.bg, CircleShape)
                     .clip(CircleShape)
                     .background(Color(room.themeColor))

@@ -108,6 +108,58 @@ import com.pbp.desktop.ui.DesktopTiming
 
 /** 공용 오버레이 부품과 일반 다이얼로그 — Main.kt에서 분리 (리뷰 B1) */
 
+/**
+ * 입력 문법 도움말 — 입력창 오른쪽 끝 "?"로 연다. 오른쪽 위 X로 닫는다.
+ * 목록은 [com.pbp.shared.MarkupHelp]가 단일 출처라 모바일과 항상 같다.
+ *
+ * 제목은 센터, 항목은 좌측 정렬 — 문법 예시는 세로로 줄이 맞아야 훑어읽기 좋다.
+ */
+@Composable
+internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(DesktopDimens.overlay)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Tokens.Panel)
+                .clickable(enabled = false) {}
+                .padding(22.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Box(Modifier.fillMaxWidth()) {
+                Text(
+                    "입력 문법", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    color = Tokens.Ink, modifier = Modifier.align(Alignment.Center),
+                )
+                Box(
+                    Modifier.align(Alignment.CenterEnd).size(28.dp)
+                        .clip(CircleShape).clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✕", fontSize = 14.sp, color = Tokens.InkSub)
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            com.pbp.shared.MarkupHelp.entries.forEach { entry ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(
+                        entry.syntax, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace, color = Tokens.SignatureRing,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(entry.summary, fontSize = 12.sp, color = Tokens.Ink)
+                    entry.example?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(it, fontSize = 11.sp, color = Tokens.InkDim)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Box(

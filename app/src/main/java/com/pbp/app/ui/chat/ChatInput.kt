@@ -111,6 +111,7 @@ internal fun InputZone(
     // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
     var input by rememberSaveable { mutableStateOf("") }
     var oocOn by rememberSaveable { mutableStateOf(false) }
+    var helpOpen by rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
@@ -258,10 +259,23 @@ internal fun InputZone(
                     },
                 placeholder = {
                     Text(
-                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (등대)[等臺] · 1d100",
+                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (루비)[문자] · 1d100",
                         fontSize = 13.sp, // 입력줄 플레이스홀더 = 본문과 같은 단(스케일)
                         color = tokens.inkDim,
                     )
+                },
+                // 입력창 오른쪽 끝 "?" — 지원 문법 도움말
+                trailingIcon = {
+                    Box(
+                        Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = .12f))
+                            .clickable { helpOpen = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("?", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = tokens.inkSub)
+                    }
                 },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White.copy(alpha = .08f),
@@ -283,4 +297,5 @@ internal fun InputZone(
             ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
         }
     }
+    if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
 }

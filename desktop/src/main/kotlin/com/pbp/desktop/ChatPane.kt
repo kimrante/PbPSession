@@ -123,6 +123,8 @@ internal fun ChatPane(
     onMessageLongPress: (Message) -> Unit,
     onEditProfile: (Int) -> Unit,
     onExport: () -> Unit,
+    /** 입력창 "?" — 지원 문법 도움말 오버레이 열기 */
+    onShowMarkupHelp: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -230,6 +232,7 @@ internal fun ChatPane(
                 onSwitchProfile = onSwitchProfile,
                 onAddProfile = onAddProfile,
                 onEditProfile = onEditProfile,
+                onShowMarkupHelp = onShowMarkupHelp,
             )
         }
     }
@@ -657,6 +660,7 @@ internal fun InputZone(
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
     onEditProfile: (Int) -> Unit,
+    onShowMarkupHelp: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
@@ -836,7 +840,7 @@ internal fun InputZone(
                             Box(Modifier.weight(1f)) {
                                 if (input.isEmpty()) {
                                     Text(
-                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (등대)[等臺] · 1d100",
+                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (루비)[문자] · 1d100",
                                         fontSize = 11.sp, color = Tokens.InkDim,
                                     )
                                 }
@@ -849,6 +853,18 @@ internal fun InputZone(
                                     .border(1.dp, Color(0x2614191F), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 5.dp, vertical = 1.dp),
                             )
+                            // 입력창 오른쪽 끝 "?" — 지원 문법 도움말 (모바일과 동일)
+                            Box(
+                                Modifier.padding(start = 8.dp).size(20.dp)
+                                    .clip(CircleShape).background(Color(0x1414191F))
+                                    .clickable(onClick = onShowMarkupHelp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "?", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    color = Tokens.InkSub,
+                                )
+                            }
                         }
                     },
                 )

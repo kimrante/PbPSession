@@ -585,6 +585,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onMessageLongPress = { messageAction = it },
                 onEditProfile = { editProfileIndex = it },
                 onExport = ::exportLogs,
+                onShowMarkupHelp = { overlay = OverlayKind.MarkupHelp },
             )
         }
     }
@@ -722,6 +723,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             },
             onAdd = { overlay = OverlayKind.AddProfileChoice },
         )
+        OverlayKind.MarkupHelp -> MarkupHelpOverlay(onDismiss = { overlay = null })
         OverlayKind.AddProfileChoice -> AddProfileChoiceOverlay(
             onDismiss = { overlay = null },
             onEmpty = { overlay = OverlayKind.NewProfile },
@@ -875,7 +877,7 @@ internal fun <T> runBlockingIo(block: () -> T): T =
 
 private enum class OverlayKind {
     JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting, OwnerProfile,
-    ProfileManager, AddProfileChoice,
+    ProfileManager, AddProfileChoice, MarkupHelp,
 }
 
 internal fun inviteCode(): String {

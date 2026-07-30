@@ -23,6 +23,7 @@ object RecentColors {
     enum class Slot(val key: String) {
         NAME("name"),
         BUBBLE("bubble"),
+        TEXT("text"),
         OWNER("owner"),
         THEME("theme"),
     }

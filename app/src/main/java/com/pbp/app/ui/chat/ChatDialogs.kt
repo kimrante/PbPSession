@@ -101,6 +101,9 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun MessageActionDialog(
     message: Message,
+    /** 내 메시지만 편집·삭제할 수 있다. 복사는 상대 메시지에서도 쓸 수 있다 */
+    canModify: Boolean,
+    onCopy: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
@@ -142,6 +145,15 @@ internal fun MessageActionDialog(
                 Text("메시지", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                 Spacer(Modifier.height(PbpDimens.gap2))
                 MessageActionRow(
+                    icon = "📋",
+                    tileColor = tokens.inkDim,
+                    title = "복사",
+                    titleColor = tokens.ink,
+                    subtitle = "본문을 클립보드에 담습니다",
+                    onClick = onCopy,
+                )
+                if (canModify) {
+                MessageActionRow(
                     icon = "✏️",
                     tileColor = tokens.signature,
                     title = "편집",
@@ -157,6 +169,7 @@ internal fun MessageActionDialog(
                     subtitle = "공유된 방이면 상대 화면에서도 사라집니다",
                     onClick = onDelete,
                 )
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Text(
                         "취소",

@@ -154,8 +154,10 @@ internal fun ProfileOverlay(
     var emoji by remember { mutableStateOf(editing?.emoji ?: "") }
     var nameColor by remember { mutableStateOf(editing?.nameColor ?: Tokens.namePresets.first()) }
     var bubbleColor by remember { mutableStateOf(editing?.bubbleColor ?: Tokens.bubblePresets.first()) }
+    var textColor by remember { mutableStateOf(editing?.textColor) }
     var nameCustomOpen by remember { mutableStateOf(false) }
     var bubbleCustomOpen by remember { mutableStateOf(false) }
+    var textCustomOpen by remember { mutableStateOf(false) }
     // 캐릭터 값 — 앱 프로필 편집기의 value 목록과 동일 개념. {값이름} 치환·팔레트에 쓰인다
     val stats = remember {
         mutableStateListOf<Pair<String, String>>().apply {
@@ -247,6 +249,25 @@ internal fun ProfileOverlay(
             ColorPalettePicker(bubbleColor) { bubbleColor = it; onColorUsed("bubble", it) }
         }
         Spacer(Modifier.height(14.dp))
+        Text("말풍선 글씨색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Spacer(Modifier.height(7.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(
+                com.pbp.shared.Palette.textPresets,
+                textColor ?: com.pbp.shared.Palette.textPresets.first(),
+                recentColors["text"].orEmpty(),
+            ) { textColor = it; textCustomOpen = false }
+            CustomSwatch(on = textColor != null && textColor !in com.pbp.shared.Palette.textPresets) {
+                textCustomOpen = !textCustomOpen
+            }
+        }
+        if (textCustomOpen) {
+            Spacer(Modifier.height(8.dp))
+            ColorPalettePicker(textColor ?: com.pbp.shared.Palette.textPresets.first()) {
+                textColor = it; onColorUsed("text", it)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
         Text("캐릭터 값", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Text(
             "메시지의 {값이름}이 값으로 치환되고, 숫자 값은 판정 팔레트에 뜹니다",
@@ -286,6 +307,7 @@ internal fun ProfileOverlay(
                         isGm = editing?.isGm ?: false,
                         stats = ProfileStats.sanitize(stats.toMap()).takeIf { it.isNotEmpty() },
                         imagePath = imagePath,
+                        textColor = textColor,
                     )
                 )
             }
@@ -608,14 +630,17 @@ internal fun OwnerProfileOverlay(
     initialName: String,
     initialColor: Long,
     initialImage: String?,
+    initialTextColor: Long? = null,
     forced: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String, Long, String?) -> Unit,
+    onSave: (String, Long, String?, Long?) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var color by remember { mutableStateOf(initialColor) }
     var imagePath by remember { mutableStateOf(initialImage) }
+    var textColor by remember { mutableStateOf(initialTextColor) }
     var customOpen by remember { mutableStateOf(false) }
+    var textCustomOpen by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     OverlayScaffold("오너 프로필", onDismiss = { if (!forced) onDismiss() }) {
@@ -666,10 +691,29 @@ internal fun OwnerProfileOverlay(
             Spacer(Modifier.height(8.dp))
             ColorPalettePicker(color) { color = it; onColorUsed("owner", it) }
         }
+        Spacer(Modifier.height(14.dp))
+        Text("말풍선 글씨색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Spacer(Modifier.height(7.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SwatchRow(
+                com.pbp.shared.Palette.textPresets,
+                textColor ?: com.pbp.shared.Palette.textPresets.first(),
+                recentColors["text"].orEmpty(),
+            ) { textColor = it; textCustomOpen = false }
+            CustomSwatch(on = textColor != null && textColor !in com.pbp.shared.Palette.textPresets) {
+                textCustomOpen = !textCustomOpen
+            }
+        }
+        if (textCustomOpen) {
+            Spacer(Modifier.height(8.dp))
+            ColorPalettePicker(textColor ?: com.pbp.shared.Palette.textPresets.first()) {
+                textColor = it; onColorUsed("text", it)
+            }
+        }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("저장", Modifier.weight(1f)) {
-                if (name.isNotBlank()) onSave(name.trim(), color, imagePath)
+                if (name.isNotBlank()) onSave(name.trim(), color, imagePath, textColor)
             }
             if (!forced) {
                 GhostButton("취소", Modifier.weight(1f), onDismiss)

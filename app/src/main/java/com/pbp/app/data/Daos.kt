@@ -172,6 +172,10 @@ interface MessageDao {
     )
     fun observeUnreadCounts(): Flow<List<UnreadCount>>
 
+    /** 상대에게서 받은 마지막 메시지 시각 — 읽음 확인으로 올릴 기준값 */
+    @Query("SELECT MAX(createdAt) FROM messages WHERE roomId = :roomId AND incoming = 1")
+    suspend fun latestIncomingAt(roomId: Long): Long?
+
     // remoteId 유니크 인덱스와 조합해 수신 레이스의 중복 삽입을 DB 차원에서 차단
     @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
     suspend fun insert(message: Message): Long

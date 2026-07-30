@@ -80,6 +80,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         name: String,
         nameColor: Long?,
         bubbleColor: Long?,
+        textColor: Long?,
         newImagePath: String?, // 크롭 다이얼로그가 만든 512px JPEG 경로
         stats: List<Pair<String, String>>,
         onDone: () -> Unit,
@@ -89,6 +90,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
                 name = name.trim().ifEmpty { "이름 없음" },
                 nameColor = nameColor,
                 bubbleColor = bubbleColor,
+                textColor = textColor,
                 imagePath = newImagePath ?: existing?.imagePath,
                 stats = ProfileStats.encode(stats),
             )
@@ -124,6 +126,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     var bubbleColor by rememberSaveable {
         mutableStateOf<Long?>(PbpPalette.bubblePresets.first())
     }
+    // 말풍선 안 글씨색. null이면 테마 기본 잉크
+    var textColor by rememberSaveable { mutableStateOf<Long?>(null) }
     var cropSource by remember { mutableStateOf<Uri?>(null) } // 크롭 대기 중인 갤러리 이미지
     var pickedPath by rememberSaveable {
         mutableStateOf<String?>(null) // 크롭 완료된 512px 파일
@@ -148,6 +152,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
         // DB 로드는 최초 1회만 — 회전 후 재실행 시 편집 중이던 폼을 덮어쓰지 않는다 (P2-4)
         if (!loaded) {
             existing?.let {
+                textColor = it.textColor
                 name = it.name
                 nameColor = it.nameColor ?: PbpPalette.namePresets.first()
                 bubbleColor = it.bubbleColor ?: PbpPalette.bubblePresets.first()
@@ -196,7 +201,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 .takeIf { it.isNotEmpty() }
                                 ?.let { listOf(it to newStatValue.trim()) }
                                 .orEmpty()
-                            vm.save(existing, name, nameColor, bubbleColor, pickedPath, stats + pending) {
+                            vm.save(existing, name, nameColor, bubbleColor, textColor, pickedPath, stats + pending) {
                                 nav.popBackStack()
                             }
                         }
@@ -279,6 +284,16 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     slot = com.pbp.app.data.RecentColors.Slot.BUBBLE,
                     onSelect = { bubbleColor = it },
                     onCustom = { customTarget = "bubble" },
+                )
+                Spacer(Modifier.height(PbpDimens.gap5))
+
+                FieldLabel("말풍선 글씨색")
+                com.pbp.app.ui.common.ColorSwatchRow(
+                    presets = PbpPalette.textPresets,
+                    selected = textColor ?: PbpPalette.textPresets.first(),
+                    slot = com.pbp.app.data.RecentColors.Slot.TEXT,
+                    onSelect = { textColor = it },
+                    onCustom = { customTarget = "text" },
                 )
                 Spacer(Modifier.height(PbpDimens.gap5))
 
@@ -447,21 +462,36 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
 
     customTarget?.let { target ->
         HexColorDialog(
-            title = if (target == "name") "이름 색 (커스텀)" else "말풍선 색 (커스텀)",
+            title = when (target) {
+                "name" -> "이름 색 (커스텀)"
+                "text" -> "말풍선 글씨색 (커스텀)"
+                else -> "말풍선 색 (커스텀)"
+            },
             onDismiss = { customTarget = null },
             onPick = { color ->
-                if (target == "name") nameColor = color else bubbleColor = color
+                when (target) {
+                    "name" -> nameColor = color
+                    "text" -> textColor = color
+                    else -> bubbleColor = color
+                }
                 // 커스텀 적용만 기록 — 프리셋은 이미 줄에 있어 중복 (목업 01장).
                 // 자리별 목록이라 이름 색이 말풍선 색 줄에 섞이지 않는다
                 com.pbp.app.data.RecentColors.add(
                     app,
-                    if (target == "name") com.pbp.app.data.RecentColors.Slot.NAME
-                    else com.pbp.app.data.RecentColors.Slot.BUBBLE,
+                    when (target) {
+                        "name" -> com.pbp.app.data.RecentColors.Slot.NAME
+                        "text" -> com.pbp.app.data.RecentColors.Slot.TEXT
+                        else -> com.pbp.app.data.RecentColors.Slot.BUBBLE
+                    },
                     color,
                 )
                 customTarget = null
             },
-            initial = if (target == "name") nameColor else bubbleColor,
+            initial = when (target) {
+                "name" -> nameColor
+                "text" -> textColor
+                else -> bubbleColor
+            },
         )
     }
 }

@@ -24,6 +24,7 @@ data class Message(
     val senderIsBot: Boolean,
     val senderNameColor: Long?,
     val senderBubbleColor: Long?,
+    val senderTextColor: Long?,
     val isOoc: Boolean,
     val editedAt: Long?,
     val createdAt: Long,
@@ -323,24 +324,27 @@ class FirestoreRest(
         return roomMeta(doc)
     }
 
-    /** members/{uid} 문서 보장 — 보안 규칙의 방 접근 근거 */
+    /**
+     * members/{uid} 문서 보장 — 보안 규칙의 방 접근 근거.
+     * platform을 함께 남긴다: 읽음 확인은 모바일끼리만 성립하므로, 데스크톱이
+     * 섞여 있으면 모바일 쪽이 "읽음" 표시를 생략해야 한다.
+     */
     fun ensureMember(remoteRoomId: String): Boolean {
         currentToken() // uid 확보
         val memberId = uid ?: return false
         return patch(
-            "$base/rooms/$remoteRoomId/members/$memberId?key=$apiKey&updateMask.fieldPaths=joinedAt",
-            gson.toJson(fields(mapOf("joinedAt" to System.currentTimeMillis()))),
+            "$base/rooms/$remoteRoomId/members/$memberId?key=$apiKey" +
+                "&updateMask.fieldPaths=joinedAt&updateMask.fieldPaths=platform",
+            gson.toJson(
+                fields(
+                    mapOf(
+                        "joinedAt" to System.currentTimeMillis(),
+                        "platform" to Protocol.Platform.DESKTOP,
+                    )
+                )
+            ),
         )
     }
-
-    /**
-     * 방 참여 인원 — members 문서 수 (상단 바 "N명 참여 중").
-     * 실패하면 null이라 호출부가 표기를 생략한다. 1:1 전제라 문서가 많지 않다.
-     */
-    fun countMembers(remoteRoomId: String): Int? = runCatching {
-        get("$base/rooms/$remoteRoomId/members?key=$apiKey&pageSize=100")
-            ?.getAsJsonArray("documents")?.size()
-    }.getOrNull()
 
     /** 초대 코드 → 방 매핑 문서 생성 (방 생성 시) */
     fun createInviteCode(code: String, remoteRoomId: String): Boolean = patch(
@@ -408,6 +412,7 @@ class FirestoreRest(
         senderIsBot = doc.bool("senderIsBot"),
         senderNameColor = doc.long("senderNameColor"),
         senderBubbleColor = doc.long("senderBubbleColor"),
+        senderTextColor = doc.long("senderTextColor"),
         isOoc = doc.bool("isOoc"),
         editedAt = doc.long("editedAt"),
         createdAt = doc.long("createdAt") ?: 0L,

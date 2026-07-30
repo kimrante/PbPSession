@@ -28,6 +28,7 @@ object LogExport {
         val senderIsGm: Boolean = false,
         val senderNameColor: Long? = null,
         val senderBubbleColor: Long? = null,
+        val senderTextColor: Long? = null,
         val isOoc: Boolean = false,
         val editedAt: Long? = null,
         val diceExpr: String? = null,
@@ -132,6 +133,7 @@ object LogExport {
                                 name = message.senderName ?: "",
                                 nameColor = nameColor,
                                 bubbleColor = bubbleColor,
+                                textColor = message.senderTextColor?.let { hex(it) },
                                 mine = message.mine,
                                 time = if (index == parts.lastIndex) time else "",
                                 edited = if (index == parts.lastIndex) edited else "",
@@ -215,6 +217,7 @@ $body</div>
         name: String,
         nameColor: String,
         bubbleColor: String,
+        textColor: String? = null,
         mine: Boolean,
         time: String,
         edited: String,
@@ -223,7 +226,8 @@ $body</div>
     ): String {
         val rowClass = if (mine) "lrow me" else "lrow"
         val bubbleClass = if (ooc) "lbubble lchat" else "lbubble"
-        return """<div class="$rowClass">$avatar<div><div class="lname" style="color:$nameColor">${escape(name)}<time>$time</time>$edited</div><div class="$bubbleClass" style="background:$bubbleColor">$bodyHtml</div></div></div>"""
+        val ink = textColor?.let { ";color:$it" } ?: ""
+        return """<div class="$rowClass">$avatar<div><div class="lname" style="color:$nameColor">${escape(name)}<time>$time</time>$edited</div><div class="$bubbleClass" style="background:$bubbleColor$ink">$bodyHtml</div></div></div>"""
     }
 
     fun hex(argb: Long): String = String.format("#%06X", argb and 0xFFFFFF)

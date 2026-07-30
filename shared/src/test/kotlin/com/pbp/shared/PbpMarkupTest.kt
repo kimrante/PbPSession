@@ -3,6 +3,7 @@ package com.pbp.shared
 import com.pbp.shared.PbpMarkup
 import com.pbp.shared.PbpMarkup.Node
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PbpMarkupTest {
@@ -43,7 +44,7 @@ class PbpMarkupTest {
                 Node.Ruby("等臺", "등대"),
                 Node.Span(" 쪽으로 간다"),
             ),
-            PbpMarkup.parse("|等臺《등대》 쪽으로 간다"),
+            PbpMarkup.parse("(등대)[等臺] 쪽으로 간다"),
         )
     }
 
@@ -51,7 +52,7 @@ class PbpMarkupTest {
     fun `일문 루비도 지원한다 - UTF-8`() {
         assertEquals(
             listOf(Node.Span("이내 "), Node.Ruby("침묵", "しじま"), Node.Span("만이 남았다")),
-            PbpMarkup.parse("이내 |침묵《しじま》만이 남았다"),
+            PbpMarkup.parse("이내 (しじま)[침묵]만이 남았다"),
         )
     }
 
@@ -83,7 +84,29 @@ class PbpMarkupTest {
                 Node.Span(" 굴릴게. "),
                 Node.Span("조용히.", italic = true),
             ),
-            PbpMarkup.parse("그 전에 |탐지《Spot Hidden》 굴릴게. *조용히.*"),
+            PbpMarkup.parse("그 전에 (Spot Hidden)[탐지] 굴릴게. *조용히.*"),
         )
+    }
+
+    @Test
+    fun `신 루비 문법 — 괄호가 독음, 대괄호가 본문`() {
+        val nodes = PbpMarkup.parse("어두운 (등대)[等臺]로 향했다")
+        val ruby = nodes.filterIsInstance<PbpMarkup.Node.Ruby>().single()
+        assertEquals("等臺", ruby.base)   // 대괄호 = 본문
+        assertEquals("등대", ruby.ruby)   // 괄호 = 위에 붙는 독음
+    }
+
+    @Test
+    fun `구 루비 문법은 더 이상 인식하지 않는다 — 원문 그대로`() {
+        assertTrue(
+            PbpMarkup.parse("|等臺《등대》")
+                .filterIsInstance<PbpMarkup.Node.Ruby>().isEmpty()
+        )
+    }
+
+    @Test
+    fun `괄호만 있거나 대괄호만 있으면 루비가 아니다`() {
+        assertTrue(PbpMarkup.parse("(주석) 그리고 [대괄호]")
+            .filterIsInstance<PbpMarkup.Node.Ruby>().isEmpty())
     }
 }

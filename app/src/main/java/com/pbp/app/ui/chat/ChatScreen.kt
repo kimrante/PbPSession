@@ -21,14 +21,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
@@ -118,21 +116,17 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     val totalCount = repo.observeMessageCount(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    /**
-     * 상단 바 "N명 참여 중" — 공유된 방은 members 문서 수, 로컬 전용 방은 나 혼자(1).
-     * 서버 응답 전이거나 읽기에 실패하면 null이라 표기를 생략한다.
-     */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val memberCount = room
-        .flatMapLatest { current ->
-            val remoteId = current?.remoteId
-            if (remoteId == null) kotlinx.coroutines.flow.flowOf(1)
-            else app.syncManager.observeMemberCount(remoteId)
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
     val profiles = repo.observeProfilesForRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * 상대가 어디까지 읽었는지 — 화면이 열려 있는 동안만 구독한다.
+     * 상대가 데스크톱이거나 로컬 전용 방이면 null이라 "읽음"을 표시하지 않는다.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val peerReadAt = room
+        .flatMapLatest { repo.observePeerReadAt(it?.remoteId) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
 
@@ -187,8 +181,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val room by vm.room.collectAsState()
     val messages by vm.messages.collectAsState()
     val totalCount by vm.totalCount.collectAsState()
-    val memberCount by vm.memberCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
+    val peerReadAt by vm.peerReadAt.collectAsState()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
@@ -321,38 +315,22 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(PbpDimens.gap1))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // GM/PL · 참여 인원 — 방 테마 컬러 점을 둘 사이 구분점으로 쓴다
-                            Text(
-                                if (room?.isMaster == true) "GM" else "PL",
-                                fontSize = 11.sp,
-                                lineHeight = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = tokens.inkSub,
-                            )
-                            memberCount?.let { count ->
-                                Spacer(Modifier.width(PbpDimens.gap1))
-                                Box(
-                                    Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(themeColor)
-                                )
-                                Spacer(Modifier.width(PbpDimens.gap1))
-                                Text(
-                                    "${count}명 참여 중",
-                                    fontSize = 11.sp,
-                                    lineHeight = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = tokens.inkSub,
-                                )
-                            }
-                        }
+                        Text(
+                            if (room?.isMaster == true) "GM" else "PL",
+                            fontSize = 11.sp,
+                            lineHeight = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = tokens.inkSub,
+                        )
                 }
                 }
 
                 // ── 메시지 목록
                 val reversed = messages.asReversed()
+                // "읽음"은 상대가 읽은 내 메시지 중 가장 최신 1건에만 붙인다
+                val readMarkId = peerReadAt?.let { readAt ->
+                    messages.lastOrNull { !it.incoming && it.createdAt <= readAt }?.id
+                }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -363,10 +341,15 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         val message = reversed[revIdx]
                         // 같은 인물의 연속 메시지는 아바타·이름을 생략하고 간격을 좁힌다
                         val grouped = isContinuation(reversed.getOrNull(revIdx + 1), message)
+                        // reverseLayout이라 revIdx-1이 더 나중(아래) 메시지 —
+                        // 같은 사람이 같은 분에 이어 보냈으면 이 줄의 시간은 감춘다
+                        val showTime = !sharesTimeLabel(message, reversed.getOrNull(revIdx - 1))
                         Box(Modifier.padding(top = if (grouped) PbpDimens.gap1 else PbpDimens.gap3)) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
+                                showTime = showTime,
+                                showRead = message.id == readMarkId,
                                 themeColor = themeColor,
                                 onLongPress = { actionTargetId = it.id },
                             )
@@ -430,6 +413,17 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     actionTarget?.let { target ->
         MessageActionDialog(
             message = target,
+            // 편집·삭제는 내 메시지만, 복사는 누구 메시지든
+            canModify = !target.incoming,
+            onCopy = {
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                clipboard.setPrimaryClip(
+                    android.content.ClipData.newPlainText("PbP 메시지", target.body)
+                )
+                actionTargetId = null
+                Toast.makeText(context, "메시지를 복사했습니다", Toast.LENGTH_SHORT).show()
+            },
             onEdit = {
                 editTargetId = target.id
                 actionTargetId = null

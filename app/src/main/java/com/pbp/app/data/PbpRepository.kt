@@ -103,22 +103,31 @@ class PbpRepository(private val db: AppDatabase) {
         syncManager?.pushRoomSettings(remoteId, room.themeColor, room.backgroundKey)
     }
 
-    /** 방에 들어왔을 때 호출 — 미확인 배지·푸시 기준 시각 갱신 */
-    suspend fun markRead(roomId: Long) = db.roomDao().setLastReadAt(roomId, System.currentTimeMillis())
+    /**
+     * 방에 들어왔을 때 호출 — 미확인 배지·푸시 기준 시각 갱신.
+     * 공유 방이면 상대에게 읽음 확인도 알린다 (받은 메시지가 있을 때만).
+     */
+    suspend fun markRead(roomId: Long) {
+        db.roomDao().setLastReadAt(roomId, System.currentTimeMillis())
+        val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
+        val readAt = db.messageDao().latestIncomingAt(roomId) ?: return
+        syncManager?.pushReadReceipt(remoteId, readAt)
+    }
 
+    /**
+     * 상대(모바일)가 어디까지 읽었는지. 로컬 전용 방이거나 상대가 데스크톱이면 null —
+     * 읽음 확인은 모바일끼리만 성립한다.
+     */
+    fun observePeerReadAt(remoteId: String?) =
+        if (remoteId == null) kotlinx.coroutines.flow.flowOf(null)
+        else syncManager?.observePeerReadAt(remoteId) ?: kotlinx.coroutines.flow.flowOf(null)
+
+    /**
+     * 발화 프로필 교체. 화면에 안내 메시지를 남기지 않는다 —
+     * 프로필 스트립의 선택 표시로 충분하고, 전환할 때마다 로그가 끊겨 읽기 나빴다.
+     */
     suspend fun switchProfile(roomId: Long, profile: CharacterProfile) {
-        val message = Message(
-            roomId = roomId,
-            type = MessageType.SYSTEM,
-            body = "프로필을 '${profile.name}'(으)로 전환했습니다",
-            createdAt = System.currentTimeMillis(),
-        )
-        var inserted: Message? = null
-        db.withTransaction {
-            db.roomDao().setActiveProfile(roomId, profile.id)
-            inserted = message.copy(id = db.messageDao().insert(message))
-        }
-        inserted?.let { pushIfSynced(roomId, listOf(it)) }
+        db.roomDao().setActiveProfile(roomId, profile.id)
     }
 
     /**
@@ -144,6 +153,7 @@ class PbpRepository(private val db: AppDatabase) {
                 senderIsGm = if (isOoc) false else sender.isGm,
                 senderNameColor = if (asOwner) OwnerProfile.color else sender.nameColor,
                 senderBubbleColor = if (asOwner) OwnerProfile.color else sender.bubbleColor,
+                senderTextColor = if (asOwner) OwnerProfile.textColor else sender.textColor,
                 isOoc = isOoc,
                 createdAt = System.currentTimeMillis(),
             )

@@ -79,7 +79,9 @@ fun OwnerProfileScreen(nav: NavController) {
     var name by rememberSaveable { mutableStateOf(OwnerProfile.name) }
     var color by rememberSaveable { mutableStateOf(OwnerProfile.color) }
     var imagePath by rememberSaveable { mutableStateOf(OwnerProfile.imagePath) }
-    var showCustomColor by rememberSaveable { mutableStateOf(false) }
+    var textColor by rememberSaveable { mutableStateOf(OwnerProfile.textColor) }
+    /** null=닫힘, "owner"=오너 컬러, "text"=말풍선 글씨색 */
+    var customTarget by rememberSaveable { mutableStateOf<String?>(null) }
 
     val canSave = name.isNotBlank()
     // 미설정 상태에서는 나갈 수 없다 (목업 02-B)
@@ -122,7 +124,7 @@ fun OwnerProfileScreen(nav: NavController) {
                             if (canSave) tokens.signature else tokens.signature.copy(alpha = .4f)
                         )
                         .clickable(enabled = canSave) {
-                            OwnerProfile.set(context, name, color, imagePath)
+                            OwnerProfile.set(context, name, color, imagePath, textColor)
                             nav.popBackStack()
                         }
                         .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
@@ -214,7 +216,17 @@ fun OwnerProfileScreen(nav: NavController) {
                     selected = color,
                     slot = RecentColors.Slot.OWNER,
                     onSelect = { color = it },
-                    onCustom = { showCustomColor = true },
+                    onCustom = { customTarget = "owner" },
+                )
+                Spacer(Modifier.height(PbpDimens.gap5))
+
+                FieldLabel("말풍선 글씨색")
+                ColorSwatchRow(
+                    presets = PbpPalette.textPresets,
+                    selected = textColor ?: PbpPalette.textPresets.first(),
+                    slot = RecentColors.Slot.TEXT,
+                    onSelect = { textColor = it },
+                    onCustom = { customTarget = "text" },
                 )
                 Spacer(Modifier.height(PbpDimens.gap5))
 
@@ -240,7 +252,8 @@ fun OwnerProfileScreen(nav: NavController) {
                         ) {
                             Text(
                                 "〔잡담〕 이 색으로 잡담하게 됩니다.",
-                                fontSize = 11.sp, color = tokens.chatterInk,
+                                fontSize = 11.sp,
+                                color = textColor?.let { Color(it) } ?: tokens.chatterInk,
                             )
                         }
                     }
@@ -251,16 +264,21 @@ fun OwnerProfileScreen(nav: NavController) {
         }
     }
 
-    if (showCustomColor) {
+    customTarget?.let { target ->
+        val isText = target == "text"
         HexColorDialog(
-            title = "오너 컬러 (커스텀)",
-            onDismiss = { showCustomColor = false },
+            title = if (isText) "말풍선 글씨색 (커스텀)" else "오너 컬러 (커스텀)",
+            onDismiss = { customTarget = null },
             onPick = { picked ->
-                color = picked
-                RecentColors.add(context, RecentColors.Slot.OWNER, picked)
-                showCustomColor = false
+                if (isText) textColor = picked else color = picked
+                RecentColors.add(
+                    context,
+                    if (isText) RecentColors.Slot.TEXT else RecentColors.Slot.OWNER,
+                    picked,
+                )
+                customTarget = null
             },
-            initial = color,
+            initial = if (isText) textColor else color,
         )
     }
 }

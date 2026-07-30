@@ -30,6 +30,7 @@ object Protocol {
         const val SENDER_IS_BOT = "senderIsBot"
         const val SENDER_NAME_COLOR = "senderNameColor"
         const val SENDER_BUBBLE_COLOR = "senderBubbleColor"
+        const val SENDER_TEXT_COLOR = "senderTextColor"
         const val IS_OOC = "isOoc"
         const val CREATED_AT = "createdAt"
         const val EDITED_AT = "editedAt"
@@ -47,6 +48,8 @@ object Protocol {
         // 멤버·아바타·초대코드 문서
         const val FCM_TOKEN = "fcmToken"
         const val JOINED_AT = "joinedAt"
+        const val PLATFORM = "platform"
+        const val LAST_READ_AT = "lastReadAt"
         const val UPDATED_AT = "updatedAt"
         const val DATA = "data"
         const val ROOM_ID = "roomId"
@@ -57,6 +60,15 @@ object Protocol {
         const val TEXT = "TEXT"
         const val DICE = "DICE"
         const val SYSTEM = "SYSTEM"
+    }
+
+    /**
+     * 멤버 문서의 기기 종류. 읽음 확인은 모바일끼리만 성립하므로
+     * (데스크톱은 lastReadAt을 쓰지 않는다) 상대가 어느 쪽인지 알아야 한다.
+     */
+    object Platform {
+        const val ANDROID = "android"
+        const val DESKTOP = "desktop"
     }
 
     /** 방 기본값 — 양 클라이언트가 같은 값을 써야 첫 화면이 갈라지지 않는다 */

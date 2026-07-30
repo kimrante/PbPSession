@@ -138,6 +138,7 @@ internal fun messageValues(
     "senderIsBot" to isBot,
     "senderNameColor" to sender.nameColor,
     "senderBubbleColor" to sender.bubbleColor,
+    "senderTextColor" to sender.textColor,
     "isOoc" to isOoc,
     "createdAt" to System.currentTimeMillis(),
     "authorUid" to authorUid,

@@ -32,6 +32,7 @@ object LogExporter {
         senderIsGm = senderIsGm,
         senderNameColor = senderNameColor,
         senderBubbleColor = senderBubbleColor,
+        senderTextColor = senderTextColor,
         isOoc = isOoc,
         editedAt = editedAt,
         diceExpr = diceExpr,

@@ -111,7 +111,6 @@ import com.pbp.desktop.ui.DesktopTiming
 internal fun ChatPane(
     room: JoinedRoom,
     messages: List<Message>,
-    memberCount: Int?,
     profiles: List<Profile>,
     myUid: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
@@ -151,24 +150,11 @@ internal fun ChatPane(
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // GM/PL · 참여 인원 — 방 테마 컬러 점을 둘 사이 구분점으로 쓴다
-                        Text(
-                            if (room.isMaster) "GM" else "PL",
-                            fontSize = 11.sp, lineHeight = 11.sp,
-                            fontWeight = FontWeight.Medium, color = Tokens.InkSub,
-                        )
-                        if (memberCount != null) {
-                            Spacer(Modifier.width(4.dp))
-                            Box(Modifier.size(6.dp).clip(CircleShape).background(theme))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                "${memberCount}명 참여 중",
-                                fontSize = 11.sp, lineHeight = 11.sp,
-                                fontWeight = FontWeight.Medium, color = Tokens.InkSub,
-                            )
-                        }
-                    }
+                    Text(
+                        if (room.isMaster) "GM" else "PL",
+                        fontSize = 11.sp, lineHeight = 11.sp,
+                        fontWeight = FontWeight.Medium, color = Tokens.InkSub,
+                    )
                 }
                 GhostButton("내보내기", Modifier, onExport)
                 Spacer(Modifier.width(8.dp))
@@ -255,6 +241,8 @@ internal fun MessageBlock(
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
     grouped: Boolean = false,
+    /** false면 시간을 감춘다 — 같은 사람이 같은 분에 이어 보낸 중간 메시지 */
+    showTime: Boolean = true,
     onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == myUid
@@ -308,7 +296,7 @@ internal fun MessageBlock(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(chatterColor)
                         .combinedClickable(
                             onClick = {},
-                            onLongClick = { if (mine) onLongPress(message) },
+                            onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                         )
                         .padding(horizontal = 12.dp, vertical = 3.dp)
                 ) {
@@ -335,6 +323,7 @@ internal fun MessageBlock(
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text, overrideName = "GM",
                             overrideBubbleColor = Tokens.gmQuoteBubble,
+                            showTime = showTime,
                             onLongPress = onLongPress,
                         )
                     }
@@ -359,7 +348,7 @@ internal fun MessageBlock(
                             overrideBody = part.text(),
                             quoteBubble = part is GmSpeech.Part.Quote,
                             showHeader = !grouped && index == 0,
-                            showTime = index == parts.lastIndex,
+                            showTime = showTime && index == parts.lastIndex,
                             onLongPress = onLongPress,
                         )
                     }
@@ -367,6 +356,16 @@ internal fun MessageBlock(
             }
         }
     }
+}
+
+/**
+ * 같은 사람이 같은 분(分)에 이어 보냈는가 — 앞 메시지의 시간을 생략하고 마지막에만 남긴다
+ * (모바일과 동일 규칙). 다른 인물이면 분이 같아도 각자 표기한다.
+ */
+internal fun sharesTimeLabel(current: Message, next: Message?): Boolean {
+    if (next == null) return false
+    if (current.senderName != next.senderName || current.authorUid != next.authorUid) return false
+    return formatTime(current.createdAt) == formatTime(next.createdAt)
 }
 
 /** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 (모바일과 동일 규칙) */
@@ -441,7 +440,12 @@ internal fun BubbleRow(
         message.senderNameColor != null -> Color(Tokens.nameColorForLight(message.senderNameColor))
         else -> Tokens.Ink
     }
-    val inkColor = if (message.isOoc) Tokens.ChatterInk else Tokens.BubbleInk
+    // 말풍선 글씨색은 발신 시점 스냅샷 (모바일과 동일)
+    val inkColor = when {
+        message.isOoc -> Tokens.ChatterInk
+        message.senderTextColor != null -> Color(message.senderTextColor)
+        else -> Tokens.BubbleInk
+    }
 
     Row(
         Modifier.fillMaxWidth(),
@@ -481,7 +485,7 @@ internal fun BubbleRow(
                             .clip(shape).background(bubbleColor)
                             .combinedClickable(
                                 onClick = {},
-                                onLongClick = { if (editable) onLongPress(message) },
+                                onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                             )
                     ) {
                         QuoteMark(
@@ -508,7 +512,7 @@ internal fun BubbleRow(
                             .clip(shape).background(bubbleColor)
                             .combinedClickable(
                                 onClick = {},
-                                onLongClick = { if (editable) onLongPress(message) },
+                                onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                             )
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
@@ -829,7 +833,7 @@ internal fun InputZone(
                             Box(Modifier.weight(1f)) {
                                 if (input.isEmpty()) {
                                     Text(
-                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
+                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (등대)[等臺] · 1d100",
                                         fontSize = 11.sp, color = Tokens.InkDim,
                                     )
                                 }

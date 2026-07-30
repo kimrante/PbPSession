@@ -139,6 +139,7 @@ object PbpPalette {
     // 팔레트 값·변환은 :shared Palette가 단일 출처 — 내보내기 색과 갈라지지 않게 (리뷰 A3)
     val namePresets = com.pbp.shared.Palette.namePresets
     val bubblePresets = com.pbp.shared.Palette.bubblePresets
+    val textPresets = com.pbp.shared.Palette.textPresets
     val gmQuoteBubble = com.pbp.shared.Palette.gmQuoteBubble
 
     fun nameColorForLight(argb: Long): Long = com.pbp.shared.Palette.nameColorForLight(argb)

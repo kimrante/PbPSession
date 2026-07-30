@@ -139,7 +139,7 @@ com.pbp.app
 rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeColor, backgroundKey, rule
 rooms/{roomId}/messages/{msgId}   type, body, diceExpr, diceOutcome, sender*, isOoc,
                                   createdAt, editedAt, authorUid, avatarId
-rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt
+rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt, platform, lastReadAt
 rooms/{roomId}/avatars/{md5}      data (base64, 긴 변 256px)
 inviteCodes/{code}                roomId
 ```

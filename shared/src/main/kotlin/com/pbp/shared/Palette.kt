@@ -12,6 +12,9 @@ object Palette {
     /** 말풍선 색 프리셋 — 오너 컬러도 이 목록을 쓴다 */
     val bubblePresets = listOf(0xFFFFD9A8, 0xFFBFE3F6, 0xFFE3D2F2)
 
+    /** 말풍선 글씨색 프리셋 — 기본 잉크 / 진회색 / 흰색 */
+    val textPresets = listOf(0xFF10151C, 0xFF4A4A4A, 0xFFFFFFFF)
+
     /** GM 발화 중 " " 대사 말풍선 색 */
     const val gmQuoteBubble = 0xFFE7E2D4
 

@@ -120,7 +120,7 @@ class LogExporterTest {
     fun `마크다운과 루비가 HTML 태그로 변환된다`() {
         val html = LogExporter.buildHtml(
             "방", "",
-            listOf(message(body = "**불빛이 꺼진 순간**을 |等臺《등대》에서"))
+            listOf(message(body = "**불빛이 꺼진 순간**을 (등대)[等臺]에서"))
         )
         assertTrue(html.contains("<b>불빛이 꺼진 순간</b>"))
         assertTrue(html.contains("<ruby>等臺<rt>등대</rt></ruby>"))

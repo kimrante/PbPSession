@@ -22,6 +22,10 @@ object OwnerProfile {
     var imagePath by mutableStateOf<String?>(null)
         private set
 
+    /** 말풍선 안 글씨색. null이면 테마 기본 잉크 */
+    var textColor by mutableStateOf<Long?>(null)
+        private set
+
     val isSet: Boolean get() = name.isNotBlank()
 
     private fun prefs(context: Context) =
@@ -32,16 +36,28 @@ object OwnerProfile {
         name = p.getString("ownerName", "") ?: ""
         color = p.getLong("ownerColor", DEFAULT_COLOR)
         imagePath = p.getString("ownerImagePath", null)
+        textColor = if (p.contains("ownerTextColor")) p.getLong("ownerTextColor", 0) else null
     }
 
-    fun set(context: Context, name: String, color: Long, imagePath: String?) {
+    fun set(
+        context: Context,
+        name: String,
+        color: Long,
+        imagePath: String?,
+        textColor: Long? = null,
+    ) {
         this.name = name.trim()
         this.color = color
         this.imagePath = imagePath
+        this.textColor = textColor
         prefs(context).edit()
             .putString("ownerName", this.name)
             .putLong("ownerColor", color)
             .putString("ownerImagePath", imagePath)
+            .apply {
+                if (textColor != null) putLong("ownerTextColor", textColor)
+                else remove("ownerTextColor")
+            }
             .apply()
     }
 }

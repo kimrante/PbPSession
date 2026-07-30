@@ -175,6 +175,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var ownerName by remember { mutableStateOf(config.ownerName) }
     var ownerColor by remember { mutableStateOf(config.ownerColor) }
     var ownerImagePath by remember { mutableStateOf(config.ownerImagePath) }
+    var ownerTextColor by remember { mutableStateOf(config.ownerTextColor) }
 
     var overlay by remember {
         mutableStateOf<OverlayKind?>(
@@ -198,9 +199,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     // 내 테마/배경 변경 직후 폴링이 옛 서버 값으로 되돌리는 것 방지 (P3-14)
     var metaFreezeUntil by remember { mutableStateOf(0L) }
-
-    // 상단 바 "N명 참여 중" — 메타 폴링과 같은 주기로 갱신, 실패 시 null이라 표기 생략
-    var memberCount by remember { mutableStateOf<Int?>(null) }
 
     // 메시지 작성자 신원 — 익명 UID가 있으면 그것을(규칙 정합), 없으면 기존 deviceId (C3)
     fun authorUid(): String = firestore.uid ?: config.deviceId
@@ -261,7 +259,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             }
         }
         messages = session.messages
-        memberCount = null // 방을 바꾸면 이전 방의 인원 수가 남지 않게
         var lastCreatedAt = session.lastCreatedAt
         var lastMetaPollAt = 0L
         var lastActivityAt = System.currentTimeMillis()
@@ -317,8 +314,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 }
                 if (now - lastMetaPollAt >= DesktopTiming.META_POLL_MS && now > metaFreezeUntil) {
                     lastMetaPollAt = now
-                    // 참여 인원 — 메타 폴링에 얹어 같은 주기로만 읽는다 (상단 바 "N명 참여 중")
-                    memberCount = withContext(Dispatchers.IO) { firestore.countMembers(room.remoteId) }
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
@@ -376,7 +371,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             Profile(
                 name = ownerName, emoji = "🙂",
                 nameColor = ownerColor, bubbleColor = ownerColor,
-                isGm = false, imagePath = ownerImagePath,
+                isGm = false, imagePath = ownerImagePath, textColor = ownerTextColor,
             )
         } else sender
         lastLocalSendAt.set(System.currentTimeMillis()) // 폴 주기 즉시 복귀 신호 (P2)
@@ -537,6 +532,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
     }
 
+    /** 발화 프로필 교체 — 화면 안내 메시지는 남기지 않는다 (모바일과 동일) */
     fun switchProfile(index: Int) {
         val room = selected ?: return
         if (room.activeProfileIndex == index) return
@@ -544,15 +540,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         rooms = rooms.map { if (it.remoteId == room.remoteId) updated else it }
         selected = updated
         persist()
-        val name = profiles.getOrNull(index)?.name ?: return
-        scope.launch(Dispatchers.IO) {
-            val ok = firestore.postMessage(
-                room.remoteId,
-                systemMessageValues("프로필을 '$name'(으)로 전환했습니다", authorUid()),
-            )
-            // 로컬 전환은 이미 끝났으므로 되돌리지 않고 알리기만 (C14)
-            if (!ok) System.err.println("프로필 전환 알림 전송 실패 — 상대 화면에는 표시되지 않습니다")
-        }
     }
 
     // 앱 전체 글꼴 적용 — 서술(명조)처럼 명시 지정한 곳은 그대로 유지된다
@@ -584,7 +571,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ChatPane(
                 room = room,
                 messages = messages,
-                memberCount = memberCount,
                 profiles = profiles,
                 // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
                 // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
@@ -766,15 +752,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             initialName = ownerName,
             initialColor = ownerColor,
             initialImage = ownerImagePath,
+            initialTextColor = ownerTextColor,
             forced = ownerName.isBlank(), // 미설정이면 저장 전에는 닫을 수 없다
             onDismiss = { overlay = null },
-            onSave = { name, color, image ->
+            onSave = { name, color, image, textColor ->
                 ownerName = name
                 ownerColor = color
                 ownerImagePath = image
+                ownerTextColor = textColor
                 config.ownerName = name
                 config.ownerColor = color
                 config.ownerImagePath = image
+                config.ownerTextColor = textColor
                 persist()
                 overlay = null
             },
@@ -802,14 +791,26 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
     messageAction?.let { target ->
         OverlayScaffold("메시지", onDismiss = { messageAction = null }) {
-            YellowButton("편집", Modifier.fillMaxWidth()) {
-                messageEdit = target
+            // 복사는 상대 메시지에서도 — 편집·삭제만 내 메시지로 제한
+            GhostButton("복사", Modifier.fillMaxWidth()) {
+                runCatching {
+                    java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(
+                        java.awt.datatransfer.StringSelection(target.body), null,
+                    )
+                }
                 messageAction = null
             }
-            Spacer(Modifier.height(8.dp))
-            GhostButton("삭제", Modifier.fillMaxWidth()) {
-                messageDelete = target
-                messageAction = null
+            if (target.authorUid == authorUid()) {
+                Spacer(Modifier.height(8.dp))
+                YellowButton("편집", Modifier.fillMaxWidth()) {
+                    messageEdit = target
+                    messageAction = null
+                }
+                Spacer(Modifier.height(8.dp))
+                GhostButton("삭제", Modifier.fillMaxWidth()) {
+                    messageDelete = target
+                    messageAction = null
+                }
             }
         }
     }

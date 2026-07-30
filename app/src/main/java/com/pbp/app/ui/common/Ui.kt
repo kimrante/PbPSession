@@ -5,11 +5,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -58,6 +60,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -184,8 +187,8 @@ fun MarkupText(
     // 지정이 없으면 앱 글꼴 설정을 따른다 — GM 서술만 명조를 명시적으로 넘긴다
     val family = fontFamily ?: com.pbp.app.ui.theme.AppFonts.fontFamily
     // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight) {
-        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight)
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight, lineHeight) {
+        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight, lineHeight)
     }
     Text(
         annotated,
@@ -215,8 +218,16 @@ private fun buildMarkup(
     rubyColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
+    lineHeight: TextUnit,
 ): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
     val nodes = PbpMarkup.parse(text)
+    // 루비 상자는 줄 높이를 넘지 않아야 한다 — 넘으면 그 줄만 벌어져 문단이 어긋난다.
+    // 줄 높이가 지정돼 있으면 그 값에 맞추고, 없으면 안전한 기본값.
+    val lineEm = if (lineHeight.isSpecified && fontSize.value > 0f) {
+        (lineHeight.value / fontSize.value).coerceAtLeast(MIN_RUBY_BOX_EM)
+    } else {
+        MIN_RUBY_BOX_EM
+    }
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated = buildAnnotatedString {
         nodes.forEachIndexed { index, node ->
@@ -240,17 +251,24 @@ private fun buildMarkup(
                 }
                 is PbpMarkup.Node.Ruby -> {
                     val id = "ruby-$index"
-                    // 폭은 본문/독음 중 넓은 쪽 (CJK≈1em, 그 외≈0.55em)
-                    val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.58f) + 0.15f
+                    // 폭은 본문/독음 중 넓은 쪽 (CJK≈1em, 그 외≈0.55em).
+                    // 독음이 작아진 만큼(0.42em) 폭 환산 계수도 낮춘다
+                    val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.46f) + 0.12f
                     appendInlineContent(id, node.base)
                     inline[id] = InlineTextContent(
-                        Placeholder(width.em, 1.95.em, PlaceholderVerticalAlign.TextCenter)
+                        // 줄 높이 안에 들어가는 상자 — 루비가 있는 줄만 벌어지지 않는다
+                        Placeholder(width.em, lineEm.em, PlaceholderVerticalAlign.Center)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        // 본문은 아래쪽 기준, 독음은 그 위 남는 공간에
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                            modifier = Modifier.fillMaxHeight(),
+                        ) {
                             Text(
                                 node.ruby,
-                                fontSize = fontSize * 0.55f,
-                                lineHeight = fontSize * 0.6f,
+                                fontSize = fontSize * RUBY_SCALE,
+                                lineHeight = fontSize * (RUBY_SCALE + 0.04f),
                                 color = rubyColor,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -259,7 +277,7 @@ private fun buildMarkup(
                             Text(
                                 node.base,
                                 fontSize = fontSize,
-                                lineHeight = fontSize * 1.1f,
+                                lineHeight = fontSize * 1.0f,
                                 color = color,
                                 fontFamily = fontFamily,
                                 fontWeight = fontWeight,
@@ -276,6 +294,12 @@ private fun buildMarkup(
 }
 
 /** 대략적 글자 폭(em) 추정 — CJK/한글 1em, 그 외 0.55em */
+/** 독음 글자 크기 = 본문의 42% */
+private const val RUBY_SCALE = 0.42f
+
+/** 줄 높이 지정이 없을 때 쓰는 루비 상자 높이(본문 기준 배수) */
+private const val MIN_RUBY_BOX_EM = 1.45f
+
 private fun textUnits(text: String): Float =
     text.sumOf { ch -> if (ch.code >= 0x1100) 1.0 else 0.55 }.toFloat()
 

@@ -1,5 +1,7 @@
 package com.pbp.desktop.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.em
 import com.pbp.shared.PbpMarkup
 
@@ -103,8 +106,8 @@ fun MarkupText(
     lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
     // 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, fontFamily, fontWeight) {
-        buildMarkup(text, fontSize, color, rubyColor, fontFamily, fontWeight)
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, fontFamily, fontWeight, lineHeight) {
+        buildMarkup(text, fontSize, color, rubyColor, fontFamily, fontWeight, lineHeight)
     }
     Text(
         annotated,
@@ -125,8 +128,15 @@ private fun buildMarkup(
     rubyColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
+    lineHeight: TextUnit,
 ): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
     val nodes = PbpMarkup.parse(text)
+    // 루비 상자가 줄 높이를 넘으면 그 줄만 벌어진다 — 줄 높이에 맞춰 가둔다 (모바일과 동일)
+    val lineEm = if (lineHeight.isSpecified && fontSize.value > 0f) {
+        (lineHeight.value / fontSize.value).coerceAtLeast(MIN_RUBY_BOX_EM)
+    } else {
+        MIN_RUBY_BOX_EM
+    }
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated = buildAnnotatedString {
         nodes.forEachIndexed { index, node ->
@@ -148,16 +158,20 @@ private fun buildMarkup(
                 }
                 is PbpMarkup.Node.Ruby -> {
                     val id = "ruby-$index"
-                    val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.58f) + 0.15f
+                    val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.46f) + 0.12f
                     appendInlineContent(id, node.base)
                     inline[id] = InlineTextContent(
-                        Placeholder(width.em, 1.95.em, PlaceholderVerticalAlign.TextCenter)
+                        Placeholder(width.em, lineEm.em, PlaceholderVerticalAlign.Center)
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom,
+                            modifier = Modifier.fillMaxHeight(),
+                        ) {
                             Text(
                                 node.ruby,
-                                fontSize = fontSize * 0.55f,
-                                lineHeight = fontSize * 0.6f,
+                                fontSize = fontSize * RUBY_SCALE,
+                                lineHeight = fontSize * (RUBY_SCALE + 0.04f),
                                 color = rubyColor,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1,
@@ -166,7 +180,7 @@ private fun buildMarkup(
                             Text(
                                 node.base,
                                 fontSize = fontSize,
-                                lineHeight = fontSize * 1.1f,
+                                lineHeight = fontSize * 1.0f,
                                 color = color,
                                 fontFamily = fontFamily,
                                 fontWeight = fontWeight,
@@ -181,6 +195,10 @@ private fun buildMarkup(
     }
     return annotated to inline
 }
+
+/** 독음 글자 크기 = 본문의 42% (모바일과 동일) */
+private const val RUBY_SCALE = 0.42f
+private const val MIN_RUBY_BOX_EM = 1.45f
 
 private fun textUnits(text: String): Float =
     text.sumOf { ch -> if (ch.code >= 0x1100) 1.0 else 0.55 }.toFloat()

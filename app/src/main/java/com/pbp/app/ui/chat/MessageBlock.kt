@@ -103,11 +103,25 @@ internal fun isContinuation(prev: Message?, current: Message): Boolean {
     return prev.senderName == current.senderName && prev.incoming == current.incoming
 }
 
+/**
+ * 같은 사람이 **같은 분(分)에** 이어서 보냈는가 — 그렇다면 앞 메시지의 시간은 생략하고
+ * 마지막 것에만 남긴다. 다른 인물이면 분이 같아도 각자 표기한다.
+ */
+internal fun sharesTimeLabel(current: Message, next: Message?): Boolean {
+    if (next == null) return false
+    if (current.senderName != next.senderName || current.incoming != next.incoming) return false
+    return formatTime(current.createdAt) == formatTime(next.createdAt)
+}
+
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
 @Composable
 internal fun MessageBlock(
     message: Message,
     grouped: Boolean = false,
+    /** false면 시간을 감춘다 — 같은 사람이 같은 분에 이어 보낸 중간 메시지 */
+    showTime: Boolean = true,
+    /** 상대가 여기까지 읽었음 — 내 메시지 중 가장 최신 1건에만 붙는다 */
+    showRead: Boolean = false,
     themeColor: Color,
     onLongPress: (Message) -> Unit,
 ) {
@@ -137,7 +151,7 @@ internal fun MessageBlock(
                     shape = RoundedCornerShape(999.dp),
                     modifier = Modifier.combinedClickable(
                         onClick = {},
-                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                        onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                     ),
                 ) {
                     Text(
@@ -192,6 +206,8 @@ internal fun MessageBlock(
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
+                            showTime = showTime,
+                            showRead = showRead,
                             overrideBody = part.text,
                             overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
@@ -208,8 +224,8 @@ internal fun MessageBlock(
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             if (parts.size <= 1) {
                 BubbleRow(
-                    message = message, showHeader = !grouped,
-                    themeColor = themeColor, onLongPress = onLongPress,
+                    message = message, showHeader = !grouped, showTime = showTime,
+                    showRead = showRead, themeColor = themeColor, onLongPress = onLongPress,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap1)) {
@@ -222,7 +238,8 @@ internal fun MessageBlock(
                             },
                             quoteBubble = part is GmSpeech.Part.Quote,
                             showHeader = !grouped && index == 0,
-                            showTime = index == parts.lastIndex,
+                            showTime = showTime && index == parts.lastIndex,
+                            showRead = showRead && index == parts.lastIndex,
                             themeColor = themeColor,
                             onLongPress = onLongPress,
                         )
@@ -258,7 +275,7 @@ internal fun NarrationBlock(
                 .background(tokens.narrBg)
                 .combinedClickable(
                     onClick = {},
-                    onLongClick = { if (!message.incoming) onLongPress(message) },
+                    onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                 )
                 .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
         ) {
@@ -287,6 +304,7 @@ internal fun BubbleRow(
     quoteBubble: Boolean = false,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
     showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
+    showRead: Boolean = false, // 상대가 여기까지 읽었음 (모바일↔모바일)
     themeColor: Color,
     onLongPress: (Message) -> Unit,
 ) {
@@ -312,7 +330,12 @@ internal fun BubbleRow(
         message.senderNameColor != null -> Color(message.senderNameColor)
         else -> tokens.ink
     }
-    val inkColor = if (message.isOoc) tokens.chatterInk else tokens.bubbleInk
+    // 말풍선 글씨색은 발신 시점 스냅샷 — 프로필을 나중에 바꿔도 과거 로그는 그대로
+    val inkColor = when {
+        message.isOoc -> tokens.chatterInk
+        message.senderTextColor != null -> Color(message.senderTextColor)
+        else -> tokens.bubbleInk
+    }
 
     Row(
         Modifier.fillMaxWidth(),
@@ -322,7 +345,10 @@ internal fun BubbleRow(
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
                 if (showTime) {
-                    TimeStamp(message, themeColor, alignEnd = true, Modifier.align(Alignment.Bottom))
+                    TimeStamp(
+                        message, themeColor, alignEnd = true, showRead = showRead,
+                        modifier = Modifier.align(Alignment.Bottom),
+                    )
                 }
             }
             if (!mine) {
@@ -364,7 +390,7 @@ internal fun BubbleRow(
                     )
                     .combinedClickable(
                         onClick = {},
-                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                        onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                     )
                 if (quoteInner != null) {
                     // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
@@ -468,9 +494,14 @@ internal fun TimeStamp(
     themeColor: Color,
     alignEnd: Boolean,
     modifier: Modifier = Modifier,
+    /** 상대(모바일)가 읽었음 — 시간 위에 작게 */
+    showRead: Boolean = false,
 ) {
     val tokens = Pbp.colors
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        if (showRead) {
+            Text("읽음", fontSize = 9.sp, color = tokens.inkDim)
+        }
         if (message.editedAt != null) {
             Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
         }

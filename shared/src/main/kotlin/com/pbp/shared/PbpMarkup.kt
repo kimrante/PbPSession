@@ -25,7 +25,11 @@ object PbpMarkup {
         data class Value(val text: String) : Node
     }
 
-    private val rubyPattern = Regex("""\|([^|《》]+)《([^《》]+)》""")
+    /**
+     * 루비(위첨자 독음) — `(루비)[문자]`. 괄호가 위에 작게 붙는 독음, 대괄호가 본문이다.
+     * 예: `(등대)[等臺]` → 等臺 위에 "등대".
+     */
+    private val rubyPattern = Regex("""\(([^()\[\]]+)\)\[([^\[\]]+)]""")
     private val valuePattern = Regex("""\{\{([^{}]+)\}\}""")
 
     fun parse(text: String): List<Node> {
@@ -49,7 +53,8 @@ object PbpMarkup {
             if (match.range.first > cursor) {
                 nodes += parseStyled(text.substring(cursor, match.range.first))
             }
-            nodes += Node.Ruby(match.groupValues[1], match.groupValues[2])
+            // (루비)[문자] — 괄호가 독음, 대괄호가 본문
+            nodes += Node.Ruby(base = match.groupValues[2], ruby = match.groupValues[1])
             cursor = match.range.last + 1
         }
         if (cursor < text.length) nodes += parseStyled(text.substring(cursor))

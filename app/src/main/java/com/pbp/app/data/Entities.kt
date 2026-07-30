@@ -59,6 +59,8 @@ data class CharacterProfile(
     val nameColor: Long? = null,
     /** 말풍선 색(ARGB). null이면 기본 프리셋 첫 색 */
     val bubbleColor: Long? = null,
+    /** 말풍선 안 글씨색(ARGB). null이면 테마 기본 잉크 */
+    val textColor: Long? = null,
     /** 캐릭터별 value 목록(ProfileStats 인코딩). 메시지의 {값이름}이 값으로 치환된다 */
     val stats: String = "",
 )
@@ -97,6 +99,8 @@ data class Message(
     val senderIsBot: Boolean = false,
     val senderNameColor: Long? = null,
     val senderBubbleColor: Long? = null,
+    /** 발신 시점의 말풍선 글씨색 스냅샷. null이면 테마 기본 잉크 */
+    val senderTextColor: Long? = null,
     val createdAt: Long,
     /** Firestore 메시지 문서 ID. 수신 중복 방지와 수정/삭제 전파에 쓴다 */
     val remoteId: String? = null,

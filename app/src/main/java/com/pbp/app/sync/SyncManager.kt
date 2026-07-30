@@ -176,28 +176,74 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }
 
     /**
-     * 방 참여 인원 — members 문서 수를 실시간으로 흘려보낸다 (상단 바 "N명 참여 중").
-     * 로컬 전용 방(공유 안 됨)은 나 혼자이므로 호출부에서 1을 쓴다.
-     * 오류·최초 응답 전에는 null을 흘려 호출부가 표기를 생략할 수 있게 한다.
+     * members/{myUid} 문서 보장 — 보안 규칙의 방 접근 근거.
+     * platform을 함께 남긴다: 읽음 확인은 모바일끼리만 성립해서 상대가
+     * 어느 기기인지 알아야 표시 여부를 정할 수 있다.
      */
-    fun observeMemberCount(remoteRoomId: String): kotlinx.coroutines.flow.Flow<Int?> =
+    private suspend fun ensureMembership(remoteRoomId: String) {
+        firestore.collection("rooms").document(remoteRoomId)
+            .collection("members").document(myUid)
+            .set(
+                mapOf(
+                    Protocol.Field.JOINED_AT to System.currentTimeMillis(),
+                    Protocol.Field.PLATFORM to Protocol.Platform.ANDROID,
+                ),
+                com.google.firebase.firestore.SetOptions.merge(),
+            )
+            .await()
+    }
+
+    /** 방마다 마지막으로 올린 읽음 시각 — 같은 값을 되풀이해 쓰지 않기 위한 가드 */
+    private val pushedReadAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * 읽음 확인 — 내가 읽은 마지막 상대 메시지 시각을 내 멤버 문서에 남긴다.
+     * [readAt]이 직전에 올린 값 이하면 쓰지 않는다(불필요한 쓰기 억제).
+     *
+     * platform을 함께 쓰는 이유: 이 기능 이전에 만들어진 멤버 문서에는 platform이 없어
+     * 상대가 나를 모바일로 알아보지 못한다. 읽음을 올리는 순간 같이 붙여 두면
+     * 별도 마이그레이션 없이 자연스럽게 채워진다.
+     */
+    suspend fun pushReadReceipt(remoteRoomId: String, readAt: Long) {
+        if ((pushedReadAt[remoteRoomId] ?: 0L) >= readAt) return
+        runCatching {
+            ensureAuth()
+            firestore.collection("rooms").document(remoteRoomId)
+                .collection("members").document(myUid)
+                .set(
+                    mapOf(
+                        Protocol.Field.LAST_READ_AT to readAt,
+                        Protocol.Field.PLATFORM to Protocol.Platform.ANDROID,
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge(),
+                )
+                .await()
+        }.onSuccess { pushedReadAt[remoteRoomId] = readAt }
+    }
+
+    /**
+     * 상대(모바일)가 어디까지 읽었는지 — members 문서의 lastReadAt 중 내 것을 뺀 최대값.
+     * 상대가 데스크톱뿐이면 null을 흘려 호출부가 "읽음" 표시를 생략한다.
+     */
+    fun observePeerReadAt(remoteRoomId: String): kotlinx.coroutines.flow.Flow<Long?> =
         kotlinx.coroutines.flow.callbackFlow {
             ensureAuth() // 규칙상 인증 없이는 읽을 수 없다
             val registration = firestore.collection("rooms").document(remoteRoomId)
                 .collection("members")
                 .addSnapshotListener { snapshot, error ->
-                    trySend(if (error != null || snapshot == null) null else snapshot.size())
+                    if (error != null || snapshot == null) {
+                        trySend(null)
+                        return@addSnapshotListener
+                    }
+                    val peerRead = snapshot.documents
+                        .filter { it.id != myUid }
+                        .filter { it.getString(Protocol.Field.PLATFORM) == Protocol.Platform.ANDROID }
+                        .mapNotNull { it.getLong(Protocol.Field.LAST_READ_AT) }
+                        .maxOrNull()
+                    trySend(peerRead)
                 }
             awaitClose { registration.remove() }
         }
-
-    /** members/{myUid} 문서 보장 — 보안 규칙의 방 접근 근거 */
-    private suspend fun ensureMembership(remoteRoomId: String) {
-        firestore.collection("rooms").document(remoteRoomId)
-            .collection("members").document(myUid)
-            .set(mapOf("joinedAt" to System.currentTimeMillis()), com.google.firebase.firestore.SetOptions.merge())
-            .await()
-    }
 
     /** 참여/공유 더블탭 가드 — 같은 키의 동시 실행을 차단한다 (L2) */
     private val joinInFlight = java.util.concurrent.ConcurrentHashMap<String, Boolean>()

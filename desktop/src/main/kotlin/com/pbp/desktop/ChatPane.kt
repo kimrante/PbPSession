@@ -48,8 +48,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -123,6 +125,16 @@ internal fun ChatPane(
     onMessageLongPress: (Message) -> Unit,
     onEditProfile: (Int) -> Unit,
     onExport: () -> Unit,
+    /** 입력창 "?" — 지원 문법 도움말 오버레이 열기 */
+    onShowMarkupHelp: () -> Unit,
+    /** 캡처 범위 (messages 인덱스). null이면 캡처 모드가 아니다 */
+    captureIdx: IntRange?,
+    onCaptureTap: (Int) -> Unit,
+    onCaptureExit: () -> Unit,
+    onCaptureMake: () -> Unit,
+    captureRendering: Boolean,
+    captureWithBackground: Boolean,
+    onToggleCaptureBackground: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -135,6 +147,11 @@ internal fun ChatPane(
             // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션.
             // PC는 좌측 정렬 유지 (trpg-app-mockup-pc-light.html) — 넓은 창에서 제목이
             // 사이드바 쪽 시선 흐름과 이어지고, 부제 규격만 모바일과 공유한다.
+            if (captureIdx != null) CaptureModeBar(
+                subtitle = if (captureIdx.first == captureIdx.last) "끝 메시지를 클릭하세요"
+                else "양 끝을 다시 클릭해 조절할 수 있어요",
+                onClose = onCaptureExit,
+            ) else
             Row(
                 Modifier.fillMaxWidth().height(DesktopDimens.appBar)
                     .background(
@@ -203,18 +220,54 @@ internal fun ChatPane(
                     items(messages.size, key = { messages[it].docId }) { index ->
                         val message = messages[index]
                         val grouped = isContinuation(messages.getOrNull(index - 1), message)
+                        // 목록은 오름차순이라 "다음" 메시지는 index + 1 (모바일과 동일 규칙)
+                        val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
+                        val mark = captureMarkOf(captureIdx, index)
+                        // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다
+                        val joinsAbove = captureIdx?.contains(index) == true &&
+                            captureIdx.contains(index - 1)
                         Box(
-                            Modifier.padding(top = if (index == 0) 0.dp else if (grouped) DesktopDimens.gap1 else DesktopDimens.gap3)
+                            Modifier.padding(
+                                top = when {
+                                    index == 0 || joinsAbove -> 0.dp
+                                    grouped -> DesktopDimens.gap1 // 모바일과 같은 연속 간격
+                                    else -> DesktopDimens.gap3
+                                }
+                            )
                         ) {
                             MessageBlock(
                                 message, myUid, room, avatarCache, firestore, grouped,
-                                onLongPress = onMessageLongPress,
+                                showTime = showTime,
+                                mark = mark,
+                                onTap = if (captureIdx != null) ({ onCaptureTap(index) }) else null,
+                                // 캡처 모드에서는 편집·삭제 팝업을 잠근다
+                                onLongPress = { if (captureIdx == null) onMessageLongPress(it) },
                             )
                         }
                     }
                 }
             }
 
+            // 캡처 모드면 입력 영역 자리를 캡처 바가 대신한다 (모바일과 같은 규칙)
+            if (captureIdx != null) {
+                val picked = messages.subList(
+                    captureIdx.first.coerceIn(0, messages.size),
+                    (captureIdx.last + 1).coerceIn(0, messages.size),
+                )
+                CaptureBar(
+                    count = picked.size,
+                    timeRange = if (captureIdx.first == captureIdx.last) null else timeRangeLabel(picked),
+                    startLabel = picked.firstOrNull()?.let {
+                        "시작 " + formatTime(it.createdAt) + " · " + it.senderName
+                    },
+                    overLimit = picked.size > CAPTURE_MAX,
+                    rendering = captureRendering,
+                    onMake = onCaptureMake,
+                    onCancel = onCaptureExit,
+                    withBackground = captureWithBackground,
+                    onToggleBackground = onToggleCaptureBackground,
+                )
+            } else
             // 입력 영역 — 전송 시 스크롤 플래그를 세워 실제 도착까지 유지 (N4)
             InputZone(
                 room = room,
@@ -227,6 +280,7 @@ internal fun ChatPane(
                 onSwitchProfile = onSwitchProfile,
                 onAddProfile = onAddProfile,
                 onEditProfile = onEditProfile,
+                onShowMarkupHelp = onShowMarkupHelp,
             )
         }
     }
@@ -243,16 +297,26 @@ internal fun MessageBlock(
     grouped: Boolean = false,
     /** false면 시간을 감춘다 — 같은 사람이 같은 분에 이어 보낸 중간 메시지 */
     showTime: Boolean = true,
+    /** 캡처 모드의 선택 상태. NONE이면 평상시·캡처 이미지와 완전히 같다 */
+    mark: CaptureMark = CaptureMark.NONE,
+    /** 캡처 모드에서 행 전체를 클릭했을 때 */
+    onTap: (() -> Unit)? = null,
     onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == myUid
+    val radiusPx = with(LocalDensity.current) { DesktopDimens.rCell.toPx() }
+    var wrapper = Modifier.fillMaxWidth().captureBand(mark, Tokens.Signature, radiusPx)
+    if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
+    if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = DesktopDimens.gap2)
+    if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
+    Box(wrapper) {
     when {
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0xBFFFFFFF))
                         .border(1.dp, Color(0x1214191F), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
                     Text(message.body, fontSize = 10.sp, color = Color(0x8C23272E))
                 }
@@ -279,6 +343,7 @@ internal fun MessageBlock(
                             label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
+                            // 성공 파랑은 모바일 statBlue와 같은 값 (플랫폼 드리프트 해소)
                             color = if (Rules.isSuccess(message.diceOutcome)) Tokens.StatBlue
                             else Tokens.Danger,
                         )
@@ -298,7 +363,7 @@ internal fun MessageBlock(
                             onClick = {},
                             onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                         )
-                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
                     Text(
                         "${message.senderName ?: ""} : ${message.body}",
@@ -311,12 +376,12 @@ internal fun MessageBlock(
         message.senderIsGm -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
-            Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 parts.forEach { part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
                             message, part.text,
-                            onLongPress = { if (mine) onLongPress(message) },
+                            onLongPress = { onLongPress(message) }, // 복사·캡처는 상대 서술에서도
                         )
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -340,7 +405,7 @@ internal fun MessageBlock(
                     onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -356,6 +421,70 @@ internal fun MessageBlock(
             }
         }
     }
+    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
+    when (mark) {
+        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
+        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
+        else -> Unit
+    }
+    }
+}
+
+/** 캡처 범위 선택 표시 — 모바일 CaptureMark와 같은 규칙 (목업 mockup-capture 03장) */
+internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
+
+/**
+ * 밴드(선택 구간) 배경·테두리. 열린 쪽의 둥근 모서리는 캔버스 밖으로 밀어 잘리게 하는
+ * 방식이라, 인접한 밴드가 맞닿아도 가로선이 생기지 않는다 (모바일과 같은 구현).
+ */
+internal fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
+    drawBehind {
+        if (mark == CaptureMark.NONE || mark == CaptureMark.OUT) return@drawBehind
+        val stroke = 2.dp.toPx()
+        val over = radiusPx + stroke
+        val top = if (mark == CaptureMark.START || mark == CaptureMark.ONLY) 0f else -over
+        val bottom =
+            if (mark == CaptureMark.END || mark == CaptureMark.ONLY) size.height else size.height + over
+        val inset = stroke / 2
+        val corner = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+        drawRoundRect(
+            color = accent.copy(alpha = .26f),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+            size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
+            cornerRadius = corner,
+        )
+        drawRoundRect(
+            color = accent,
+            topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
+            cornerRadius = corner,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
+    }
+
+/** 밴드 양 끝의 '시작'·'끝' 배지 */
+@Composable
+private fun EdgeBadge(label: String, modifier: Modifier) {
+    Text(
+        label,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Black,
+        color = Color.White,
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Tokens.SignatureInk)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
+}
+
+/** 선택 구간의 표시 상태 — 모바일 captureMarkOf와 같은 판정 */
+internal fun captureMarkOf(range: IntRange?, index: Int): CaptureMark = when {
+    range == null -> CaptureMark.NONE
+    index !in range -> CaptureMark.OUT
+    range.first == range.last -> CaptureMark.ONLY
+    index == range.first -> CaptureMark.START
+    index == range.last -> CaptureMark.END
+    else -> CaptureMark.IN
 }
 
 /**
@@ -384,7 +513,7 @@ internal fun GmSpeech.Part.text(): String = when (this) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun NarrationBlock(message: Message, text: String, onLongPress: () -> Unit = {}) {
-    val shape = RoundedCornerShape(topStart = DesktopDimens.rTail, topEnd = DesktopDimens.rCard, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rTail)
+    val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
     Column(
         Modifier.fillMaxWidth()
             .shadow(3.dp, shape) // 목업 box-shadow 0 3px 12px
@@ -472,9 +601,9 @@ internal fun BubbleRow(
                     Spacer(Modifier.height(4.dp))
                 }
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = DesktopDimens.rCard, topEnd = DesktopDimens.rTail, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rCard)
+                    RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
                 } else {
-                    RoundedCornerShape(topStart = DesktopDimens.rTail, topEnd = DesktopDimens.rCard, bottomEnd = DesktopDimens.rCard, bottomStart = DesktopDimens.rCard)
+                    RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
                 }
                 if (quoteInner != null) {
                     // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
@@ -520,7 +649,7 @@ internal fun BubbleRow(
                             if (message.isOoc) {
                                 Text(
                                     "잡담", fontSize = 9.sp, color = inkColor,
-                                    modifier = Modifier.padding(end = 6.dp)
+                                    modifier = Modifier.padding(end = 6.dp, top = 2.dp)
                                         .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
                                         .padding(horizontal = 5.dp),
                                 )
@@ -654,6 +783,7 @@ internal fun InputZone(
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
     onEditProfile: (Int) -> Unit,
+    onShowMarkupHelp: () -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
@@ -715,7 +845,7 @@ internal fun InputZone(
                                     2.dp,
                                     when {
                                         on -> Tokens.SignatureRing
-                                        profile.isGm -> Tokens.GmRing
+                                        profile.isGm -> Tokens.GmRing // GM 금테
                                         else -> Color(0x2614191F)
                                     },
                                     CircleShape,
@@ -800,7 +930,7 @@ internal fun InputZone(
                             RoundedCornerShape(999.dp),
                         )
                         .clickable { oocOn = !oocOn }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -833,7 +963,7 @@ internal fun InputZone(
                             Box(Modifier.weight(1f)) {
                                 if (input.isEmpty()) {
                                     Text(
-                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (등대)[等臺] · 1d100",
+                                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (루비)[문자] · 1d100",
                                         fontSize = 11.sp, color = Tokens.InkDim,
                                     )
                                 }
@@ -846,6 +976,18 @@ internal fun InputZone(
                                     .border(1.dp, Color(0x2614191F), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 5.dp, vertical = 1.dp),
                             )
+                            // 입력창 오른쪽 끝 "?" — 지원 문법 도움말 (모바일과 동일)
+                            Box(
+                                Modifier.padding(start = 8.dp).size(20.dp)
+                                    .clip(CircleShape).background(Color(0x1414191F))
+                                    .clickable(onClick = onShowMarkupHelp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "?", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    color = Tokens.InkSub,
+                                )
+                            }
                         }
                     },
                 )
@@ -854,7 +996,7 @@ internal fun InputZone(
                         .background(if (input.isNotBlank()) theme else theme.copy(alpha = .35f))
                         .clickable(enabled = input.isNotBlank()) { doSend() },
                     contentAlignment = Alignment.Center,
-                ) { Text("➤", fontSize = 15.sp, color = Color.White) }
+                ) { Text("➤", fontSize = 15.sp, color = Tokens.BubbleInk) }
             }
             errorMessage?.let { message ->
                 Text(

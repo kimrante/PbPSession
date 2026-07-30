@@ -2,6 +2,7 @@ package com.pbp.app.ui.chat
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -44,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,9 +70,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
+import com.pbp.app.data.CaptureSettings
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
+import com.pbp.app.export.CaptureRenderer
+import com.pbp.app.export.findActivity
 import com.pbp.shared.GmSpeech
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
@@ -85,7 +90,9 @@ import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,15 +127,74 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * 상대가 어디까지 읽었는지 — 화면이 열려 있는 동안만 구독한다.
+     * 상대가 어디까지 읽었는지 — 화면이 보이는 동안만 구독한다.
      * 상대가 데스크톱이거나 로컬 전용 방이면 null이라 "읽음"을 표시하지 않는다.
+     *
+     * remoteId만 뽑아 distinctUntilChanged로 거르는 이유(R1): room 엔티티에는 로컬
+     * lastReadAt이 들어 있어 markRead마다 새 값이 방출된다. 엔티티째로 flatMapLatest에
+     * 넣으면 메시지 1건마다 Firestore 리스너가 해제·재등록된다.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val peerReadAt = room
-        .flatMapLatest { repo.observePeerReadAt(it?.remoteId) }
+        .map { it?.remoteId }
+        .distinctUntilChanged()
+        .flatMapLatest { repo.observePeerReadAt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
+
+    // ── 캡처 ──────────────────────────────────────────────
+    // 비트맵은 내비게이션 인자로 넘길 수 없어 VM이 들고 있는다. 회전으로 컴포저블이
+    // 재생성돼도 다시 그리지 않으려면 여기 있어야 한다 — recycle은 onCleared에서만.
+    var captureResult by mutableStateOf<List<android.graphics.Bitmap>>(emptyList())
+        private set
+
+    /** 마지막으로 캡처한 메시지 — 배경 토글을 바꿀 때 다시 그리려면 필요하다 */
+    private var captureSource: List<Message> = emptyList()
+
+    fun renderCapture(
+        context: android.content.Context,
+        picked: List<Message>,
+        onDone: (Boolean) -> Unit,
+    ) = viewModelScope.launch {
+        val activity = context.findActivity()
+        if (activity == null) {
+            onDone(false)
+            return@launch
+        }
+        captureSource = picked
+        val bitmaps = runCatching {
+            CaptureRenderer.render(
+                activity = activity,
+                roomName = room.value?.name ?: "PbP",
+                backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
+                messages = picked,
+                withBackground = CaptureSettings.withBackground,
+            )
+        }.getOrDefault(emptyList())
+        recycleCapture()
+        captureResult = bitmaps
+        onDone(bitmaps.isNotEmpty())
+    }
+
+    /** 배경 포함 토글이 바뀌면 다시 그린다 — 배경은 이미지에 구워져 있어 재렌더 말고는 방법이 없다 */
+    fun rerenderCapture(context: android.content.Context, onDone: (Boolean) -> Unit) {
+        if (captureSource.isEmpty()) {
+            onDone(false)
+            return
+        }
+        renderCapture(context, captureSource, onDone)
+    }
+
+    private fun recycleCapture() {
+        captureResult.forEach { if (!it.isRecycled) it.recycle() }
+        captureResult = emptyList()
+    }
+
+    override fun onCleared() {
+        recycleCapture()
+        super.onCleared()
+    }
 
     fun send(text: String, isOoc: Boolean) = viewModelScope.launch {
         val sender = profiles.value.find { it.id == room.value?.activeProfileId }
@@ -182,7 +248,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val messages by vm.messages.collectAsState()
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
-    val peerReadAt by vm.peerReadAt.collectAsState()
+    // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
+    val peerReadAt by vm.peerReadAt.collectAsStateWithLifecycle()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
@@ -202,6 +269,45 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     var showAddProfile by rememberSaveable {
         mutableStateOf(false)
     }
+    // 캡처 범위 — (시작 메시지 id, 끝 메시지 id). 끝이 null이면 아직 고르는 중.
+    // 회전에도 유지되도록 다이얼로그 대상들과 같은 rememberSaveable 규칙 (N10)
+    var captureStart by rememberSaveable { mutableStateOf<Long?>(null) }
+    var captureEnd by rememberSaveable { mutableStateOf<Long?>(null) }
+    var captureRendering by remember { mutableStateOf(false) }
+    val capturing = captureStart != null
+    // 화면 렌더마다 O(N) 재스캔하지 않도록 인덱스 구간을 캐시한다 (F3과 같은 방식)
+    val captureIdx = remember(messages, captureStart, captureEnd) {
+        val a = messages.indexOfFirst { it.id == captureStart }
+        val b = messages.indexOfFirst { it.id == captureEnd }
+        when {
+            a < 0 -> null
+            b < 0 -> a..a
+            else -> minOf(a, b)..maxOf(a, b)
+        }
+    }
+    // 범위 안 메시지가 상대에 의해 삭제되면 시작점이 사라질 수 있다 — 모드를 닫는다
+    LaunchedEffect(captureIdx == null, capturing) {
+        if (capturing && captureIdx == null) {
+            captureStart = null
+            captureEnd = null
+            Toast.makeText(context, "선택한 메시지가 삭제되어 캡처를 취소했습니다", Toast.LENGTH_SHORT).show()
+        }
+    }
+    val exitCapture = {
+        captureStart = null
+        captureEnd = null
+    }
+    // 목업 03장의 탭 규칙: ① 시작만 있으면 그 자리가 끝 ② 양 끝을 다시 탭하면 그 끝만 이동
+    // ③ 범위 밖은 가까운 끝이 늘어난다. 어느 경우에도 범위가 초기화되지 않는다.
+    val onCaptureTap = { tapped: Int ->
+        captureIdx?.let { range ->
+            val next = captureRangeAfterTap(range, tapped)
+            captureStart = messages[next.first].id
+            captureEnd = messages[next.last].id
+        }
+        Unit
+    }
+    BackHandler(enabled = capturing) { exitCapture() }
 
     // 수정 작성 중 상대가 그 메시지를 삭제하면 다이얼로그가 무통보로 사라진다 —
     // 최소한 이유는 알린다 (L6)
@@ -237,6 +343,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         val appended = if (prevIndex >= 0) messages.size - 1 - prevIndex else messages.size
         prevLatestId = latestMessageId
         // 내 발신이면 무조건, 아니면 바닥 근처를 보고 있을 때만 따라간다 (P1-7)
+        // 캡처 모드에서는 고르던 자리가 밀리면 안 되므로 따라가지 않는다
+        if (capturing) return@LaunchedEffect
         if (pendingScrollToLatest || listState.firstVisibleItemIndex <= appended + 1) {
             listState.scrollToItem(0)
             pendingScrollToLatest = false
@@ -266,6 +374,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         ) {
             RoomBackdrop(backgroundKey = room?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND) {
                 // ── 상단 바: 타이틀 묶음은 정중앙, 버튼은 좌우 끝 (목업 mockup-chat-header)
+                if (capturing) {
+                    CaptureModeBar(
+                        subtitle = if (captureEnd == null) "끝 메시지를 탭하세요"
+                        else "양 끝을 다시 탭해 조절할 수 있어요",
+                        onClose = exitCapture,
+                    )
+                } else
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -328,9 +443,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 // ── 메시지 목록
                 val reversed = messages.asReversed()
                 // "읽음"은 상대가 읽은 내 메시지 중 가장 최신 1건에만 붙인다
-                val readMarkId = peerReadAt?.let { readAt ->
-                    messages.lastOrNull { !it.incoming && it.createdAt <= readAt }?.id
-                }
+                val readMarkId = remember(messages, peerReadAt) { readMarkTarget(messages, peerReadAt) }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -344,16 +457,30 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         // reverseLayout이라 revIdx-1이 더 나중(아래) 메시지 —
                         // 같은 사람이 같은 분에 이어 보냈으면 이 줄의 시간은 감춘다
                         val showTime = !sharesTimeLabel(message, reversed.getOrNull(revIdx - 1))
-                        // 항목 '사이' 간격이라 top 한쪽만 준다 — 상하 대칭 원칙의 문서화된
-                        // 예외 (연속 말풍선 gap1 / 그룹 사이 gap3, ui-guidelines 1장 원칙 3)
-                        Box(Modifier.padding(top = if (grouped) PbpDimens.gap1 else PbpDimens.gap3)) {
+                        // messages(오래된 순) 기준 인덱스 — 캡처 범위 판정에 쓴다
+                        val idx = messages.size - 1 - revIdx
+                        val mark = captureMarkOf(captureIdx, idx)
+                        // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다 (목업 실측 틈 0px)
+                        val joinsAbove = captureIdx?.contains(idx) == true &&
+                            captureIdx.contains(idx + 1)
+                        val topPad = when {
+                            joinsAbove -> 0.dp
+                            grouped -> PbpDimens.gap1
+                            else -> PbpDimens.gap3
+                        }
+                        // 말풍선 사이 간격은 위쪽에만 준다 — 아래에도 주면 이중으로 벌어진다.
+                        // 상하 대칭 규칙(CLAUDE.md §0)의 의도적 예외
+                        Box(Modifier.padding(top = topPad)) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
                                 showTime = showTime,
                                 showRead = message.id == readMarkId,
                                 themeColor = themeColor,
-                                onLongPress = { actionTargetId = it.id },
+                                mark = mark,
+                                onTap = if (capturing) ({ onCaptureTap(idx) }) else null,
+                                // 캡처 모드에서는 편집·삭제 팝업을 잠근다
+                                onLongPress = { if (!capturing) actionTargetId = it.id },
                             )
                         }
                     }
@@ -372,7 +499,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                         .clip(RoundedCornerShape(999.dp))
                                         .background(Color.Black.copy(alpha = .35f))
                                         .clickable { vm.loadOlder() }
-                                        // 터치용 칩 패딩 (ui-guidelines 5장 '필·칩')
                                         .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                                 )
                             }
@@ -380,6 +506,35 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     }
                 }
 
+                // ── 하단: 캡처 모드면 입력줄 자리를 캡처 바가 대신한다
+                if (capturing) {
+                    val picked = captureIdx
+                        ?.let { messages.subList(it.first, it.last + 1).toList() }
+                        .orEmpty()
+                    CaptureBar(
+                        count = picked.size,
+                        timeRange = if (captureEnd == null) null else timeRangeLabel(picked),
+                        startLabel = picked.firstOrNull()?.let {
+                            "시작 " + formatTime(it.createdAt) + " · " + (it.senderName ?: "이름 없음")
+                        },
+                        estimatedPx = if (captureEnd == null) null else CaptureRenderer.estimateHeightPx(picked),
+                        overLimit = picked.size > ChatViewModel.PAGE_SIZE,
+                        rendering = captureRendering,
+                        onMake = {
+                            captureRendering = true
+                            vm.renderCapture(context, picked) { ok ->
+                                captureRendering = false
+                                if (ok) {
+                                    exitCapture()
+                                    nav.navigate(com.pbp.app.Routes.capturePreview(roomId))
+                                } else {
+                                    Toast.makeText(context, "이미지를 만들지 못했습니다", Toast.LENGTH_SHORT)
+                                        .show()
+                                }
+                            }
+                        },
+                    )
+                } else
                 // ── 입력 영역: 프로필 교체 스트립 + 잡담 토글 + 입력줄
                 InputZone(
                     profiles = profiles,
@@ -426,6 +581,11 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 )
                 actionTargetId = null
                 Toast.makeText(context, "메시지를 복사했습니다", Toast.LENGTH_SHORT).show()
+            },
+            onCapture = {
+                captureStart = target.id
+                captureEnd = null
+                actionTargetId = null
             },
             onEdit = {
                 editTargetId = target.id

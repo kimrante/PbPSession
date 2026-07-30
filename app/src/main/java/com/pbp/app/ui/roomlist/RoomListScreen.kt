@@ -165,8 +165,7 @@ fun RoomListScreen(nav: NavController) {
                     Spacer(Modifier.width(PbpDimens.gap1))
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                     com.pbp.app.ui.common.OwnerAvatar(
-                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath,
-                        PbpDimens.avatarBar, // 데스크톱과 동일 규격 (ui-guidelines 7장)
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, PbpDimens.avatarBar,
                         Modifier.combinedClickable(onClick = { showManager = true }),
                     )
                 }
@@ -223,17 +222,19 @@ fun RoomListScreen(nav: NavController) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🎲", fontSize = 40.sp)
-                        Spacer(Modifier.size(PbpDimens.gap2))
-                        Text("첫 세션을 만들어보세요", fontSize = 13.sp, color = tokens.inkDim)
+                        Spacer(Modifier.height(PbpDimens.gap2))
+                        Text("첫 세션을 만들어보세요", color = tokens.inkDim, fontSize = 13.sp)
                     }
                 }
             } else {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = PbpDimens.gap4, end = PbpDimens.gap4,
-                        top = PbpDimens.gap3, // 카드 사이 간격과 같은 리듬 — 상단 바 밀착 방지
-                        bottom = 88.dp, // FAB 56 + gap4×2 (스크롤 끝 여유 — 파생식 예외)
+                        start = PbpDimens.gap4,
+                        end = PbpDimens.gap4,
+                        top = PbpDimens.gap3, // 첫 카드가 앱바에 밀착하지 않게
+                        // FAB(touchTarget 기준 56) + 화면 가장자리 여백 ×2
+                        bottom = 88.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
                 ) {
@@ -369,7 +370,7 @@ private fun RoomCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCard))
-            .background(if (tokens.isDark) Color(0x09FFFFFF) else tokens.panel)
+            .background(tokens.cardBg)
             .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),

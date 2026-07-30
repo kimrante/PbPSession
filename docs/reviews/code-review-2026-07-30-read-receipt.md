@@ -132,3 +132,17 @@
 - R1 수정 후: 화면 진입 → 메시지 10건 수신 시 members 리스너 등록이 1회뿐인지 로그로 확인.
 - R3 수정 시: "마지막 본인 메시지가 DICE" 케이스의 배지 위치를 명시하는 UI 스냅샷/수동 시나리오 추가.
 - 재쓰기 가드는 `pushedReadAt` 로직을 순수 함수로 빼면 단위 테스트 가능(선택).
+
+---
+
+## 조치 결과 (2026-07-30)
+
+| 항목 | 조치 | 위치 |
+|---|---|---|
+| R1 | `room.map { it?.remoteId }.distinctUntilChanged()`로 리스너 재등록 제거 | `ChatScreen.kt` `peerReadAt` |
+| R2 | items 루프에서 `showTime` 계산·전달 — 데스크톱 시간 접기 실동작 | `desktop/ChatPane.kt` |
+| R3 | `readMarkTarget()` 신설(말풍선 있는 최신 메시지 선택) + 배지를 `showTime`에서 분리 | `MessageBlock.kt`, 단위 테스트 `ReadMarkTest` 7건 |
+| R4 | GM 인용은 마지막 파트에만 `showTime`·`showRead` 전달 | `MessageBlock.kt` GM 분기 |
+| R5 | `collectAsStateWithLifecycle`로 전환 — 백그라운드에서 구독 해제 (`lifecycle-runtime-compose` 추가) | `ChatScreen.kt`, `libs.versions.toml` |
+| R6 | 조치 없음 — 방·프로세스당 1회 중복 쓰기는 수용 범위 (리뷰 판단 그대로) | — |
+| 문서 잔재 | 구 루비 문법 설명 3곳을 `(등대)[等臺]`로 갱신 | `PbpMarkup.kt`, `architecture.md`, `PbP-design-spec.md` |

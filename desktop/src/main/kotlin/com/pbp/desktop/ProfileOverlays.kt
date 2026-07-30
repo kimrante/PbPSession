@@ -178,7 +178,7 @@ internal fun ProfileOverlay(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(
-                Modifier.size(48.dp).clip(CircleShape).background(Tokens.Panel2) // 오너 편집(48)과 동일 규격 (감사 P3)
+                Modifier.size(44.dp).clip(CircleShape).background(Tokens.Panel2)
                     .border(1.dp, Tokens.Line, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
@@ -432,7 +432,9 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     )
                 }
                     .size(16.dp)
-                    .border(2.dp, Tokens.Ink, CircleShape)
+                    // 흰 링만 두면 밝은 영역에서 사라진다 — 안쪽에 잉크 링을 겹친다
+                    .border(3.dp, Tokens.Ink.copy(alpha = .45f), CircleShape)
+                    .border(2.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Color(current))
             )
@@ -470,7 +472,8 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
                 }
                     .size(16.dp)
-                    .border(2.dp, Tokens.Ink, CircleShape)
+                    .border(3.dp, Tokens.Ink.copy(alpha = .45f), CircleShape)
+                    .border(2.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Color(hsvToArgb(hue, 1f, 1f)))
             )
@@ -560,7 +563,7 @@ internal fun ProfileManagerOverlay(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OwnerAvatar(ownerName, ownerColor, ownerImagePath, DesktopDimens.avatarStrip)
+            OwnerAvatar(ownerName, ownerColor, ownerImagePath, 36.dp)
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(

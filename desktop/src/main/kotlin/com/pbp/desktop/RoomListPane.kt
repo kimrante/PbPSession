@@ -143,7 +143,7 @@ internal fun LeftPane(
                 Spacer(Modifier.width(6.dp))
                 // 앱 글꼴 설정 — 모바일 방 목록의 'Aa' 버튼과 동일 위계
                 Box(
-                    Modifier.size(32.dp).clip(CircleShape)
+                    Modifier.size(DesktopDimens.avatarBar).clip(CircleShape)
                         .border(1.dp, Tokens.Line, CircleShape)
                         .clickable(onClick = onFontSetting),
                     contentAlignment = Alignment.Center,
@@ -185,9 +185,9 @@ internal fun LeftPane(
             }
         }
         LazyColumn(
-            Modifier.weight(1f).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = DesktopDimens.gap2), // 상하 대칭 (감사 P2)
+            Modifier.weight(1f).padding(horizontal = DesktopDimens.gap4),
+            verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap3),
+            contentPadding = PaddingValues(vertical = DesktopDimens.gap2),
         ) {
             items(rooms, key = { it.remoteId }) { room ->
                 val active = room.remoteId == selected?.remoteId
@@ -315,7 +315,7 @@ internal fun D10Mark(modifier: Modifier = Modifier) {
 internal fun EmptyPane() {
     Box(Modifier.fillMaxSize().background(Tokens.Bg), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("🎲", fontSize = 40.sp) // 모바일과 동일 (감사 P4)
+            Text("🎲", fontSize = 40.sp) // 모바일과 같은 예외 크기
             Spacer(Modifier.height(DesktopDimens.gap2))
             Text("왼쪽에서 세션을 만들거나 초대 코드로 참여하세요", color = Tokens.InkDim, fontSize = 13.sp)
         }

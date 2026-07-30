@@ -33,6 +33,8 @@ data class PbpColors(
     val narrBg: Color,        // GM 서술 문단 배경
     val veilTop: Color,       // 배경 이미지 가독성 베일
     val veilMid: Color,
+    val cardBg: Color,        // 방 목록 카드 면 — 화면 코드의 다크 분기를 없애기 위한 토큰
+    val chatBarBg: Color,     // 채팅 입력 바 면 (배경 위에 얹히므로 반투명)
 )
 
 val PbpDarkColors = PbpColors(
@@ -58,6 +60,8 @@ val PbpDarkColors = PbpColors(
     narrBg = Color(0x73060A0E),
     veilTop = Color(0x9E0A0E14),
     veilMid = Color(0x470A0E14),
+    cardBg = Color(0x09FFFFFF),
+    chatBarBg = Color(0xE0090C11),
 )
 
 val PbpLightColors = PbpColors(
@@ -83,6 +87,8 @@ val PbpLightColors = PbpColors(
     narrBg = Color(0xB3FFFFFF),
     veilTop = Color(0x8CF4F2EC),
     veilMid = Color(0x40F4F2EC),
+    cardBg = Color(0xFFFFFFFF),
+    chatBarBg = Color(0xEDFFFFFF),
 )
 
 val LocalPbpColors = staticCompositionLocalOf { PbpDarkColors }
@@ -110,15 +116,15 @@ object PbpDimens {
     val rCell = 12.dp  // 그리드 셀, 입력 필드, 썸네일
     val rCard = 16.dp  // 카드, 말풍선, 패널
     val rSheet = 20.dp // 다이얼로그, 시트
-    val rTail = 4.dp   // 말풍선 꼬리 (내/상대/인용 공통, 데스크톱 동일)
+    val rTail = 4.dp   // 말풍선 꼬리 쪽 모서리 — 다섯 곳에서 반복되던 리터럴
 
     // 고정 규격
     val appBarHeight = 56.dp // 상단 바 — 전 화면 동일
     val touchTarget = 40.dp  // 아이콘·전송 버튼
     val avatarChat = 38.dp   // 채팅 말풍선 아바타
     val avatarStrip = 36.dp  // 프로필 교체 스트립 아바타
-    val avatarBar = 32.dp    // 상단 바 오너 아바타 (데스크톱과 동일 값)
-    val avatarProfile = 92.dp // 프로필 편집·오너 화면 대표 사진
+    val avatarBar = 32.dp    // 상단 바의 오너 아바타 (PC와 같은 값)
+    val avatarProfile = 92.dp // 프로필 편집 화면의 큰 사진 (오너·캐릭터 공통)
     val logoTile = 22.dp     // 상단 바 로고 타일 (앱 아이콘과 같은 d10)
 
     /**
@@ -132,10 +138,8 @@ object PbpDimens {
 
 /** 프리셋 팔레트 (목업 03·04 화면) */
 object PbpPalette {
-    /** 방 테마 컬러 3종 — :shared Palette 단일 출처 (데스크톱과 드리프트 방지) */
-    val themePresets = com.pbp.shared.Palette.themePresets
-
     // 팔레트 값·변환은 :shared Palette가 단일 출처 — 내보내기 색과 갈라지지 않게 (리뷰 A3)
+    val themePresets = com.pbp.shared.Palette.themePresets
     val namePresets = com.pbp.shared.Palette.namePresets
     val bubblePresets = com.pbp.shared.Palette.bubblePresets
     val textPresets = com.pbp.shared.Palette.textPresets

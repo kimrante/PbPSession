@@ -223,10 +223,14 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    // 링 3dp + 이미지 사이 3dp 갭 — 오너 화면과 같은 구조 (링이 이미지를 가리지 않게)
-                    Box(Modifier.border(3.dp, tokens.signature, CircleShape).padding(3.dp)) {
+                    Box {
                         if (pickedPath != null) {
-                            Box(Modifier.size(PbpDimens.avatarProfile).clip(CircleShape)) {
+                            Box(
+                                Modifier
+                                    .size(PbpDimens.avatarProfile)
+                                    .border(3.dp, tokens.signature, CircleShape)
+                                    .clip(CircleShape)
+                            ) {
                                 AsyncImage(
                                     model = File(pickedPath!!),
                                     contentDescription = null,
@@ -239,6 +243,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 emoji = existing?.emoji ?: "🙂",
                                 imagePath = existing?.imagePath,
                                 size = PbpDimens.avatarProfile,
+                                ringColor = tokens.signature,
                             )
                         }
                     }
@@ -379,16 +384,11 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(PbpDimens.rCard))
-                        .background(
-                            // 방 배경 프리셋 '등대'와 같은 조합 — 근사 복제 대신 팔레트 재사용
-                            PbpPalette.backgroundPresets["preset_lighthouse"]!!.let { (top, bottom) ->
-                                Brush.linearGradient(listOf(Color(top), Color(bottom)))
-                            }
-                        )
+                        .background(Brush.linearGradient(listOf(Color(0xFF233248), Color(0xFF141D2B))))
                         .border(1.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(PbpDimens.rCard))
                         .padding(PbpDimens.gap4),
                 ) {
-                    Text("미 리 보 기 — 방 배경 위", fontSize = 10.sp, letterSpacing = 1.5.sp, color = tokens.inkDim)
+                    Text("미 리 보 기 — 방 배경 위", fontSize = 10.sp, letterSpacing = 3.sp, color = tokens.inkDim)
                     Spacer(Modifier.height(PbpDimens.gap3))
                     Row(
                         Modifier.fillMaxWidth(),

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -111,6 +112,7 @@ internal fun InputZone(
     // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
     var input by rememberSaveable { mutableStateOf("") }
     var oocOn by rememberSaveable { mutableStateOf(false) }
+    var helpOpen by rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
@@ -124,7 +126,7 @@ internal fun InputZone(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(if (tokens.isDark) Color(0xE0090C11) else tokens.panel.copy(alpha = .93f))
+            .background(tokens.chatBarBg)
             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
     ) {
         // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
@@ -174,11 +176,17 @@ internal fun InputZone(
         if (suggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 items(suggestions, key = { it }) { name ->
+                    // 칩 크기는 그대로 두고 히트박스만 터치 규격으로 (접근성)
+                    Box(
+                        Modifier.heightIn(min = PbpDimens.touchTarget),
+                        contentAlignment = Alignment.Center,
+                    ) {
                     Text(
                         "$name 판정",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = tokens.signature,
+                        // 밝은 입력 바 위 옐로 '텍스트'는 signatureInk (스펙 0장)
+                        color = tokens.signatureInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(tokens.signature.copy(alpha = .14f))
@@ -189,19 +197,22 @@ internal fun InputZone(
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }
-                            // 터치용 칩 패딩 (ui-guidelines 5장 '필·칩')
                             .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     )
+                    }
                 }
             }
             Spacer(Modifier.height(PbpDimens.gap2))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
-            // 잡담 토글
+            // 잡담 토글 — 알약은 그대로 두고 히트박스만 터치 규격으로 (접근성)
+            Box(
+                Modifier.heightIn(min = PbpDimens.touchTarget),
+                contentAlignment = Alignment.Center,
+            ) {
             Row(
                 Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    // off 배경은 흰색-알파 대신 잡담 토큰 — 라이트 모드의 흰 입력바 위에서도 보인다
                     .background(if (oocOn) tokens.signature.copy(alpha = .16f) else tokens.chatterBubble)
                     .border(
                         1.dp,
@@ -209,7 +220,6 @@ internal fun InputZone(
                         RoundedCornerShape(999.dp),
                     )
                     .clickable(onClick = onOocToggle)
-                    // 터치용 칩 패딩 (ui-guidelines 5장 '필·칩')
                     .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -217,7 +227,7 @@ internal fun InputZone(
                     Modifier
                         .size(width = 22.dp, height = 12.dp)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(if (oocOn) tokens.signature else tokens.chatterInk.copy(alpha = .35f)),
+                        .background(if (oocOn) tokens.signature else tokens.line),
                     contentAlignment = if (oocOn) Alignment.CenterEnd else Alignment.CenterStart,
                 ) {
                     Box(
@@ -235,6 +245,7 @@ internal fun InputZone(
                     fontWeight = FontWeight.Bold,
                     color = if (oocOn) tokens.signature else tokens.inkDim,
                 )
+            }
             }
             val canSend = input.isNotBlank() && activeId != null
             val doSend = {
@@ -261,15 +272,28 @@ internal fun InputZone(
                     },
                 placeholder = {
                     Text(
-                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (등대)[等臺] · 1d100",
+                        if (oocOn) "잡담으로 보내기…" else "**굵게** · (루비)[문자] · 1d100",
                         fontSize = 13.sp, // 입력줄 플레이스홀더 = 본문과 같은 단(스케일)
                         color = tokens.inkDim,
                     )
                 },
+                // 입력창 오른쪽 끝 "?" — 지원 문법 도움말
+                trailingIcon = {
+                    Box(
+                        Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(tokens.chatterBubble)
+                            .clickable { helpOpen = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("?", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = tokens.inkSub)
+                    }
+                },
                 colors = TextFieldDefaults.colors(
-                    // 흰색-알파 컨테이너는 라이트 모드에서 배경과 구분 불가 — 잡담 토큰으로
-                    focusedContainerColor = tokens.chatterBubble,
-                    unfocusedContainerColor = tokens.chatterBubble,
+                    // 라이트 입력바 배경이 거의 흰색이라 흰 반투명 컨테이너는 구분되지 않는다
+                    focusedContainerColor = tokens.panel2,
+                    unfocusedContainerColor = tokens.panel2,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
@@ -287,4 +311,5 @@ internal fun InputZone(
             ) { Text("➤", fontSize = 15.sp, color = tokens.bubbleInk) }
         }
     }
+    if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
 }

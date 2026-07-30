@@ -112,8 +112,7 @@ fun ProfileManagerDialog(
                     Text(
                         "＋ 프로필 추가하기",
                         fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                        // 밝은 다이얼로그 면 위 옐로 텍스트는 signatureInk (스펙 0장)
-                        color = tokens.signatureInk,
+                        color = tokens.signatureInk, // 밝은 다이얼로그 위 옐로 텍스트 금지 (스펙 0장)
                     )
                 }
             }
@@ -135,7 +134,7 @@ private fun ManagerRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCell))
             .combinedClickable(onClick = onClick)
-            .padding(PbpDimens.gap3), // 다이얼로그 탭 행 공통 패딩 (프로필 추가 행과 동일)
+            .padding(PbpDimens.gap3), // 동류 행(추가하기·AddOptionRow)과 같은 패딩
         verticalAlignment = Alignment.CenterVertically,
     ) {
         avatar()

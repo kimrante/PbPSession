@@ -66,8 +66,7 @@ fun PbpTheme(
         MaterialTheme(
             colorScheme = material,
             typography = typographyWith(AppFonts.fontFamily),
-            // 다이얼로그·시트가 M3 기본 28 대신 rSheet(20)를 쓰도록 — 커스텀 Dialog와
-            // 스톡 AlertDialog가 한 가족이 된다 (ui-guidelines 5장)
+            // 스톡 AlertDialog(extraLarge=28dp)를 커스텀 다이얼로그와 같은 반경으로 (P3-2)
             shapes = androidx.compose.material3.Shapes(
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(PbpDimens.rSheet),
             ),

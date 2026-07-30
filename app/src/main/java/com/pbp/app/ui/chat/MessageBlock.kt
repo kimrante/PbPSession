@@ -49,8 +49,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -83,7 +87,6 @@ import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
-import com.pbp.app.ui.theme.PbpDarkColors
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
@@ -114,7 +117,61 @@ internal fun sharesTimeLabel(current: Message, next: Message?): Boolean {
     return formatTime(current.createdAt) == formatTime(next.createdAt)
 }
 
+/**
+ * "읽음" 배지를 붙일 메시지 id — 상대가 읽은 내 메시지 중 **말풍선이 있는** 가장 최신 1건.
+ *
+ * 다이스·잡담·시스템과 인용 없는 GM 서술은 중앙 정렬 블록이라 시간·배지를 그리는 자리가
+ * 아예 없다. 그런 메시지를 고르면 배지가 어디에도 뜨지 않으므로 직전 말풍선으로 물러난다 (R3).
+ */
+internal fun readMarkTarget(messages: List<Message>, peerReadAt: Long?): Long? {
+    if (peerReadAt == null) return null
+    return messages.lastOrNull { it.createdAt <= peerReadAt && rendersBubble(it) }?.id
+}
+
+/** 이 메시지가 말풍선(=시간·읽음 배지를 담는 줄)으로 그려지는가 */
+private fun rendersBubble(message: Message): Boolean {
+    if (message.incoming || message.type != MessageType.TEXT || message.isOoc) return false
+    if (!message.senderIsGm) return true
+    // GM은 인용(대사)만 말풍선 — 서술 문단뿐이면 배지를 얹을 곳이 없다
+    return GmSpeech.split(message.body).any { it is GmSpeech.Part.Quote }
+}
+
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
+/**
+ * 캡처 범위 선택 표시 (목업 mockup-capture 03장).
+ * 말풍선 내부는 건드리지 않고 **감싸는 상자에만** 얹으므로, [CaptureMark.NONE]으로
+ * 부르면 화면과 캡처 이미지가 완전히 같아진다.
+ */
+internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
+
+/**
+ * 밴드(선택 구간) 배경·테두리. 열린 쪽(위/아래)의 둥근 모서리는 캔버스 밖으로 밀어내
+ * 잘리게 하는 방식이라, 인접한 밴드가 맞닿아도 가로선이 생기지 않는다.
+ */
+private fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
+    drawBehind {
+        if (mark == CaptureMark.NONE || mark == CaptureMark.OUT) return@drawBehind
+        val stroke = 2.dp.toPx()
+        val over = radiusPx + stroke // 열린 쪽을 이만큼 밖으로 빼면 모서리가 잘려 직선이 된다
+        val top = if (mark == CaptureMark.START || mark == CaptureMark.ONLY) 0f else -over
+        val bottom = if (mark == CaptureMark.END || mark == CaptureMark.ONLY) size.height else size.height + over
+        val inset = stroke / 2
+        val corner = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+        drawRoundRect(
+            color = accent.copy(alpha = .26f),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+            size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
+            cornerRadius = corner,
+        )
+        drawRoundRect(
+            color = accent,
+            topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
+            cornerRadius = corner,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
+    }
+
 @Composable
 internal fun MessageBlock(
     message: Message,
@@ -124,9 +181,21 @@ internal fun MessageBlock(
     /** 상대가 여기까지 읽었음 — 내 메시지 중 가장 최신 1건에만 붙는다 */
     showRead: Boolean = false,
     themeColor: Color,
+    /** 캡처 모드의 선택 상태. NONE이면 평상시와 완전히 같다 */
+    mark: CaptureMark = CaptureMark.NONE,
+    /** 캡처 모드에서 행 전체를 탭했을 때. 평상시에는 빈 람다라 clickable을 붙이지 않는다 */
+    onTap: (() -> Unit)? = null,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
+    val radiusPx = with(LocalDensity.current) { PbpDimens.rCell.toPx() }
+    var wrapper = Modifier
+        .fillMaxWidth()
+        .captureBand(mark, tokens.signature, radiusPx)
+    if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
+    if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = PbpDimens.gap2)
+    if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
+    Box(wrapper) {
     when {
         message.type == MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -135,8 +204,10 @@ internal fun MessageBlock(
                         message.body,
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = .6f),
-                        // 표시용 필 패딩 (ui-guidelines 5장 '필·칩')
-                        modifier = Modifier.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap1),
+                        modifier = Modifier.padding(
+                            horizontal = PbpDimens.gap3,
+                            vertical = PbpDimens.gap1,
+                        ),
                     )
                 }
             }
@@ -160,8 +231,10 @@ internal fun MessageBlock(
                         "${message.senderName ?: ""} : ${message.body}",
                         fontSize = 10.sp,
                         color = tokens.bubbleInk.copy(alpha = .85f),
-                        // 표시용 필 패딩 — 시스템 필과 동일 (ui-guidelines 5장 '필·칩')
-                        modifier = Modifier.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap1),
+                        modifier = Modifier.padding(
+                            horizontal = PbpDimens.gap3,
+                            vertical = PbpDimens.gap1,
+                        ),
                     )
                 }
             }
@@ -181,8 +254,7 @@ internal fun MessageBlock(
                     Text(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp,
-                        // 칩 배경이 모드 무관 어두운 면이라 다크용 시그니처 옐로가 항상 맞다
-                        color = PbpDarkColors.signature,
+                        color = Color(0xFFFFE9AE),
                         fontWeight = FontWeight.Bold,
                     )
                     // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
@@ -204,15 +276,16 @@ internal fun MessageBlock(
         message.senderIsGm && !message.isOoc -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
-            // 조각 간격은 캐릭터 발화와 같은 gap2 (동류 동일 스페이싱)
+            // 배지·시간은 마지막 인용 말풍선에만 — 인용이 여럿이면 중복으로 붙는다 (R4)
+            val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
             Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
-                parts.forEach { part ->
+                parts.forEachIndexed { index, part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
-                            showTime = showTime,
-                            showRead = showRead,
+                            showTime = showTime && index == lastQuote,
+                            showRead = showRead && index == lastQuote,
                             overrideBody = part.text,
                             overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
@@ -253,6 +326,28 @@ internal fun MessageBlock(
             }
         }
     }
+    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
+    when (mark) {
+        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
+        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
+        else -> Unit
+    }
+    }
+}
+
+/** 밴드 양 끝의 '시작'·'끝' 배지 — 9sp는 배지 한정 예외 (토큰 문서) */
+@Composable
+private fun EdgeBadge(label: String, modifier: Modifier) {
+    Text(
+        label,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Black,
+        color = Color.White,
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Pbp.colors.signatureInk)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
 }
 
 /** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만). 본인은 길게 눌러 편집·삭제 */
@@ -349,9 +444,12 @@ internal fun BubbleRow(
         Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
-                if (showTime) {
+                // 시간이 접힌 줄이어도 배지는 남긴다 — 상대가 연속 발화의 중간까지만
+                // 읽었을 때 표시가 통째로 사라지지 않도록 (R3)
+                if (showTime || showRead) {
                     TimeStamp(
-                        message, themeColor, alignEnd = true, showRead = showRead,
+                        message, themeColor, alignEnd = true,
+                        showTime = showTime, showRead = showRead,
                         modifier = Modifier.align(Alignment.Bottom),
                     )
                 }
@@ -379,11 +477,10 @@ internal fun BubbleRow(
                     Spacer(Modifier.height(PbpDimens.gap1))
                 }
                 val r = PbpDimens.rCard
-                val tail = PbpDimens.rTail
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = r, topEnd = tail, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = r, topEnd = PbpDimens.rTail, bottomEnd = r, bottomStart = r)
                 } else {
-                    RoundedCornerShape(topStart = tail, topEnd = r, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = PbpDimens.rTail, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
                 val bubbleBase = Modifier
                     .widthIn(max = 240.dp)
@@ -399,8 +496,9 @@ internal fun BubbleRow(
                         onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                     )
                 if (quoteInner != null) {
-                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
-                    // 닫는 따옴표는 글리프 잉크가 글자 상자 위쪽에 몰려 있어 offset으로 보정한다.
+                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 좌우 여백은 9dp로 같다.
+                    // 위아래 값(5dp / +6dp)이 다른 것은 글리프 잉크가 글자 상자 위쪽에
+                    // 몰려 있어서다 — 눈으로 보이는 여백을 맞추기 위한 보정.
                     Box(bubbleBase) {
                         QuoteMark(
                             "“", inkColor,
@@ -500,17 +598,27 @@ internal fun TimeStamp(
     themeColor: Color,
     alignEnd: Boolean,
     modifier: Modifier = Modifier,
+    /** false면 시각·수정됨을 감춘다 (동일 시각 접힘) — 읽음 배지는 별개다 */
+    showTime: Boolean = true,
     /** 상대(모바일)가 읽었음 — 시간 위에 작게 */
     showRead: Boolean = false,
 ) {
     val tokens = Pbp.colors
+    // 라이트 모드에선 밝은 테마색이 밝은 베일 위에서 읽히지 않는다 —
+    // 이름색과 같은 보정 경로를 태워 진하게 (스펙 2장)
+    val timeColor = if (tokens.isDark) themeColor else {
+        val argb = themeColor.toArgb().toLong() and 0xFFFFFFFFL
+        Color(PbpPalette.nameColorForLight(argb))
+    }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         if (showRead) {
-            Text("읽음", fontSize = 9.sp, color = tokens.inkDim)
+            Text("읽음", fontSize = 10.sp, color = tokens.inkDim)
         }
-        if (message.editedAt != null) {
-            Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+        if (showTime) {
+            if (message.editedAt != null) {
+                Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
+            }
+            Text(formatTime(message.createdAt), fontSize = 10.sp, color = timeColor)
         }
-        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
     }
 }

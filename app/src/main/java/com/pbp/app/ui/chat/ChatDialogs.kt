@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -106,6 +107,7 @@ internal fun MessageActionDialog(
     onCopy: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onCapture: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -170,6 +172,15 @@ internal fun MessageActionDialog(
                     onClick = onDelete,
                 )
                 }
+                // 캡처는 복사와 같이 누구 메시지에서든 — canModify 밖에 둔다
+                MessageActionRow(
+                    icon = "🖼️",
+                    tileColor = tokens.themeDefault,
+                    title = "캡처",
+                    titleColor = Color(PbpPalette.nameColorForLight(0xFF8EC5E8)),
+                    subtitle = "여기부터 범위를 골라 이미지로 만듭니다",
+                    onClick = onCapture,
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Text(
                         "취소",
@@ -216,6 +227,64 @@ internal fun MessageActionRow(
         Column {
             Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = titleColor)
             Text(subtitle, fontSize = 11.sp, color = Pbp.colors.inkDim)
+        }
+    }
+}
+
+/**
+ * 입력 문법 도움말 — 입력창 오른쪽 끝 "?"로 연다. 오른쪽 위 X로 닫는다.
+ * 목록은 [com.pbp.shared.MarkupHelp]가 단일 출처라 PC와 항상 같다.
+ *
+ * 제목은 센터, 항목은 좌측 정렬 — 문법 예시는 세로로 줄이 맞아야 훑어읽기 좋다.
+ */
+@Composable
+internal fun MarkupHelpDialog(onDismiss: () -> Unit) {
+    val tokens = Pbp.colors
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(PbpDimens.rSheet))
+                .background(tokens.panel)
+                .padding(PbpDimens.gap4),
+        ) {
+            Box(Modifier.fillMaxWidth()) {
+                Text(
+                    "입력 문법",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.ink,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✕", fontSize = 13.sp, color = tokens.inkSub)
+                }
+            }
+            Spacer(Modifier.height(PbpDimens.gap3))
+            com.pbp.shared.MarkupHelp.entries.forEach { entry ->
+                Column(Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap2)) {
+                    Text(
+                        entry.syntax,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = tokens.signature,
+                    )
+                    Spacer(Modifier.height(PbpDimens.gap1))
+                    Text(entry.summary, fontSize = 12.sp, color = tokens.ink)
+                    entry.example?.let {
+                        Spacer(Modifier.height(PbpDimens.gap1))
+                        Text(it, fontSize = 11.sp, color = tokens.inkDim)
+                    }
+                }
+            }
         }
     }
 }

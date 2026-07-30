@@ -6,6 +6,13 @@ package com.pbp.shared
  */
 object Palette {
 
+    /** 방 테마 컬러 프리셋 (색 → 이름) — 이름·말풍선과 같은 3종 */
+    val themePresets = listOf(
+        0xFF8EC5E8L to "새벽 하늘",
+        0xFFC9A7E8L to "라일락",
+        0xFFE8B48EL to "호박등",
+    )
+
     /** 이름 색 프리셋 — 최근 색 5칸이 같은 줄에 들어가도록 3종 (목업 01장) */
     val namePresets = listOf(0xFFFFC46B, 0xFF8EC5E8, 0xFFC9A7E8)
 
@@ -17,13 +24,6 @@ object Palette {
 
     /** GM 발화 중 " " 대사 말풍선 색 */
     const val gmQuoteBubble = 0xFFE7E2D4
-
-    /** 방 테마 컬러 3종 — 이름·말풍선과 같은 개수 (+ 커스텀은 UI에서 별도 처리) */
-    val themePresets = listOf(
-        0xFF8EC5E8 to "새벽 하늘",
-        0xFFC9A7E8 to "라일락",
-        0xFFE8B48E to "호박등",
-    )
 
     /**
      * 다크 모드용 밝은 이름색 → 화이트 모드(및 종이 톤 로그)용 진한 색 치환.

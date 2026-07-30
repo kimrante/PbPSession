@@ -101,12 +101,65 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.text.style.TextAlign
 import com.pbp.shared.Protocol
 import com.pbp.desktop.data.AppPaths
 import com.pbp.desktop.ui.DesktopDimens
 import com.pbp.desktop.ui.DesktopTiming
 
 /** 공용 오버레이 부품과 일반 다이얼로그 — Main.kt에서 분리 (리뷰 B1) */
+
+/**
+ * 입력 문법 도움말 — 입력창 오른쪽 끝 "?"로 연다. 오른쪽 위 X로 닫는다.
+ * 목록은 [com.pbp.shared.MarkupHelp]가 단일 출처라 모바일과 항상 같다.
+ *
+ * 제목은 센터, 항목은 좌측 정렬 — 문법 예시는 세로로 줄이 맞아야 훑어읽기 좋다.
+ */
+@Composable
+internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(DesktopDimens.overlay)
+                .clip(RoundedCornerShape(20.dp))
+                .background(Tokens.Panel)
+                .clickable(enabled = false) {}
+                .padding(22.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Box(Modifier.fillMaxWidth()) {
+                Text(
+                    "입력 문법", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                    color = Tokens.Ink, modifier = Modifier.align(Alignment.Center),
+                )
+                Box(
+                    Modifier.align(Alignment.CenterEnd).size(28.dp)
+                        .clip(CircleShape).clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("✕", fontSize = 14.sp, color = Tokens.InkSub)
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            com.pbp.shared.MarkupHelp.entries.forEach { entry ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    Text(
+                        entry.syntax, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace, color = Tokens.SignatureRing,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(entry.summary, fontSize = 12.sp, color = Tokens.Ink)
+                    entry.example?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(it, fontSize = 11.sp, color = Tokens.InkDim)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
@@ -217,8 +270,8 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
     OverlayScaffold("초대 코드", onDismiss) {
         Text(
             code, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+            textAlign = TextAlign.Center, // 모바일과 동일하게 센터 (CLAUDE.md §0-(a))
             modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center, // 모바일과 동일 (감사 P4·센터 정렬)
         )
         Spacer(Modifier.height(8.dp))
         Text(

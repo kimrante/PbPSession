@@ -3,6 +3,7 @@ package com.pbp.app
 import android.app.Activity
 import android.app.Application
 import android.os.Bundle
+import coil3.request.allowHardware
 import com.pbp.app.data.AppDatabase
 import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.MessageType
@@ -13,7 +14,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class PbpApp : Application() {
+/**
+ * 하드웨어 비트맵을 끄는 이유(캡처): Coil은 기본으로 이미지를 하드웨어 비트맵으로
+ * 디코드하는데, 그런 비트맵은 **소프트웨어 캔버스에 그릴 수 없다**. 캡처는 화면을
+ * 찍는 대신 뷰를 소프트웨어 캔버스로 그리므로, 아바타가 하나라도 있으면
+ * "Software rendering doesn't support hardware bitmaps"로 렌더가 통째로 실패한다.
+ * 아바타는 256px이라 소프트웨어 비트맵으로 두어도 메모리 차이가 사실상 없다.
+ */
+class PbpApp : Application(), coil3.SingletonImageLoader.Factory {
+
+    override fun newImageLoader(context: coil3.PlatformContext) =
+        coil3.ImageLoader.Builder(context)
+            .allowHardware(false)
+            .build()
+
     val database by lazy { AppDatabase.build(this) }
     val syncManager by lazy { SyncManager(this, database) }
     val repository by lazy {

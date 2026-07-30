@@ -148,14 +148,15 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     // 결과 비트맵은 CaptureHolder에 둔다 — viewModel()은 화면마다 저장소가 달라
     // 여기 두면 미리보기 화면이 볼 수 없다.
 
+    /** @param onDone null이면 성공, 아니면 실패 사유 (화면에 그대로 보여 준다) */
     fun renderCapture(
         context: android.content.Context,
         picked: List<Message>,
-        onDone: (Boolean) -> Unit,
+        onDone: (String?) -> Unit,
     ) = viewModelScope.launch {
         val activity = context.findActivity()
         if (activity == null) {
-            onDone(false)
+            onDone("액티비티를 찾지 못했습니다")
             return@launch
         }
         val request = CaptureHolder.Request(
@@ -163,7 +164,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
             backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
             messages = picked,
         )
-        val bitmaps = runCatching {
+        val result = runCatching {
             CaptureRenderer.render(
                 activity = activity,
                 roomName = request.roomName,
@@ -173,13 +174,17 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
             )
         }.onFailure {
             android.util.Log.w("PbpCapture", "캡처 렌더 실패", it)
-        }.getOrDefault(emptyList())
+        }
+        val bitmaps = result.getOrDefault(emptyList())
         if (bitmaps.isEmpty()) {
-            onDone(false)
+            val cause = result.exceptionOrNull()
+            onDone(
+                cause?.let { "${it::class.simpleName}: ${it.message}" } ?: "만들어진 이미지가 없습니다"
+            )
             return@launch
         }
         CaptureHolder.set(request, bitmaps)
-        onDone(true)
+        onDone(null)
     }
 
     fun send(text: String, isOoc: Boolean) = viewModelScope.launch {
@@ -515,14 +520,19 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         rendering = captureRendering,
                         onMake = {
                             captureRendering = true
-                            vm.renderCapture(context, picked) { ok ->
+                            vm.renderCapture(context, picked) { error ->
                                 captureRendering = false
-                                if (ok) {
+                                if (error == null) {
                                     exitCapture()
                                     nav.navigate(com.pbp.app.Routes.CAPTURE)
                                 } else {
-                                    Toast.makeText(context, "이미지를 만들지 못했습니다", Toast.LENGTH_SHORT)
-                                        .show()
+                                    // 사유를 그대로 보여 준다 — 로그를 볼 수 없는 환경에서
+                                    // "만들지 못했습니다"만으로는 고칠 수가 없다
+                                    Toast.makeText(
+                                        context,
+                                        "이미지를 만들지 못했습니다 — $error",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
                                 }
                             }
                         },

@@ -505,3 +505,21 @@ S1~S7 전부 반영. 지시서와 다르게 간 지점만 남긴다.
 
 `WRITE_EXTERNAL_STORAGE`는 안드로이드 10(API 29) 이상에서 **의도적으로 묻지 않는다** —
 MediaStore가 권한 없이 쓰게 해 주므로 정상 동작이다.
+
+## v0.7.2 수정 — 렌더가 통째로 실패하던 원인
+
+**하드웨어 비트맵**. Coil은 기본으로 이미지를 `Bitmap.Config.HARDWARE`로 디코드하는데,
+그런 비트맵은 소프트웨어 캔버스에 그릴 수 없다(`Software rendering doesn't support
+hardware bitmaps`). 캡처는 화면을 찍는 대신 뷰를 소프트웨어 캔버스로 그리므로,
+**아바타 사진이 하나라도 있으면 렌더가 통째로 실패**했다. `PbpApp`이
+`SingletonImageLoader.Factory`를 구현해 `allowHardware(false)`로 앱 전체에서 끈다
+(아바타는 256px이라 메모리 차이가 사실상 없다).
+
+함께 고친 것:
+
+- 실패 사유를 삼키지 않는다. 장별 `runCatching`을 걷어내고 예외를 올려, 토스트에
+  `이미지를 만들지 못했습니다 — {예외}`로 보여 준다. 로그를 볼 수 없는 환경에서
+  "만들지 못했습니다"만으로는 원인을 좁힐 수 없었다.
+- `ComposeView`에 lifecycle·savedState·viewModelStore 소유자를 직접 걸어 둔다
+  (부모를 타고 못 찾는 경우의 예외 차단).
+- 첫 프레임에 높이가 0이면 최대 8프레임까지 기다린다.

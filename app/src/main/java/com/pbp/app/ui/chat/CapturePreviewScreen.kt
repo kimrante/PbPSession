@@ -188,7 +188,7 @@ fun CapturePreviewScreen(nav: NavController) {
                                 busy = true
                                 scope.launch {
                                     // 배경은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
-                                    val pages = runCatching {
+                                    val result = runCatching {
                                         CaptureRenderer.render(
                                             activity = activity,
                                             roomName = request.roomName,
@@ -196,11 +196,15 @@ fun CapturePreviewScreen(nav: NavController) {
                                             messages = request.messages,
                                             withBackground = CaptureSettings.withBackground,
                                         )
-                                    }.getOrDefault(emptyList())
+                                    }
                                     busy = false
+                                    val pages = result.getOrDefault(emptyList())
                                     if (pages.isEmpty()) {
-                                        Toast.makeText(context, "다시 그리지 못했습니다", Toast.LENGTH_SHORT)
-                                            .show()
+                                        Toast.makeText(
+                                            context,
+                                            "다시 그리지 못했습니다 — ${result.exceptionOrNull()?.message}",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
                                     } else {
                                         CaptureHolder.set(request, pages)
                                     }

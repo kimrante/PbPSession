@@ -6,6 +6,9 @@ import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,18 +101,16 @@ object CaptureRenderer {
         // 아바타는 Coil AsyncImage라 두 프레임만으로는 안 붙는다 — 캐시를 먼저 채운다
         preloadAvatars(activity, messages, backgroundKey.takeIf { withBackground })
         val chunks = splitByHeight(messages)
-        return chunks.mapIndexedNotNull { index, chunk ->
-            runCatching {
-                renderOne(
-                    activity = activity,
-                    roomName = roomName,
-                    backgroundKey = backgroundKey,
-                    messages = chunk,
-                    withBackground = withBackground,
-                    page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
-                    // 여러 장이어도 머리글의 시각 범위는 그 장의 것이어야 헷갈리지 않는다
-                )
-            }.getOrNull()
+        // 예외를 삼키지 않는다 — 삼키면 "이미지를 만들지 못했습니다"만 남고 원인을 알 수 없다
+        return chunks.mapIndexed { index, chunk ->
+            renderOne(
+                activity = activity,
+                roomName = roomName,
+                backgroundKey = backgroundKey,
+                messages = chunk,
+                withBackground = withBackground,
+                page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
+            )
         }
     }
 
@@ -190,18 +191,31 @@ object CaptureRenderer {
                 }
             }
         }
+        // ComposeView는 컴포지션을 돌리기 전에 이 세 주인을 찾아야 한다. 보통은 부모를
+        // 타고 올라가 decorView에서 찾지만, 못 찾으면 붙는 순간 예외가 난다 — 직접 걸어 둔다
+        view.setViewTreeLifecycleOwner(activity)
+        view.setViewTreeSavedStateRegistryOwner(activity)
+        view.setViewTreeViewModelStoreOwner(activity)
         val root = activity.window.decorView as ViewGroup
         // 화면 밖에 두되 붙여 둔다 — 떼어 두면 컴포지션이 돌지 않는다(GONE도 마찬가지)
         view.alpha = 0f
         root.addView(view, ViewGroup.LayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT))
         try {
-            awaitFrame()
-            awaitFrame()
-            view.measure(
-                View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            )
-            val height = view.measuredHeight.coerceIn(1, MAX_HEIGHT_PX)
+            // 컴포지션 → 레이아웃까지. 첫 프레임에 아직 높이가 0이면 몇 프레임 더 기다린다
+            // (아바타 디코드처럼 늦게 붙는 것이 있다)
+            var height = 0
+            var frames = 0
+            while (height <= 0 && frames < 8) {
+                awaitFrame()
+                frames++
+                view.measure(
+                    View.MeasureSpec.makeMeasureSpec(widthPx, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                )
+                height = view.measuredHeight
+            }
+            check(height > 0) { "레이아웃 높이가 0" }
+            height = height.coerceAtMost(MAX_HEIGHT_PX)
             view.layout(0, 0, widthPx, height)
             Bitmap.createBitmap(widthPx, height, Bitmap.Config.ARGB_8888)
                 .also { view.draw(Canvas(it)) }

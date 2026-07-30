@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,7 +71,6 @@ import com.pbp.app.data.MessageType
 import com.pbp.app.data.OwnerProfile
 import com.pbp.shared.Rules
 import com.pbp.app.ui.common.FontSettingDialog
-import com.pbp.app.ui.profile.OwnerProfileDialog
 import com.pbp.app.ui.profile.ProfileManagerDialog
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
@@ -131,8 +131,10 @@ fun RoomListScreen(nav: NavController) {
     var showJoin by remember { mutableStateOf(false) }
     var showFont by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ChatRoom?>(null) }
-    // 오너 프로필 미설정이면 먼저 설정하게 한다 (첫 실행 포함)
-    var showOwner by remember { mutableStateOf(!OwnerProfile.isSet) }
+    // 오너 프로필 미설정이면 먼저 설정 화면으로 (첫 실행 포함, 목업 02-B)
+    LaunchedEffect(OwnerProfile.isSet) {
+        if (!OwnerProfile.isSet) nav.navigate(com.pbp.app.Routes.OWNER)
+    }
     // 프로필 관리 — 오너 아이콘을 누르면 전체 프로필 목록
     var showManager by remember { mutableStateOf(false) }
     var showAddProfile by remember { mutableStateOf(false) }
@@ -280,13 +282,6 @@ fun RoomListScreen(nav: NavController) {
         FontSettingDialog(onDismiss = { showFont = false })
     }
 
-    if (showOwner) {
-        OwnerProfileDialog(
-            forced = !OwnerProfile.isSet, // 미설정이면 저장 전에는 닫을 수 없다
-            onClose = { showOwner = false },
-        )
-    }
-
     if (showManager) {
         ProfileManagerDialog(
             profiles = allProfiles,
@@ -294,7 +289,7 @@ fun RoomListScreen(nav: NavController) {
             onDismiss = { showManager = false },
             onOwner = {
                 showManager = false
-                showOwner = true
+                nav.navigate(com.pbp.app.Routes.OWNER)
             },
             onProfile = { id ->
                 showManager = false

@@ -459,7 +459,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
 }
 
 @Composable
-private fun FieldLabel(text: String) {
+internal fun FieldLabel(text: String) {
     Text(
         text,
         fontSize = 11.sp,

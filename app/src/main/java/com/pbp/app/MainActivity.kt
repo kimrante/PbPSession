@@ -49,6 +49,7 @@ private fun AppNav() {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = Routes.ROOMS) {
         composable(Routes.ROOMS) { RoomListScreen(nav) }
+        composable(Routes.OWNER) { com.pbp.app.ui.profile.OwnerProfileScreen(nav) }
         composable(
             Routes.CHAT_PATTERN,
             arguments = listOf(navArgument(Routes.ARG_ROOM_ID) { type = NavType.LongType }),

@@ -6,6 +6,7 @@ package com.pbp.app
  */
 object Routes {
     const val ROOMS = "rooms"
+    const val OWNER = "owner"
 
     const val CHAT_PATTERN = "chat/{roomId}"
     const val PROFILE_PATTERN = "profile/{profileId}"

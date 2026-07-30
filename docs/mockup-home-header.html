@@ -10,7 +10,7 @@
 /* 디자인 토큰 — 라이트 모드 + v2 스페이싱.
    디자인 원칙: 센터 정렬 기본 · 패딩/마진 상하 동일 · 동류 항목은 같은 여백값.
    상단 바 규격은 채팅 상단 바(mockup-chat-header.html)와 완전 동일:
-   높이 56 · 타이틀 블록 정중앙 · 제목↔부제 3px · 부제 11px rgba(20,25,32,.72) 500 */
+   높이 56 · 타이틀 묶음 정중앙 · 제목↔부제 3px · 부제 11px rgba(20,25,32,.72) 500 */
 :root{
   --bg:#f4f2ec; --panel:#ffffff; --panel-2:#efeade;
   --line:rgba(20,25,32,.10); --ink:#23272e;
@@ -23,27 +23,39 @@
 body{
   background:#e9e5db;color:var(--ink);
   font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
-  display:flex;align-items:center;justify-content:center;min-height:100vh;padding:40px;
+  display:flex;gap:48px;align-items:center;justify-content:center;min-height:100vh;padding:40px;
 }
+.col{display:flex;flex-direction:column;align-items:center;gap:16px}
+.tag{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);padding:6px 16px;white-space:nowrap}
 .phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px}
 .screen{border-radius:29px;overflow:hidden;background:linear-gradient(180deg,#fbf9f4,#f0ede5);height:704px;display:flex;flex-direction:column;position:relative}
 .statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700}
 
-/* ── 상단 바: 채팅 상단 바와 동일 규격 ── */
+/* ── 상단 바: 채팅 상단 바와 동일 규격. 로고+타이틀이 하나의 묶음으로 정중앙 ── */
 .appbar{
   height:56px;flex-shrink:0;position:relative;display:flex;align-items:center;
-  padding:0 var(--sp-4);
+  padding:0 var(--sp-2);
 }
-.applogo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ffd05c,#efb945);display:flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;z-index:1}
-.appbar .right{margin-left:auto;display:flex;z-index:1}
-.textbtn{font-size:11px;font-weight:700;color:var(--ink-dim);padding:8px 10px;border-radius:var(--r-pill)}
-.title-block{
-  position:absolute;left:96px;right:96px;top:0;bottom:0;  /* 좌우 동일 인셋 — 화면 정중앙 보장 */
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;pointer-events:none;
+/* 로고+타이틀 묶음 — left:0/right:0 대칭 인셋으로 화면 정중앙 */
+.brand-lock{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
 }
+.applogo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#ffd05c,#efb945);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.title-block{display:flex;flex-direction:column;align-items:center;gap:3px}
 .bar-title{font-family:'Gowun Batang',serif;font-size:18px;font-weight:700;color:var(--ink);line-height:1}
-.bar-sub{font-size:11px;font-weight:500;color:var(--ink-sub);line-height:1}
+.bar-sub{font-size:11px;font-weight:500;color:var(--ink-sub);line-height:1;white-space:nowrap}
+
+/* A안 — 로고를 2행 블록 왼쪽에 두고 묶음 전체를 중앙 */
+.lock-a{gap:var(--sp-3)}
+/* B안 — 로고+워드마크를 1행으로, 부제를 그 아래. 완전 수직 센터 락업 */
+.lock-b{flex-direction:column;gap:3px}
+.lock-b .wordmark{display:flex;align-items:center;gap:var(--sp-2)}
+.lock-b .applogo{width:26px;height:26px;border-radius:8px}
+
+.appbar .right{margin-left:auto;display:flex;z-index:1}
+.textbtn{font-size:11px;font-weight:700;color:var(--ink-dim);padding:8px 8px;border-radius:var(--r-pill)}
 
 .body16{padding:var(--sp-2) var(--sp-4);flex:1;overflow:hidden;display:flex;flex-direction:column;gap:var(--sp-3)}
 .room-card{display:flex;align-items:center;gap:var(--sp-3);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-3) var(--sp-4)}
@@ -60,51 +72,112 @@ body{
 </style>
 </head>
 <body>
-<div class="phone">
-  <div class="screen">
-    <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
-    <div class="appbar">
-      <div class="applogo">
-        <svg class="d10" viewBox="0 0 100 104" width="20" height="21"><g stroke="#ffd05c" stroke-width="2" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg>
-      </div>
-      <div class="title-block">
-        <div class="bar-title">PbP</div>
-        <div class="bar-sub">진행 중인 세션 3</div>
-      </div>
-      <div class="right">
-        <div class="textbtn">Aa</div>
-        <div class="textbtn">참여</div>
-      </div>
-    </div>
 
-    <div class="body16">
-      <div class="room-card">
-        <div class="thumb" style="background:linear-gradient(160deg,#a8c4da,#7d97ac)">🌊<i class="dot" style="background:#5f9ec7"></i></div>
-        <div class="rc-main">
-          <div class="rc-name">등대에서 만나요</div>
-          <div class="rc-prev">카야 · 등불이 꺼지기 전에 도착할게.</div>
+<!-- ══════════ A안 ══════════ -->
+<div class="col">
+  <div class="tag">A안 — 로고 + 2행 블록을 묶음으로 중앙</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="brand-lock lock-a">
+          <div class="applogo">
+            <svg class="d10" viewBox="0 0 100 104" width="19" height="20"><g stroke="#ffd05c" stroke-width="2" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg>
+          </div>
+          <div class="title-block">
+            <div class="bar-title">PbP</div>
+            <div class="bar-sub">진행 중인 세션 3</div>
+          </div>
         </div>
-        <div class="rc-side"><span class="rc-time">방금</span><span class="badge">2</span></div>
-      </div>
-      <div class="room-card">
-        <div class="thumb" style="background:linear-gradient(160deg,#c3b1d6,#9c88b4)">🕯️<i class="dot" style="background:#8a6bb0"></i></div>
-        <div class="rc-main">
-          <div class="rc-name">라일락 관 살인사건</div>
-          <div class="rc-prev">🎲 1d100&lt;=65 → 43 성공</div>
+        <div class="right">
+          <div class="textbtn">Aa</div>
+          <div class="textbtn">참여</div>
         </div>
-        <div class="rc-side"><span class="rc-time">1시간 전</span></div>
       </div>
-      <div class="room-card">
-        <div class="thumb" style="background:linear-gradient(160deg,#a9c9b4,#7fa48c)">🌲<i class="dot" style="background:#5f9e78"></i></div>
-        <div class="rc-main">
-          <div class="rc-name">이끼의 숲 단편</div>
-          <div class="rc-prev">잡담 · 오늘은 여기까지 할까요?</div>
+
+      <div class="body16">
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a8c4da,#7d97ac)">🌊<i class="dot" style="background:#5f9ec7"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">등대에서 만나요</div>
+            <div class="rc-prev">카야 · 등불이 꺼지기 전에 도착할게.</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">방금</span><span class="badge">2</span></div>
         </div>
-        <div class="rc-side"><span class="rc-time">어제</span></div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#c3b1d6,#9c88b4)">🕯️<i class="dot" style="background:#8a6bb0"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">라일락 관 살인사건</div>
+            <div class="rc-prev">🎲 1d100&lt;=65 → 43 성공</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">1시간 전</span></div>
+        </div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a9c9b4,#7fa48c)">🌲<i class="dot" style="background:#5f9e78"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">이끼의 숲 단편</div>
+            <div class="rc-prev">잡담 · 오늘은 여기까지 할까요?</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">어제</span></div>
+        </div>
       </div>
+      <div class="fab">＋</div>
     </div>
-    <div class="fab">＋</div>
   </div>
 </div>
+
+<!-- ══════════ B안 ══════════ -->
+<div class="col">
+  <div class="tag">B안 — 로고+워드마크 1행, 부제 아래</div>
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="brand-lock lock-b">
+          <div class="wordmark">
+            <div class="applogo">
+              <svg class="d10" viewBox="0 0 100 104" width="15" height="16"><g stroke="#ffd05c" stroke-width="2.4" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg>
+            </div>
+            <div class="bar-title">PbP</div>
+          </div>
+          <div class="bar-sub">진행 중인 세션 3</div>
+        </div>
+        <div class="right">
+          <div class="textbtn">Aa</div>
+          <div class="textbtn">참여</div>
+        </div>
+      </div>
+
+      <div class="body16">
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a8c4da,#7d97ac)">🌊<i class="dot" style="background:#5f9ec7"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">등대에서 만나요</div>
+            <div class="rc-prev">카야 · 등불이 꺼지기 전에 도착할게.</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">방금</span><span class="badge">2</span></div>
+        </div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#c3b1d6,#9c88b4)">🕯️<i class="dot" style="background:#8a6bb0"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">라일락 관 살인사건</div>
+            <div class="rc-prev">🎲 1d100&lt;=65 → 43 성공</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">1시간 전</span></div>
+        </div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a9c9b4,#7fa48c)">🌲<i class="dot" style="background:#5f9e78"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">이끼의 숲 단편</div>
+            <div class="rc-prev">잡담 · 오늘은 여기까지 할까요?</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">어제</span></div>
+        </div>
+      </div>
+      <div class="fab">＋</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

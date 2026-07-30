@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
-import com.pbp.desktop.logic.PbpMarkup
+import com.pbp.shared.PbpMarkup
 
 /**
  * 디자인 토큰 — 기본 디자인은 라이트 모드 (docs/PbP-design-spec.md 0장,

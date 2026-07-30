@@ -1,4 +1,4 @@
-package com.pbp.app.dice
+package com.pbp.shared
 
 import kotlin.random.Random
 

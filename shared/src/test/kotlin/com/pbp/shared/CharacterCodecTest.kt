@@ -1,6 +1,6 @@
-package com.pbp.app
+package com.pbp.shared
 
-import com.pbp.app.data.CharacterCodec
+import com.pbp.shared.CharacterCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

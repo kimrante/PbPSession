@@ -1,4 +1,4 @@
-package com.pbp.app.data
+package com.pbp.shared
 
 /**
  * 캐릭터별 value(능력치 등) 저장·치환.
@@ -17,6 +17,14 @@ object ProfileStats {
     /** 구분자(제어문자)와 중괄호는 인코딩·치환을 깨뜨리므로 저장 시 제거 (P3-11) */
     private fun sanitize(s: String): String =
         s.filterNot { it == FIELD || it == ENTRY || it == '{' || it == '}' }
+
+    /**
+     * 맵 형태 값 목록 정리 — 저장 경로가 encode가 아닌 쪽(데스크톱 config.json)에서 쓴다.
+     * 이름은 trim, 빈 이름은 버린다. 정리 규칙은 encode와 동일해야 한다.
+     */
+    fun sanitize(stats: Map<String, String>): Map<String, String> =
+        stats.entries.associate { (key, value) -> sanitize(key).trim() to sanitize(value) }
+            .filterKeys { it.isNotBlank() }
 
     fun encode(stats: List<Pair<String, String>>): String =
         stats.map { sanitize(it.first).trim() to sanitize(it.second) }
@@ -51,15 +59,22 @@ object ProfileStats {
             .take(6)
     }
 
+    /** 맵 오버로드 — 데스크톱처럼 값을 Map으로 들고 있는 호출부용 (규칙 동일) */
+    fun paletteSuggestions(query: String, stats: Map<String, String>): List<String> =
+        paletteSuggestions(query, sanitize(stats).toList())
+
     /**
      * `{값이름}`을 값으로 바꾼다. 등록되지 않은 이름은 그대로 둔다.
      * @return plain(다이스 파싱용 순수 값) to marked(화면 저장용 `{{값}}` 마커 포함)
      */
     fun substitute(text: String, stats: Map<String, String>): Pair<String, String> {
         if (stats.isEmpty() || '{' !in text) return text to text
-        val plain = placeholder.replace(text) { m -> stats[m.groupValues[1]] ?: m.value }
+        // 저장 경로가 다른 클라이언트(데스크톱 config.json)를 위해 치환 시점에도 정리 —
+        // encode를 거친 값은 이미 깨끗하므로 결과가 달라지지 않는다
+        val clean = sanitize(stats)
+        val plain = placeholder.replace(text) { m -> clean[m.groupValues[1]] ?: m.value }
         val marked = placeholder.replace(text) { m ->
-            stats[m.groupValues[1]]?.let { "{{$it}}" } ?: m.value
+            clean[m.groupValues[1]]?.let { "{{$it}}" } ?: m.value
         }
         return plain to marked
     }

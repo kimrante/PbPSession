@@ -1,7 +1,7 @@
-package com.pbp.app
+package com.pbp.shared
 
-import com.pbp.app.text.PbpMarkup
-import com.pbp.app.text.PbpMarkup.Node
+import com.pbp.shared.PbpMarkup
+import com.pbp.shared.PbpMarkup.Node
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -73,7 +73,7 @@ import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
-import com.pbp.app.text.GmSpeech
+import com.pbp.shared.GmSpeech
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.MarkupText
@@ -158,11 +158,11 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     fun delete(message: Message) = viewModelScope.launch { repo.deleteMessage(message) }
 
     /** 클립보드의 ccfolia식 캐릭터 코드로 새 캐릭터 생성 */
-    fun createFromCode(imported: com.pbp.app.data.CharacterCodec.Imported) = viewModelScope.launch {
+    fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) = viewModelScope.launch {
         repo.saveProfile(
             CharacterProfile(
                 name = imported.name,
-                stats = com.pbp.app.data.ProfileStats.encode(imported.stats),
+                stats = com.pbp.shared.ProfileStats.encode(imported.stats),
             )
         )
     }
@@ -412,7 +412,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         vm.send(text, ooc)
                         pendingScrollToLatest = true // 내 전송·판정은 항상 최신으로 스크롤
                     },
-                    rule = room?.rule ?: com.pbp.app.dice.Rules.COC7,
+                    rule = room?.rule ?: com.pbp.shared.Rules.COC7,
                 )
             }
         }
@@ -430,7 +430,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as android.content.ClipboardManager)
                     .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                val imported = clip?.let { com.pbp.app.data.CharacterCodec.parse(it) }
+                val imported = clip?.let { com.pbp.shared.CharacterCodec.parse(it) }
                 if (imported != null) {
                     vm.createFromCode(imported)
                     Toast.makeText(
@@ -568,8 +568,8 @@ private fun MessageBlock(
                     )
                     // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
                     // (CoC7 하향 판정은 대성공·대단한 성공·어려운 성공 단계까지)
-                    com.pbp.app.dice.Rules.outcomeLabel(message.diceOutcome)?.let { label ->
-                        val success = com.pbp.app.dice.Rules.isSuccess(message.diceOutcome)
+                    com.pbp.shared.Rules.outcomeLabel(message.diceOutcome)?.let { label ->
+                        val success = com.pbp.shared.Rules.isSuccess(message.diceOutcome)
                         Spacer(Modifier.width(PbpDimens.sp2))
                         Text(
                             label,
@@ -897,10 +897,10 @@ private fun InputZone(
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
-            ?.let { com.pbp.app.data.ProfileStats.decode(it.stats) } ?: emptyList()
+            ?.let { com.pbp.shared.ProfileStats.decode(it.stats) } ?: emptyList()
     }
     val suggestions = remember(input, activeStats) {
-        com.pbp.app.data.ProfileStats.paletteSuggestions(input, activeStats)
+        com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
     }
     val onOocToggle = { oocOn = !oocOn }
     val onInputChange = { text: String -> input = text }
@@ -968,7 +968,7 @@ private fun InputZone(
                             .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
                             .clickable {
                                 // 예: "1d100<={LUK} LUK 판정" — 무엇을 판정했는지 함께 남긴다
-                                val command = com.pbp.app.dice.Rules.judgeCommand(rule, name)
+                                val command = com.pbp.shared.Rules.judgeCommand(rule, name)
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }

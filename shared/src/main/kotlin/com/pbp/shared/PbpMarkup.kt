@@ -1,4 +1,4 @@
-package com.pbp.app.text
+package com.pbp.shared
 
 /**
  * 채팅 본문 문법 파서 (스펙 4장):

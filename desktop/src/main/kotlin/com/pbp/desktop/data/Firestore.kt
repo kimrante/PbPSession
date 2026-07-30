@@ -8,6 +8,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
+import com.pbp.shared.Protocol
 
 /** 메시지 (Firestore 문서 ↔ 로컬 모델) — 안드로이드 앱과 같은 스키마 */
 data class Message(
@@ -361,7 +362,7 @@ class FirestoreRest(
         name = doc.str("name") ?: "이름 없는 방",
         icon = "", // 방 아이콘 폐지 — 배경으로만 구분 (모바일과 동일)
         inviteCode = doc.str("inviteCode"),
-        themeColor = doc.long("themeColor") ?: 0xFF8EC5E8,
+        themeColor = doc.long("themeColor") ?: Protocol.DEFAULT_THEME_COLOR,
         backgroundKey = doc.str("backgroundKey"),
         rule = doc.str("rule"),
     )
@@ -371,7 +372,7 @@ class FirestoreRest(
             mapOf(
                 "name" to name, "icon" to "", "createdAt" to System.currentTimeMillis(),
                 "inviteCode" to inviteCode, "rule" to rule,
-                "themeColor" to 0xFF8EC5E8, "backgroundKey" to "preset_lighthouse",
+                "themeColor" to Protocol.DEFAULT_THEME_COLOR, "backgroundKey" to Protocol.DEFAULT_BACKGROUND,
             )
         )
         return post("$base/rooms?key=$apiKey", gson.toJson(body))?.let { roomMeta(it) }

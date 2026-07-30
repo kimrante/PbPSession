@@ -1,4 +1,4 @@
-package com.pbp.app.text
+package com.pbp.shared
 
 /**
  * 서술자(GM) 출력 규칙 (스펙 4장):

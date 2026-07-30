@@ -1,4 +1,4 @@
-package com.pbp.app.data
+package com.pbp.shared
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser

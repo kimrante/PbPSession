@@ -68,7 +68,7 @@ import com.pbp.app.data.Images
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.data.OwnerProfile
-import com.pbp.app.dice.Rules
+import com.pbp.shared.Rules
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
@@ -110,11 +110,11 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** 클립보드의 ccfolia식 캐릭터 코드로 새 캐릭터 생성 (전역, 채팅 화면과 동일 규칙) */
-    fun createFromCode(imported: com.pbp.app.data.CharacterCodec.Imported) = viewModelScope.launch {
+    fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) = viewModelScope.launch {
         repo.saveProfile(
             com.pbp.app.data.CharacterProfile(
                 name = imported.name,
-                stats = com.pbp.app.data.ProfileStats.encode(imported.stats),
+                stats = com.pbp.shared.ProfileStats.encode(imported.stats),
             )
         )
     }
@@ -344,7 +344,7 @@ fun RoomListScreen(nav: NavController) {
                 val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                         as android.content.ClipboardManager)
                     .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
-                val imported = clip?.let { com.pbp.app.data.CharacterCodec.parse(it) }
+                val imported = clip?.let { com.pbp.shared.CharacterCodec.parse(it) }
                 if (imported != null) {
                     vm.createFromCode(imported)
                     android.widget.Toast.makeText(

@@ -82,11 +82,11 @@ import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
 import com.pbp.desktop.data.RoomCacheStore
-import com.pbp.desktop.logic.CharacterCodec
-import com.pbp.desktop.logic.DiceBot
-import com.pbp.desktop.logic.ProfileStats
-import com.pbp.desktop.logic.Rules
-import com.pbp.desktop.logic.GmSpeech
+import com.pbp.shared.CharacterCodec
+import com.pbp.shared.DiceBot
+import com.pbp.shared.ProfileStats
+import com.pbp.shared.Rules
+import com.pbp.shared.GmSpeech
 import com.pbp.desktop.notify.DesktopNotifier
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
@@ -101,6 +101,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.pbp.shared.Protocol
 
 /** 방별 세션 캐시 (P3) — 메시지 목록·증분 커서·삭제 억제 목록. 프로세스 수명 동안 유지 */
 private class RoomSession {
@@ -623,7 +624,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         val joined = existing ?: JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey ?: "preset_lighthouse", isMaster = false,
+                            backgroundKey = meta.backgroundKey ?: Protocol.DEFAULT_BACKGROUND, isMaster = false,
                             rule = meta.rule,
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
@@ -664,7 +665,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey ?: "preset_lighthouse", isMaster = true,
+                            backgroundKey = meta.backgroundKey ?: Protocol.DEFAULT_BACKGROUND, isMaster = true,
                             rule = meta.rule ?: "coc7",
                         )
                         rooms = rooms + joined
@@ -884,7 +885,7 @@ private enum class OverlayKind {
 }
 
 private fun inviteCode(): String {
-    val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    val alphabet = Protocol.INVITE_ALPHABET
     return (1..6).map { alphabet.random() }.joinToString("")
 }
 
@@ -1096,7 +1097,7 @@ private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier
             return
         }
     }
-    val colors = preset ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
+    val colors = preset ?: Tokens.backgroundPresets.getValue(Protocol.DEFAULT_BACKGROUND)
     Box(modifier.background(Brush.verticalGradient(listOf(Color(colors.first), Color(colors.second)))))
 }
 
@@ -2550,7 +2551,7 @@ private fun pickAndStoreImage(title: String, subDir: String, maxSize: Int): Stri
  * 아바타 업로드용 축소 인코딩 — 모바일 downscaleToJpeg와 동일 정책:
  * 긴 변 256px, 투명이 있으면 PNG, 아니면 JPEG(82).
  */
-private fun encodeAvatarBytes(path: String, maxSize: Int = 256): ByteArray? = runCatching {
+private fun encodeAvatarBytes(path: String, maxSize: Int = Protocol.AVATAR_MAX_PX): ByteArray? = runCatching {
     val image = org.jetbrains.skia.Image.makeFromEncoded(java.io.File(path).readBytes())
     val maxDim = maxOf(image.width, image.height)
     val scale = if (maxDim > maxSize) maxSize.toFloat() / maxDim else 1f

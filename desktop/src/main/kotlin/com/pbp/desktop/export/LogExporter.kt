@@ -1,9 +1,9 @@
 package com.pbp.desktop.export
 
 import com.pbp.desktop.data.Message
-import com.pbp.desktop.logic.GmSpeech
-import com.pbp.desktop.logic.PbpMarkup
-import com.pbp.desktop.logic.Rules
+import com.pbp.shared.GmSpeech
+import com.pbp.shared.PbpMarkup
+import com.pbp.shared.Rules
 import com.pbp.desktop.ui.Tokens
 import java.text.SimpleDateFormat
 import java.util.Base64

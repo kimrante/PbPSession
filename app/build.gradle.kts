@@ -73,5 +73,7 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.coroutines.play.services)
 
+    implementation(project(":shared"))
+
     testImplementation(libs.junit)
 }

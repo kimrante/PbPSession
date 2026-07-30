@@ -1,7 +1,8 @@
 package com.pbp.app.data
 
 import androidx.room.withTransaction
-import com.pbp.app.dice.DiceBot
+import com.pbp.shared.ProfileStats
+import com.pbp.shared.DiceBot
 import com.pbp.app.sync.SyncManager
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.withContext
@@ -34,7 +35,7 @@ class PbpRepository(private val db: AppDatabase) {
         isMaster: Boolean = true,
         themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
         backgroundKey: String = PbpPalette.DEFAULT_BACKGROUND,
-        rule: String = com.pbp.app.dice.Rules.COC7,
+        rule: String = com.pbp.shared.Rules.COC7,
     ): Long = db.withTransaction {
         val roomId = db.roomDao().insert(
             ChatRoom(
@@ -139,7 +140,7 @@ class PbpRepository(private val db: AppDatabase) {
                 createdAt = System.currentTimeMillis(),
             )
             inserted += textMessage.copy(id = db.messageDao().insert(textMessage))
-            val rule = db.roomDao().get(roomId)?.rule ?: com.pbp.app.dice.Rules.COC7
+            val rule = db.roomDao().get(roomId)?.rule ?: com.pbp.shared.Rules.COC7
             if (!isOoc) {
                 DiceBot.parse(plain)?.let { command ->
                     val result = DiceBot.roll(command)
@@ -148,7 +149,7 @@ class PbpRepository(private val db: AppDatabase) {
                         type = MessageType.DICE,
                         body = result.breakdown,
                         diceExpr = "${sender.name} · ${command.expr}",
-                        diceOutcome = com.pbp.app.dice.Rules.judgeOutcome(rule, result),
+                        diceOutcome = com.pbp.shared.Rules.judgeOutcome(rule, result),
                         senderName = "다이스봇",
                         senderEmoji = "🎲",
                         senderIsBot = true,

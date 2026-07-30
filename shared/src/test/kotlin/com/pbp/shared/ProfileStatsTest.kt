@@ -1,6 +1,6 @@
-package com.pbp.app
+package com.pbp.shared
 
-import com.pbp.app.data.ProfileStats
+import com.pbp.shared.ProfileStats
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

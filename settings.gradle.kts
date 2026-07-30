@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "PbP"
 include(":app")
 include(":desktop")
+include(":shared")

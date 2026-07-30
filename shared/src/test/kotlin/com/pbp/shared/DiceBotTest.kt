@@ -1,6 +1,6 @@
-package com.pbp.app
+package com.pbp.shared
 
-import com.pbp.app.dice.DiceBot
+import com.pbp.shared.DiceBot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue

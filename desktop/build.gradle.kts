@@ -20,6 +20,8 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.gson)
 
+    implementation(project(":shared"))
+
     testImplementation(libs.junit)
 }
 

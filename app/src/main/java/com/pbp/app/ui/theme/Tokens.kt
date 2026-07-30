@@ -167,6 +167,6 @@ object PbpPalette {
         "preset_ember" to (0xFF3A1F22 to 0xFF140B0C),
     )
 
-    const val DEFAULT_BACKGROUND = "preset_lighthouse"
-    const val DEFAULT_THEME_COLOR = 0xFF8EC5E8
+    const val DEFAULT_BACKGROUND = com.pbp.shared.Protocol.DEFAULT_BACKGROUND
+    const val DEFAULT_THEME_COLOR = com.pbp.shared.Protocol.DEFAULT_THEME_COLOR
 }

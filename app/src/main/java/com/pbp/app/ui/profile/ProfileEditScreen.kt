@@ -58,7 +58,7 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
-import com.pbp.app.data.ProfileStats
+import com.pbp.shared.ProfileStats
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.common.ImageCropDialog

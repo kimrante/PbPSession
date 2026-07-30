@@ -1,4 +1,4 @@
-package com.pbp.app.dice
+package com.pbp.shared
 
 /**
  * 방에 지정하는 TRPG 룰. 채팅 팔레트의 판정 매크로가 어떤 다이스로

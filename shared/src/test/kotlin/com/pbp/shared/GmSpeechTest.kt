@@ -1,7 +1,7 @@
-package com.pbp.app
+package com.pbp.shared
 
-import com.pbp.app.text.GmSpeech
-import com.pbp.app.text.GmSpeech.Part
+import com.pbp.shared.GmSpeech
+import com.pbp.shared.GmSpeech.Part
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

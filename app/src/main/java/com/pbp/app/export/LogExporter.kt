@@ -2,8 +2,8 @@ package com.pbp.app.export
 
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
-import com.pbp.app.text.GmSpeech
-import com.pbp.app.text.PbpMarkup
+import com.pbp.shared.GmSpeech
+import com.pbp.shared.PbpMarkup
 import com.pbp.app.ui.theme.PbpPalette
 import java.io.File
 import java.text.SimpleDateFormat
@@ -55,10 +55,10 @@ object LogExporter {
                     body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
 
                 message.type == MessageType.DICE -> {
-                    val outcome = com.pbp.app.dice.Rules.outcomeLabel(message.diceOutcome)
+                    val outcome = com.pbp.shared.Rules.outcomeLabel(message.diceOutcome)
                         ?.let { label ->
                             val color =
-                                if (com.pbp.app.dice.Rules.isSuccess(message.diceOutcome)) "#2563C9"
+                                if (com.pbp.shared.Rules.isSuccess(message.diceOutcome)) "#2563C9"
                                 else "#C0392B"
                             """ <b style="color:$color">${escape(label)}</b>"""
                         } ?: ""

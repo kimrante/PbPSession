@@ -27,6 +27,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
+import com.pbp.shared.Protocol
 
 /**
  * 2인 동기화 담당. Firestore 구조:
@@ -248,7 +249,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
         // 미업로드분 백필 — WriteBatch로 왕복 최소화 (배치당 최대 450건).
         // remoteId를 커밋 전에 저장해 중간 크래시 시에도 아웃박스가 같은 문서로 재시도(멱등)
-        db.messageDao().listUnsent(roomId).chunked(450).forEach { chunk ->
+        db.messageDao().listUnsent(roomId).chunked(Protocol.BATCH_SIZE).forEach { chunk ->
             val batch = firestore.batch()
             val refs = chunk.mapNotNull { message ->
                 val avatarId = message.senderImagePath?.let { path ->
@@ -315,7 +316,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_THEME_COLOR,
             backgroundKey = roomDoc.getString("backgroundKey")
                 ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_BACKGROUND,
-            rule = roomDoc.getString("rule") ?: com.pbp.app.dice.Rules.COC7,
+            rule = roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번)
@@ -354,7 +355,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // 로컬이 모르는 극소수 잔여 문서(detach~wipe 사이 도착분)는 reattach 후 다시 내려온다.
         val collection = firestore.collection("rooms").document(remoteRoomId)
             .collection("messages")
-        knownRemoteIds.chunked(450).forEach { chunk ->
+        knownRemoteIds.chunked(Protocol.BATCH_SIZE).forEach { chunk ->
             val batch = firestore.batch()
             chunk.forEach { batch.delete(collection.document(it)) }
             batch.commit().await()
@@ -680,7 +681,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }
 
     private fun randomCode(): String {
-        val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val alphabet = Protocol.INVITE_ALPHABET
         return (1..6).map { alphabet.random() }.joinToString("")
     }
 
@@ -833,7 +834,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 긴 변 256px 이하로 축소 (Firestore 1MB 문서 제한을 넉넉히 하회).
      * 투명 영역이 있으면 PNG, 아니면 JPEG — JPEG는 알파를 검정으로 채운다.
      */
-    private fun downscaleToJpeg(path: String, maxSize: Int = 256): ByteArray? {
+    private fun downscaleToJpeg(path: String, maxSize: Int = Protocol.AVATAR_MAX_PX): ByteArray? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

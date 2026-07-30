@@ -137,6 +137,8 @@ body{
 .opt .ic{width:34px;height:34px;border-radius:var(--r-cell);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .opt.edit .ic{background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5)}
 .opt.danger .ic{background:rgba(201,79,79,.10);border:1px solid rgba(201,79,79,.3)}
+.opt.copy .ic{background:rgba(20,25,32,.06);border:1px solid rgba(20,25,32,.18)}
+.opt.copy b{color:var(--ink)}
 .opt.pic .ic{background:rgba(95,158,199,.16);border:1px solid rgba(95,158,199,.5)}
 .opt b{display:block;font-size:13px;font-weight:700;color:var(--accent-ink)}
 .opt.danger b{color:var(--fail)}
@@ -263,6 +265,7 @@ td b{color:var(--ink)}
           </div>
           <div class="dlg">
             <h3>메시지</h3>
+            <div class="opt copy"><div class="ic">📋</div><div><b>복사</b><span>본문을 클립보드에 담습니다</span></div></div>
             <div class="opt edit"><div class="ic">✏️</div><div><b>편집</b><span>본문을 고치면 (수정됨) 표시가 남습니다</span></div></div>
             <div class="opt danger"><div class="ic">🗑️</div><div><b>삭제</b><span>공유된 방이면 상대 화면에서도 사라집니다</span></div></div>
             <div class="opt pic hover"><div class="ic">🖼️</div><div><b>캡처</b><span>여기부터 범위를 골라 이미지로 만듭니다</span></div></div>
@@ -271,7 +274,7 @@ td b{color:var(--ink)}
         </div>
       </div></div>
       <div class="cap"><b>A · 진입 — 롱프레스 메뉴에 '캡처' 추가</b>
-        <span>편집·삭제 아래 세 번째 항목. 캡처는 남의 말도 담아야 하므로 <b>상대 메시지에서도 팝업이 열리며,</b> 그때는 캡처 한 줄만 보입니다.</span></div>
+        <span>복사·편집·삭제 아래 <b>네 번째 항목.</b> 상대 메시지에서는 편집·삭제가 빠져 복사·캡처 두 줄만 보입니다(v0.5.4 <code>canModify</code> 규칙 그대로).</span></div>
     </div>
 
     <!-- ── B. 끝점 선택 대기 ── -->

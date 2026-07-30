@@ -2,7 +2,11 @@
 
 시각 규격은 **`docs/mockups/mockup-capture.html`**(+PNG)에 있다. 이 문서는 **그 목업을 코드로 옮기는 순서와 지점**을
 정리한 것이며, **다른 세션이 이 문서만 보고 작업할 수 있도록** 항목마다 위치·변경·주의를 명시한다.
-기준 커밋: `4f886cd` (v0.5.0). 라인 번호는 이 커밋 기준.
+기준 커밋: `8b3897c` (v0.5.4). 라인 번호는 이 커밋 기준.
+
+> **선행 작업이 이미 들어와 있다.** v0.5.4의 '메시지 복사' 기능이 캡처가 필요로 하던 배선을 대부분 깔아 놓았다 —
+> 롱프레스가 상대 메시지에서도 열리고(`MessageBlock`의 `incoming` 가드 제거), `MessageActionDialog`에
+> `canModify: Boolean`이 생겼다. 덕분에 S1이 크게 줄었다. 이 문서는 그 상태를 전제로 쓰였다.
 
 ## 만드는 것 / 만들지 않는 것
 
@@ -12,7 +16,7 @@
 **만들지 않는 것**
 
 - 기존 **HTML 로그 내보내기(상단 바 `↓`)는 손대지 않는다.** 방 전체를 문서로 남기는 기능이라 성격이 다르다
-  (`ChatScreen.kt:252-262`, `export/LogExporter.kt`, `:shared LogExport`). 캡처는 완전히 별개 경로다.
+  (`ChatScreen.kt:256-266`, `export/LogExporter.kt`, `:shared LogExport`). 캡처는 완전히 별개 경로다.
 - 스크린샷을 찍지 않는다 — 화면 픽셀을 캡처하는 대신 **선택 범위를 오프스크린에서 다시 그린다**(S4 참조).
   그래야 상단 바·입력줄·딤이 섞이지 않고, 화면 폭에 따라 결과가 달라지지 않는다.
 - 서버·스키마 변경 없음. Firestore 문서, Room 엔티티, 동기화 경로를 건드릴 이유가 없다.
@@ -36,32 +40,36 @@
 
 ## S1. 캡처 모드 상태와 진입
 
-### S1-1. 롱프레스가 상대 메시지에서도 열려야 한다
+### S1-1. 진입 배선은 이미 있다 — 데스크톱 한 곳만 빠졌다
 
-- **위치**: `app/src/main/java/com/pbp/app/ui/chat/MessageBlock.kt:140`, `:261`, `:367` — 세 곳 모두
-  `onLongClick = { if (!message.incoming) onLongPress(message) }`.
-- **문제**: 캡처는 **남의 말도 담아야** 하는데, 지금은 내 메시지에서만 팝업이 열린다.
-- **변경**: 세 곳의 `if (!message.incoming)` 가드를 제거해 항상 `onLongPress(message)`를 호출한다.
-  대신 **팝업 쪽에서** 편집·삭제를 가릴지 판단한다(S1-2). 가드를 팝업 한 곳으로 모으는 것이므로
-  권한이 느슨해지는 것은 아니다.
+- 모바일 `MessageBlock.kt:173`, `:299`, `:417`은 이미 `onLongClick = { onLongPress(message) }`로
+  **상대 메시지에서도** 팝업을 연다(주석 `// 복사는 상대 메시지에서도`). 손댈 것이 없다.
+- **다만 데스크톱은 한 곳이 빠져 있다**: `desktop/.../ChatPane.kt:325`의 GM 서술
+  (`NarrationBlock(onLongPress = { if (mine) onLongPress(message) })`)만 여전히 `if (mine)` 가드가 남아,
+  같은 파일의 다른 세 곳(`:305`, `:494`, `:521`)과 어긋난다. **상대의 GM 서술은 복사도 캡처도 안 된다.**
+  가드를 제거해 `onLongPress = { onLongPress(message) }`로 맞춘다 — 복사 기능의 누락을 함께 고치는 셈이다.
 
 ### S1-2. `MessageActionDialog`에 캡처 줄 추가
 
-- **위치**: `app/src/main/java/com/pbp/app/ui/chat/ChatDialogs.kt:101-175`.
+- **위치**: `app/src/main/java/com/pbp/app/ui/chat/ChatDialogs.kt:103-180`.
+  현재 줄 구성은 **복사**(항상) → `if (canModify) { 편집, 삭제 }`.
 - **변경**:
-  - 시그니처에 `canEdit: Boolean`과 `onCapture: () -> Unit`을 추가한다. 호출부에서 `canEdit = !target.incoming`.
-  - `canEdit == false`면 편집·삭제 `MessageActionRow` 두 줄을 그리지 않는다 → 상대 메시지에서는 **캡처 한 줄만** 보인다.
-  - 캡처 줄은 기존 `MessageActionRow`를 그대로 재사용한다(새 부품 만들지 말 것):
-    `icon = "🖼️"`, `tileColor = tokens.themeDefault`, `title = "캡처"`, `titleColor` = 이름색 계열의 진한 청색,
-    `subtitle = "여기부터 범위를 골라 이미지로 만듭니다"`.
-  - 순서는 **편집 → 삭제 → 캡처**. 파괴적 동작(삭제) 바로 아래에 두는 것이 어색하면 캡처를 맨 위로 올려도 되지만,
-    목업은 세 번째다.
-- **주의**: 미리보기로 띄우는 대상 말풍선(`:117-133`)은 `message.senderBubbleColor`를 쓰는데,
-  상대 메시지에서도 그대로 동작하므로 손댈 필요 없다.
+  - 시그니처에 `onCapture: () -> Unit`만 추가한다. **`canModify`는 이미 있으므로 새 플래그를 만들지 말 것.**
+  - 캡처 줄은 `canModify` **밖**에 둔다(복사와 같이 누구 메시지에서든 쓸 수 있어야 한다).
+    위치는 `if (canModify) { ... }` 블록 **뒤** — 즉 내 메시지에서는 복사·편집·삭제·캡처 4줄,
+    상대 메시지에서는 복사·캡처 2줄이 된다.
+  - 기존 `MessageActionRow`를 그대로 재사용한다(새 부품 만들지 말 것):
+    `icon = "🖼️"`, `tileColor = tokens.themeDefault`, `title = "캡처"`,
+    `titleColor` = 이름색 계열의 진한 청색, `subtitle = "여기부터 범위를 골라 이미지로 만듭니다"`.
+- **호출부**: `ChatScreen.kt:422-444`의 `MessageActionDialog(...)`에 `onCapture`를 추가하고
+  `{ captureStart = target.id; captureEnd = null; actionTargetId = null }`을 넘긴다.
+  `onCopy`가 이미 같은 형태(동작 후 `actionTargetId = null`)라 패턴을 따라가면 된다.
+- **주의**: 목업 A컷은 복사 기능이 들어오기 전에 그려서 편집·삭제·캡처 3줄로 보인다.
+  **실제 구현은 복사가 맨 위에 있는 4줄**이 맞다.
 
 ### S1-3. 모드 상태
 
-- **위치**: `app/src/main/java/com/pbp/app/ui/chat/ChatScreen.kt:194-210` (다이얼로그 대상들이 모여 있는 곳).
+- **위치**: `app/src/main/java/com/pbp/app/ui/chat/ChatScreen.kt:199-212` (다이얼로그 대상들이 모여 있는 곳).
 - **변경**: 같은 자리에 추가한다.
 
   ```kotlin
@@ -73,7 +81,7 @@
 
   `captureStart != null`이면 캡처 모드다.
 - **범위 계산**: 화면 렌더마다 O(N) 재스캔하지 않도록 `remember`로 인덱스 구간을 캐시한다
-  (`:205-207`의 `editTarget` 등과 같은 방식).
+  (`:209-211`의 `editTarget` 등과 같은 방식).
 
   ```kotlin
   // messages는 오래된 순. 사용자가 위/아래 어느 쪽을 먼저 눌러도 되도록 정렬한다
@@ -111,7 +119,7 @@
   방을 나가면 안 된다.
 - **모드 중 잠그는 것**: 롱프레스(편집·삭제), 프로필 전환, 입력. `MessageBlock`에 넘기는 `onLongPress`를
   캡처 모드에서는 빈 람다로 바꾸고, `InputZone` 자리를 `CaptureBar`가 대신한다(S3).
-- **자동 스크롤 정지**: `:237-250`의 `LaunchedEffect`가 새 메시지마다 `scrollToItem(0)`을 부를 수 있다.
+- **자동 스크롤 정지**: `:241-254`의 `LaunchedEffect`가 새 메시지마다 `scrollToItem(0)`(`:251`)을 부를 수 있다.
   고르던 자리가 밀리면 안 되므로 **캡처 모드에서는 스크롤하지 않는다** — 조건에
   `captureStart == null`을 추가한다. (`pendingScrollToLatest`는 내 발신 전용이고 모드 중에는 전송이
   막히므로 자연히 false다.)
@@ -120,8 +128,9 @@
 
 ## S2. 범위 선택 표시
 
-- **위치**: `MessageBlock.kt:106-234` (`MessageBlock`), 호출부는 `ChatScreen.kt:362-374`.
-- **변경**: 파라미터 2개를 추가한다.
+- **위치**: `MessageBlock.kt:137-146` (`MessageBlock` 시그니처), 호출부는 `ChatScreen.kt:351-363`.
+- **변경**: 파라미터 2개를 추가한다. `showTime`·`showRead`는 v0.5.x에서 들어온 기존 파라미터이므로 그대로 두고
+  그 뒤에 붙인다.
 
   ```kotlin
   internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
@@ -129,12 +138,16 @@
   internal fun MessageBlock(
       message: Message,
       grouped: Boolean = false,
+      showTime: Boolean = true,
+      showRead: Boolean = false,
       themeColor: Color,
-      mark: CaptureMark = CaptureMark.NONE,
-      onTap: () -> Unit = {},
+      mark: CaptureMark = CaptureMark.NONE,   // 추가
+      onTap: () -> Unit = {},                  // 추가
       onLongPress: (Message) -> Unit,
   )
   ```
+
+  기본값을 준 이유는 **캡처 렌더러가 `mark`/`onTap`을 안 넘기고 그대로 부를 수 있게** 하려는 것이다(S4).
 
 - **그리는 규칙** — **말풍선 내부는 절대 손대지 않는다.** 기존 `when` 블록을 감싸는 `Box` 하나에만
   배경·테두리·투명도를 얹는다. 그래야 캡처 이미지에서 `mark = NONE`으로 부르면 화면과 완전히 같은 결과가 나온다.
@@ -148,7 +161,7 @@
   | `END` | `IN` + 아래쪽 2dp 테두리 + 하단 라운드 + 중앙 하단 '끝' 배지 |
   | `ONLY` | 사방 2dp 테두리 + `rCell` 라운드 + '시작' 배지 (한 건만 선택된 상태) |
 
-- **밴드가 끊기지 않게**: 목록의 항목 간격은 `ChatScreen.kt:366`에서
+- **밴드가 끊기지 않게**: 목록의 항목 간격은 `ChatScreen.kt:355`에서
   `Box(Modifier.padding(top = if (grouped) gap1 else gap3))`로 준다. 밴드 배경이 이 간격에서 끊기면
   "범위"로 읽히지 않는다. **간격 자체를 밴드가 먹도록** 캡처 모드에서는 padding을 `Box` 밖이 아니라
   밴드 안쪽으로 옮긴다 — 즉 캡처 모드에서 항목은 `밴드 Box( padding(vertical) { MessageBlock } )` 구조가 되고,
@@ -157,14 +170,14 @@
   감싸는 `Box`에 `clickable(onClick = onTap)`을 준다. 캡처 모드가 아닐 때는 `onTap`이 빈 람다이므로
   `clickable`을 아예 붙이지 않는다(불필요한 리플·접근성 노드 방지).
 - **선택 단위는 메시지 1건**: 대사가 섞인 발화는 `GmSpeech.split`으로 말풍선 여러 개가 되지만
-  (`MessageBlock.kt:208-231`), 선택은 `message.id` 기준이다. 조각 중 어느 것을 탭해도 그 메시지 전체가 잡히고,
+  (`MessageBlock.kt:243-270`), 선택은 `message.id` 기준이다. 조각 중 어느 것을 탭해도 그 메시지 전체가 잡히고,
   이미지에도 조각이 전부 들어간다 — 감싸는 `Box`가 하나이므로 자연히 그렇게 된다.
 
 ---
 
 ## S3. 하단 캡처 바
 
-- **위치**: `ChatScreen.kt:397-410`의 `InputZone` 자리.
+- **위치**: `ChatScreen.kt:389-402`의 `InputZone` 자리.
 - **변경**: 캡처 모드면 `InputZone` 대신 신규 `CaptureBar`를 그린다. `ChatInput.kt`에 함께 두거나
   `ChatDialogs.kt` 옆에 새 파일로 둔다.
 
@@ -194,7 +207,7 @@
 
 ### 상단 바
 
-- **위치**: `ChatScreen.kt:274-352`.
+- **위치**: `ChatScreen.kt:278-336` (상단 바 블록).
 - **변경**: 캡처 모드면 같은 56dp 자리에 모드 상단 바를 그린다 — 배경을 시그니처 톤으로 바꿔
   모드 전환을 알리고, 왼쪽은 `✕`(모드 종료), 가운데는 `캡처할 범위 선택` + 상태 부제, 오른쪽은 비운다.
 - **주의**: 가운데 묶음은 기존과 같은 방식(좌우 같은 인셋으로 절대 배치)을 유지해야 중심이 흔들리지 않는다.
@@ -256,7 +269,7 @@ suspend fun render(
   - 머리글: 로고 타일 22dp(`ic_logo_d10`) + 방 이름(명조 12sp) + `2026-07-30 21:03 – 21:14 · 4개 메시지`.
     상하 패딩 `gap2` 동일.
   - 낙관: `PbP · 방 이름`과 날짜. 상하 패딩도 `gap2` — 머리글과 같은 값이어야 한다.
-  - 날짜 문자열은 `ui/common/Ui.kt:576`의 `formatTime` 옆에 `formatDateRange(first, last)`를 추가해 만든다.
+  - 날짜 문자열은 `ui/common/Ui.kt:600`의 `formatTime` 옆에 `formatDateRange(first, last)`를 추가해 만든다.
 
 ### 높이 상한과 분할
 
@@ -301,10 +314,10 @@ suspend fun render(
   - `AndroidManifest.xml`에 `provider` 추가 + `res/xml/file_paths.xml` 신규 (현재 둘 다 없다).
   - `Intent.FLAG_GRANT_READ_URI_PERMISSION` 필수.
 - **저장**: 기존 HTML 내보내기와 같은 **SAF** — `ActivityResultContracts.CreateDocument("image/png")`.
-  권한이 필요 없고 패턴이 이미 있다(`ChatScreen.kt:252-262`).
+  권한이 필요 없고 패턴이 이미 있다(`ChatScreen.kt:256-266`).
   여러 장이면 런처를 여러 번 띄우지 말고 `OpenDocumentTree`로 폴더를 받아 한 번에 쓴다.
 - **실패 처리**: 문서 프로바이더가 없는 기기를 위해 `runCatching { launcher.launch(...) }` +
-  실패 토스트 — `ChatScreen.kt:291-297`과 같은 형태로.
+  실패 토스트 — `ChatScreen.kt:295-301`과 같은 형태로.
 
 ### 열린 결정 — 갤러리에 바로 보이게 할지
 
@@ -324,16 +337,16 @@ suspend fun render(
 
 같은 규칙, 같은 결과 이미지. 데스크톱은 `Message`가 `type: String`·`authorUid` 기반이라는 점만 다르다.
 
-- **진입**: `ChatPane.kt:225`가 이미 `onLongPress = onMessageLongPress`로 **길게 클릭**을 쓴다.
+- **진입**: `ChatPane.kt:216`이 이미 `onLongPress = onMessageLongPress`로 **길게 클릭**을 쓴다.
   우클릭 메뉴를 새로 만들 필요 없다 — 기존 액션 팝업(`Overlays.kt`)에 캡처 항목만 추가한다.
-  단 `:311`, `:331`, `:484`, `:511`의 `if (mine)` / `if (editable)` 가드는 모바일과 같은 이유로 풀어야 한다.
+  가드는 `:325`(GM 서술) 한 곳만 남아 있다 — S1-1 참조.
 - **모드 종료**: `Esc`. 창 단위 키 처리는 `Main.kt`의 기존 `onPreviewKeyEvent` 패턴을 따른다.
-- **선택 표시**: `ChatPane.kt:250`의 `MessageBlock`에 모바일과 같은 `mark`/`onTap`을 추가한다.
+- **선택 표시**: `ChatPane.kt:243`의 `MessageBlock`에 모바일과 같은 `mark`/`onTap`을 추가한다.
 - **렌더**: `ImageComposeScene`(Compose Desktop)으로 **같은 360dp 폭**에 그린다.
   `ImageComposeScene(width, height, density) { content }.render()` → `Image`(Skia) → PNG 바이트.
   높이를 먼저 알아야 하므로 넉넉한 높이로 한 번 재고 실제 높이로 다시 그리거나, 모바일과 같은
   누적 방식으로 묶음을 나눈다.
-- **저장**: 기존 로그 내보내기와 같은 `java.awt.FileDialog`(`Main.kt:471`) — PNG.
+- **저장**: 기존 로그 내보내기와 같은 `java.awt.FileDialog`(`Main.kt:466`) — PNG.
 - **양쪽 결과가 같아야 한다**: 폭·간격·머리글·낙관 수치가 모바일과 같은지 확인할 것.
   로그 내보내기에서 `roomIcon` 헤더가 한쪽에만 있어 결과가 갈렸던 전례가 있다
   (`docs/reviews/code-review-2026-07-30-clean.md` A1).

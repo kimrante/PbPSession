@@ -212,6 +212,7 @@ fun OwnerProfileScreen(nav: NavController) {
                 ColorSwatchRow(
                     presets = PbpPalette.bubblePresets,
                     selected = color,
+                    slot = RecentColors.Slot.OWNER,
                     onSelect = { color = it },
                     onCustom = { showCustomColor = true },
                 )
@@ -256,7 +257,7 @@ fun OwnerProfileScreen(nav: NavController) {
             onDismiss = { showCustomColor = false },
             onPick = { picked ->
                 color = picked
-                RecentColors.add(context, picked)
+                RecentColors.add(context, RecentColors.Slot.OWNER, picked)
                 showCustomColor = false
             },
             initial = color,

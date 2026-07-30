@@ -42,10 +42,13 @@ private val GAP = 4.dp
 fun ColorSwatchRow(
     presets: List<Long>,
     selected: Long?,
+    /** 최근 색 목록은 자리마다 따로다 — 이름 색과 말풍선 색이 섞이지 않게 */
+    slot: RecentColors.Slot,
     onSelect: (Long) -> Unit,
     onCustom: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val recent = RecentColors.list(slot)
     val tokens = Pbp.colors
     Row(
         modifier.horizontalScroll(rememberScrollState()),
@@ -70,11 +73,11 @@ fun ColorSwatchRow(
                 .height(16.dp)
                 .background(tokens.line)
         )
-        RecentColors.list.forEach { color ->
+        recent.forEach { color ->
             Swatch(color = color, selected = selected == color, outlined = true) { onSelect(color) }
         }
         // 남은 자리는 점선 원 — 최근 색이 몇 칸 더 차는지 보인다
-        repeat(RecentColors.MAX - RecentColors.list.size) {
+        repeat(RecentColors.MAX - recent.size) {
             Box(
                 Modifier
                     .size(SWATCH)
@@ -97,19 +100,21 @@ fun ColorSwatchRow(
 @Composable
 fun RecentColorRow(
     selected: Long?,
+    slot: RecentColors.Slot,
     onSelect: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tokens = Pbp.colors
+    val recent = RecentColors.list(slot)
     Row(
         modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RecentColors.list.forEach { color ->
+        recent.forEach { color ->
             Swatch(color = color, selected = selected == color, outlined = true) { onSelect(color) }
         }
-        repeat(RecentColors.MAX - RecentColors.list.size) {
+        repeat(RecentColors.MAX - recent.size) {
             Box(
                 Modifier
                     .size(SWATCH)

@@ -266,6 +266,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 com.pbp.app.ui.common.ColorSwatchRow(
                     presets = PbpPalette.namePresets,
                     selected = nameColor,
+                    slot = com.pbp.app.data.RecentColors.Slot.NAME,
                     onSelect = { nameColor = it },
                     onCustom = { customTarget = "name" },
                 )
@@ -275,6 +276,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 com.pbp.app.ui.common.ColorSwatchRow(
                     presets = PbpPalette.bubblePresets,
                     selected = bubbleColor,
+                    slot = com.pbp.app.data.RecentColors.Slot.BUBBLE,
                     onSelect = { bubbleColor = it },
                     onCustom = { customTarget = "bubble" },
                 )
@@ -449,8 +451,14 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
             onDismiss = { customTarget = null },
             onPick = { color ->
                 if (target == "name") nameColor = color else bubbleColor = color
-                // 커스텀 적용만 기록 — 프리셋은 이미 줄에 있어 중복 (목업 01장)
-                com.pbp.app.data.RecentColors.add(app, color)
+                // 커스텀 적용만 기록 — 프리셋은 이미 줄에 있어 중복 (목업 01장).
+                // 자리별 목록이라 이름 색이 말풍선 색 줄에 섞이지 않는다
+                com.pbp.app.data.RecentColors.add(
+                    app,
+                    if (target == "name") com.pbp.app.data.RecentColors.Slot.NAME
+                    else com.pbp.app.data.RecentColors.Slot.BUBBLE,
+                    color,
+                )
                 customTarget = null
             },
             initial = if (target == "name") nameColor else bubbleColor,

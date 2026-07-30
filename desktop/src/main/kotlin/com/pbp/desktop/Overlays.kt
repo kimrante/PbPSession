@@ -232,8 +232,8 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
 @Composable
 internal fun SettingsOverlay(
     room: JoinedRoom?,
-    recentColors: List<Long> = emptyList(),
-    onColorUsed: (Long) -> Unit = {},
+    recentColors: Map<String, List<Long>> = emptyMap(),
+    onColorUsed: (String, Long) -> Unit = { _, _ -> },
     onDismiss: () -> Unit,
     onApply: (Long, String) -> Unit,
     onResetLogs: ((Boolean) -> Unit) -> Unit,
@@ -249,7 +249,7 @@ internal fun SettingsOverlay(
         Text("테마 컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.themePresets.map { it.first }, theme, recentColors) {
+            SwatchRow(Tokens.themePresets.map { it.first }, theme, recentColors["theme"].orEmpty()) {
                 theme = it
                 hexOpen = false
             }
@@ -260,7 +260,7 @@ internal fun SettingsOverlay(
         }
         if (hexOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(theme) { theme = it; onColorUsed(it) }
+            ColorPalettePicker(theme) { theme = it; onColorUsed("theme", it) }
         }
         Spacer(Modifier.height(14.dp))
         Text("배경", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)

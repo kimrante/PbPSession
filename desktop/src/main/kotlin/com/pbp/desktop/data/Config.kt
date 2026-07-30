@@ -50,17 +50,24 @@ class AppConfig private constructor(
     @Volatile var ownerColor: Long = 0xFFFFD9A8,
     @Volatile var ownerImagePath: String? = null,
     /**
-     * 최근 사용한 커스텀 색 (최신순, 최대 [RECENT_COLORS_MAX]개).
-     * 넘치면 가장 오래된 것부터 밀려난다 — 모바일 RecentColors와 같은 규칙.
+     * 최근 사용한 커스텀 색 — **자리별로 따로** (name/bubble/owner/theme).
+     * 각 목록은 최신순 최대 [RECENT_COLORS_MAX]개, 넘치면 가장 오래된 것부터
+     * 밀려난다 — 모바일 RecentColors와 같은 규칙.
      */
-    val recentColors: MutableList<Long> = mutableListOf(),
+    val recentColorsBySlot: MutableMap<String, MutableList<Long>> = mutableMapOf(),
 ) {
-    /** 커스텀 색 기록 — 중복은 앞으로 끌어올리고, 상한을 넘으면 오래된 것부터 버린다 */
+    fun recentColors(slot: String): List<Long> = recentColorsBySlot[slot].orEmpty()
+
+    /**
+     * 커스텀 색 기록 — 자리별 목록에 중복 없이 앞으로 끌어올리고,
+     * 상한을 넘으면 가장 오래된 것부터 버린다.
+     */
     @Synchronized
-    fun addRecentColor(argb: Long) {
-        recentColors.remove(argb)
-        recentColors.add(0, argb)
-        while (recentColors.size > RECENT_COLORS_MAX) recentColors.removeAt(recentColors.lastIndex)
+    fun addRecentColor(slot: String, argb: Long) {
+        val list = recentColorsBySlot.getOrPut(slot) { mutableListOf() }
+        list.remove(argb)
+        list.add(0, argb)
+        while (list.size > RECENT_COLORS_MAX) list.removeAt(list.lastIndex)
     }
 
     companion object {
@@ -93,8 +100,10 @@ class AppConfig private constructor(
                 ownerName = loaded?.ownerName ?: "",
                 ownerColor = loaded?.ownerColor ?: 0xFFFFD9A8,
                 ownerImagePath = loaded?.ownerImagePath,
-                recentColors = loaded?.recentColors.orEmpty()
-                    .take(RECENT_COLORS_MAX).toMutableList(),
+                // v0.5.0의 공용 목록은 어느 자리에 쓴 색인지 알 수 없어 승계하지 않는다
+                recentColorsBySlot = loaded?.recentColorsBySlot.orEmpty()
+                    .mapValues { (_, v) -> v.take(RECENT_COLORS_MAX).toMutableList() }
+                    .toMutableMap(),
             ).also { it.save() }
         }
 
@@ -113,7 +122,7 @@ class AppConfig private constructor(
         val ownerName: String? = null,
         val ownerColor: Long? = null,
         val ownerImagePath: String? = null,
-        val recentColors: List<Long>? = null,
+        val recentColorsBySlot: Map<String, MutableList<Long>>? = null,
     )
 
     /**
@@ -125,7 +134,7 @@ class AppConfig private constructor(
     fun snapshot(): String = gson.toJson(
         Saved(
             deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont,
-            ownerName, ownerColor, ownerImagePath, recentColors.toList(),
+            ownerName, ownerColor, ownerImagePath, recentColorsBySlot.toMap(),
         )
     )
 

@@ -168,8 +168,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var profiles by remember { mutableStateOf(config.profiles.toList()) }
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
-    // 최근 사용한 커스텀 색 — 네 색 선택 줄이 공유 (목업 01장)
-    var recentColors by remember { mutableStateOf(config.recentColors.toList()) }
+    // 최근 사용한 커스텀 색 — 자리(name/bubble/owner/theme)별로 따로 (버그 수정)
+    var recentColors by remember { mutableStateOf(config.recentColorsBySlot.mapValues { it.value.toList() }) }
 
     // 오너 프로필 — 미설정이면 먼저 설정하게 한다 (첫 실행 포함, 모바일과 동일)
     var ownerName by remember { mutableStateOf(config.ownerName) }
@@ -212,10 +212,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         scope.launch(Dispatchers.IO) { config.writeSnapshot(json) }
     }
 
-    /** 커스텀 색 적용 기록 — 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
-    fun rememberColor(argb: Long) {
-        config.addRecentColor(argb)
-        recentColors = config.recentColors.toList()
+    /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
+    fun rememberColor(slot: String, argb: Long) {
+        config.addRecentColor(slot, argb)
+        recentColors = config.recentColorsBySlot.mapValues { it.value.toList() }
         persist()
     }
 

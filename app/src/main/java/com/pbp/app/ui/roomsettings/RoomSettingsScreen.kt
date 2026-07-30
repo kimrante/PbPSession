@@ -169,6 +169,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             // 테마 그리드는 라벨 있는 셀 체계라, 최근 색은 그리드 아래 별도 줄로 (목업 01-B)
             com.pbp.app.ui.common.RecentColorRow(
                 selected = room?.themeColor,
+                slot = com.pbp.app.data.RecentColors.Slot.THEME,
                 onSelect = { vm.setThemeColor(it) },
                 modifier = Modifier.padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
             )
@@ -308,7 +309,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             onDismiss = { showCustomTheme = false },
             onPick = { color ->
                 vm.setThemeColor(color)
-                com.pbp.app.data.RecentColors.add(context, color)
+                com.pbp.app.data.RecentColors.add(context, com.pbp.app.data.RecentColors.Slot.THEME, color)
                 showCustomTheme = false
             },
             initial = room?.themeColor,

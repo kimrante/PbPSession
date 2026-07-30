@@ -141,10 +141,10 @@ internal fun OwnerAvatar(
 internal fun ProfileOverlay(
     onDismiss: () -> Unit,
     onSave: (Profile) -> Unit,
-    /** 최근 사용한 커스텀 색 (최신순) */
-    recentColors: List<Long> = emptyList(),
-    /** 커스텀 색을 적용했을 때 — 최근 목록에 기록 */
-    onColorUsed: (Long) -> Unit = {},
+    /** 자리별 최근 사용한 커스텀 색 (최신순) */
+    recentColors: Map<String, List<Long>> = emptyMap(),
+    /** 커스텀 색을 적용했을 때 — 해당 자리 목록에 기록 */
+    onColorUsed: (String, Long) -> Unit = { _, _ -> },
     /** null이면 새 캐릭터, 아니면 이 프로필을 편집 */
     editing: Profile? = null,
     /** 편집 모드에서만 — null이면 삭제 버튼 숨김 */
@@ -224,27 +224,27 @@ internal fun ProfileOverlay(
         Text("이름 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.namePresets, nameColor, recentColors) { nameColor = it; nameCustomOpen = false }
+            SwatchRow(Tokens.namePresets, nameColor, recentColors["name"].orEmpty()) { nameColor = it; nameCustomOpen = false }
             CustomSwatch(on = nameColor !in Tokens.namePresets) {
                 nameCustomOpen = !nameCustomOpen
             }
         }
         if (nameCustomOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(nameColor) { nameColor = it; onColorUsed(it) }
+            ColorPalettePicker(nameColor) { nameColor = it; onColorUsed("name", it) }
         }
         Spacer(Modifier.height(14.dp))
         Text("말풍선 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.bubblePresets, bubbleColor, recentColors) { bubbleColor = it; bubbleCustomOpen = false }
+            SwatchRow(Tokens.bubblePresets, bubbleColor, recentColors["bubble"].orEmpty()) { bubbleColor = it; bubbleCustomOpen = false }
             CustomSwatch(on = bubbleColor !in Tokens.bubblePresets) {
                 bubbleCustomOpen = !bubbleCustomOpen
             }
         }
         if (bubbleCustomOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(bubbleColor) { bubbleColor = it; onColorUsed(it) }
+            ColorPalettePicker(bubbleColor) { bubbleColor = it; onColorUsed("bubble", it) }
         }
         Spacer(Modifier.height(14.dp))
         Text("캐릭터 값", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
@@ -603,8 +603,8 @@ internal fun ProfileManagerOverlay(
  */
 @Composable
 internal fun OwnerProfileOverlay(
-    recentColors: List<Long> = emptyList(),
-    onColorUsed: (Long) -> Unit = {},
+    recentColors: Map<String, List<Long>> = emptyMap(),
+    onColorUsed: (String, Long) -> Unit = { _, _ -> },
     initialName: String,
     initialColor: Long,
     initialImage: String?,
@@ -656,7 +656,7 @@ internal fun OwnerProfileOverlay(
         Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.bubblePresets, color, recentColors) {
+            SwatchRow(Tokens.bubblePresets, color, recentColors["owner"].orEmpty()) {
                 color = it
                 customOpen = false
             }
@@ -664,7 +664,7 @@ internal fun OwnerProfileOverlay(
         }
         if (customOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(color) { color = it; onColorUsed(it) }
+            ColorPalettePicker(color) { color = it; onColorUsed("owner", it) }
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

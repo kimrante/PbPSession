@@ -454,3 +454,40 @@ suspend fun saveToGallery(
 S1~S3(범위 고르는 UI)은 기존 부품 재사용이라 한 세션 분량이다. **S4가 이 기능의 실체이자 위험**이고,
 특히 아바타 로딩 타이밍과 분할 처리에서 시간이 든다. S5는 배선이고, **S6은 갤러리 저장으로 정해져 권한 분기가 붙어 배선보다는 조금 더 든다**
 (API 28 이하 요청·거부 처리, 파일명 치환, 실패 롤백). S7은 S4가 끝나면 기계적이다.
+
+---
+
+## 구현 결과 (2026-07-30)
+
+S1~S7 전부 반영. 지시서와 다르게 간 지점만 남긴다.
+
+| 단계 | 산출물 |
+|---|---|
+| S1 | `ChatDialogs.MessageActionDialog(onCapture)` · `ChatScreen`의 `captureStart/captureEnd` · `BackHandler` · 캡처 중 스크롤/롱프레스/입력 잠금. 데스크톱 GM 서술의 `if (mine)` 가드 제거 |
+| S2 | `MessageBlock`에 `mark`/`onTap` · `Modifier.captureBand` · `EdgeBadge` (양 플랫폼) |
+| S3 | 신규 `ui/chat/CaptureBar.kt` (하단 바 70dp 고정 + 모드 상단 바), 데스크톱 `CaptureBar.kt` |
+| S4 | 신규 `export/CaptureRenderer.kt` — ComposeView 오프스크린, 360dp 폭 + **고정 밀도 2.0** |
+| S5 | 신규 `ui/chat/CapturePreviewScreen.kt` + `Routes.capturePreview` |
+| S6 | 신규 `export/CaptureSaver.kt` + `AndroidManifest`(권한·FileProvider) + `res/xml/file_paths.xml` |
+| S7 | 데스크톱 `ImageComposeScene` 렌더러 · Esc 종료 · FileDialog 저장 |
+
+**결정·이탈**
+
+- **렌더 밀도는 고정 2.0**을 골랐다(지시서가 "어느 쪽이든 골라 문서에 남길 것"이라고 한 부분).
+  기기 밀도를 쓰면 같은 대화가 폰마다 다른 픽셀 크기로 나온다. 360dp × 2.0 = **720px 고정**.
+- **밴드 그리기**는 CSS의 `box-shadow: inset`을 그대로 옮길 수 없어, 열린 쪽(위/아래)의 둥근 모서리를
+  캔버스 밖으로 밀어내 잘리게 하는 방식으로 구현했다(`captureBand`). 인접 밴드가 맞닿아도 가로선이 없다.
+- **예상 높이는 한 함수**(`CaptureRenderer.estimateHeightPx`)만 쓴다. 하단 바 문구와 분할 판정이
+  다른 계산을 쓰면 "약 N px"과 실제 장수가 어긋난다.
+- **탭 규칙은 순수 함수**(`captureRangeAfterTap`)로 빼서 단위 테스트 9건으로 고정했다.
+  데스크톱도 같은 이름·같은 규칙의 함수를 쓴다(모듈이 달라 코드는 각자 갖는다).
+- **데스크톱에는 미리보기 화면이 없다**(지시서 S7이 FileDialog 저장만 요구). 대신 배경 포함 토글이
+  묻히지 않도록 캡처 바에 `배경 포함 ✓` 버튼을 두었다.
+- **캡처 이미지는 항상 라이트 토큰**으로 그린다. 기기 다크 설정에 따라 결과가 갈리면 안 된다.
+
+**미검증** — 컴파일·단위 테스트까지만 확인했다. 아래는 실기기·실행 확인이 필요하다.
+
+- 아바타 프리로드가 실제로 충분한지(빈 원으로 찍히지 않는지)
+- 8,000px 초과 분할이 실제로 여러 장으로 나오는지
+- 갤러리 저장·공유·API 28 이하 권한 흐름
+- 데스크톱 `ImageComposeScene` 2패스 측정이 실제 높이를 맞추는지

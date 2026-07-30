@@ -107,6 +107,7 @@ internal fun MessageActionDialog(
     onCopy: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onCapture: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -171,6 +172,15 @@ internal fun MessageActionDialog(
                     onClick = onDelete,
                 )
                 }
+                // 캡처는 복사와 같이 누구 메시지에서든 — canModify 밖에 둔다
+                MessageActionRow(
+                    icon = "🖼️",
+                    tileColor = tokens.themeDefault,
+                    title = "캡처",
+                    titleColor = Color(PbpPalette.nameColorForLight(0xFF8EC5E8)),
+                    subtitle = "여기부터 범위를 골라 이미지로 만듭니다",
+                    onClick = onCapture,
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Text(
                         "취소",

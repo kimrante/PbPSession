@@ -117,6 +117,12 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
         title = "PbP — 1:1 TRPG 채팅",
         state = rememberWindowState(width = 1200.dp, height = 760.dp),
+        // Esc = 캡처 모드 종료. 입력창에 포커스가 있어도 먹도록 프리뷰 단계에서 잡는다
+        onPreviewKeyEvent = { event ->
+            event.key == Key.Escape &&
+                event.type == KeyEventType.KeyUp &&
+                escapeHandler.get()?.invoke() == true
+        },
     ) {
         // 창 포커스 추적 — 포커스가 없을 때만 OS 알림 (모바일 isForeground와 동일 역할)
         val windowFocused = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
@@ -136,6 +142,13 @@ fun main() = application {
         App(windowFocused)
     }
 }
+
+/**
+ * Esc 처리기 — 창이 키를 먼저 받지만 캡처 상태는 [App]이 들고 있어서, App이 여기에
+ * 처리기를 걸어 둔다. 처리했으면 true를 돌려 키를 소비한다.
+ */
+private val escapeHandler =
+    java.util.concurrent.atomic.AtomicReference<(() -> Boolean)?>(null)
 
 @Composable
 internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
@@ -185,6 +198,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     // 내 메시지 길게 눌러 편집/삭제 — 앱과 동일 흐름 (팝업 → 편집/삭제)
     var messageAction by remember { mutableStateOf<Message?>(null) }
+    // 캡처 범위 — (시작 docId, 끝 docId). 끝이 null이면 아직 고르는 중 (모바일과 같은 규칙)
+    var captureStart by remember { mutableStateOf<String?>(null) }
+    var captureEnd by remember { mutableStateOf<String?>(null) }
+    var captureRendering by remember { mutableStateOf(false) }
+    var captureWithBackground by remember { mutableStateOf(config.captureWithBackground) }
     var messageEdit by remember { mutableStateOf<Message?>(null) }
     var messageDelete by remember { mutableStateOf<Message?>(null) }
 
@@ -459,6 +477,83 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
 
     /** HTML 로그 내보내기 — 모바일과 동일 형식. 아바타는 방 avatars 문서에서 받아 내장 */
+    /** 선택 구간(messages 인덱스). 시작점이 없으면 null = 캡처 모드 아님 */
+    val captureIdx: IntRange? = remember(messages, captureStart, captureEnd) {
+        val a = messages.indexOfFirst { it.docId == captureStart }
+        val b = messages.indexOfFirst { it.docId == captureEnd }
+        when {
+            a < 0 -> null
+            b < 0 -> a..a
+            else -> minOf(a, b)..maxOf(a, b)
+        }
+    }
+    fun exitCapture() {
+        captureStart = null
+        captureEnd = null
+    }
+    DisposableEffect(captureStart == null) {
+        escapeHandler.set {
+            if (captureStart != null) {
+                captureStart = null
+                captureEnd = null
+                true
+            } else false
+        }
+        onDispose { escapeHandler.set(null) }
+    }
+    // 목업 03장의 탭 규칙 — 모바일 onCaptureTap과 같은 동작
+    fun onCaptureTap(tapped: Int) {
+        val range = captureIdx ?: return
+        val next = captureRangeAfterTap(range, tapped)
+        captureStart = messages[next.first].docId
+        captureEnd = messages[next.last].docId
+    }
+
+    /** 캡처 이미지를 만들어 PNG로 저장 — 기존 로그 내보내기와 같은 FileDialog */
+    fun makeCapture() {
+        val room = selected ?: return
+        val range = captureIdx ?: return
+        val picked = messages.subList(
+            range.first.coerceIn(0, messages.size),
+            (range.last + 1).coerceIn(0, messages.size),
+        ).toList()
+        if (picked.isEmpty() || picked.size > CAPTURE_MAX) return
+        captureRendering = true
+        val uid = authorUid()
+        scope.launch {
+            val pages = withContext(Dispatchers.Default) {
+                runCatching {
+                    com.pbp.desktop.export.CaptureRenderer.render(
+                        room = room,
+                        messages = picked,
+                        myUid = uid,
+                        avatarCache = avatarCache,
+                        firestore = firestore,
+                        withBackground = config.captureWithBackground,
+                    )
+                }.getOrDefault(emptyList())
+            }
+            captureRendering = false
+            if (pages.isEmpty()) {
+                System.err.println("캡처 이미지를 만들지 못했습니다")
+                return@launch
+            }
+            withContext(Dispatchers.IO) {
+                val fd = java.awt.FileDialog(null as java.awt.Frame?, "캡처 이미지 저장", java.awt.FileDialog.SAVE)
+                fd.file = "PbP_${room.name}.png"
+                fd.isVisible = true
+                val dir = fd.directory ?: return@withContext
+                val name = (fd.file ?: return@withContext).removeSuffix(".png")
+                pages.forEachIndexed { index, bytes ->
+                    val suffix = if (pages.size > 1) "_${index + 1}of${pages.size}" else ""
+                    runCatching { java.io.File(dir, "$name$suffix.png").writeBytes(bytes) }
+                        .onFailure { System.err.println("캡처 저장 실패: $it") }
+                }
+            }
+            exitCapture()
+        }
+    }
+
     fun exportLogs() {
         val room = selected ?: return
         val snapshot = messages
@@ -586,6 +681,17 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onEditProfile = { editProfileIndex = it },
                 onExport = ::exportLogs,
                 onShowMarkupHelp = { overlay = OverlayKind.MarkupHelp },
+                captureIdx = captureIdx,
+                onCaptureTap = ::onCaptureTap,
+                onCaptureExit = ::exitCapture,
+                onCaptureMake = ::makeCapture,
+                captureRendering = captureRendering,
+                captureWithBackground = captureWithBackground,
+                onToggleCaptureBackground = {
+                    captureWithBackground = !captureWithBackground
+                    config.captureWithBackground = captureWithBackground
+                    persist()
+                },
             )
         }
     }
@@ -800,6 +906,13 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         java.awt.datatransfer.StringSelection(target.body), null,
                     )
                 }
+                messageAction = null
+            }
+            Spacer(Modifier.height(8.dp))
+            // 캡처는 복사와 같이 누구 메시지에서든
+            GhostButton("캡처", Modifier.fillMaxWidth()) {
+                captureStart = target.docId
+                captureEnd = null
                 messageAction = null
             }
             if (target.authorUid == authorUid()) {

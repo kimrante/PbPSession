@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
         com.pbp.app.ui.theme.AppFonts.load(this)
         com.pbp.app.data.OwnerProfile.load(this)
+        com.pbp.app.data.CaptureSettings.load(this)
         com.pbp.app.data.RecentColors.load(this)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -112,6 +113,15 @@ private fun AppNav(
             arguments = listOf(navArgument(Routes.ARG_PROFILE_ID) { type = NavType.LongType }),
         ) { entry ->
             ProfileEditScreen(nav, entry.arguments!!.getLong(Routes.ARG_PROFILE_ID))
+        }
+        composable(
+            Routes.CAPTURE_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_ROOM_ID) { type = NavType.LongType }),
+        ) { entry ->
+            com.pbp.app.ui.chat.CapturePreviewScreen(
+                nav,
+                entry.arguments!!.getLong(Routes.ARG_ROOM_ID),
+            )
         }
         composable(
             Routes.SETTINGS_PATTERN,

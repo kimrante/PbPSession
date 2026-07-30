@@ -49,9 +49,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -134,6 +137,41 @@ private fun rendersBubble(message: Message): Boolean {
 }
 
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
+/**
+ * 캡처 범위 선택 표시 (목업 mockup-capture 03장).
+ * 말풍선 내부는 건드리지 않고 **감싸는 상자에만** 얹으므로, [CaptureMark.NONE]으로
+ * 부르면 화면과 캡처 이미지가 완전히 같아진다.
+ */
+internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
+
+/**
+ * 밴드(선택 구간) 배경·테두리. 열린 쪽(위/아래)의 둥근 모서리는 캔버스 밖으로 밀어내
+ * 잘리게 하는 방식이라, 인접한 밴드가 맞닿아도 가로선이 생기지 않는다.
+ */
+private fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
+    drawBehind {
+        if (mark == CaptureMark.NONE || mark == CaptureMark.OUT) return@drawBehind
+        val stroke = 2.dp.toPx()
+        val over = radiusPx + stroke // 열린 쪽을 이만큼 밖으로 빼면 모서리가 잘려 직선이 된다
+        val top = if (mark == CaptureMark.START || mark == CaptureMark.ONLY) 0f else -over
+        val bottom = if (mark == CaptureMark.END || mark == CaptureMark.ONLY) size.height else size.height + over
+        val inset = stroke / 2
+        val corner = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+        drawRoundRect(
+            color = accent.copy(alpha = .26f),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+            size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
+            cornerRadius = corner,
+        )
+        drawRoundRect(
+            color = accent,
+            topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
+            cornerRadius = corner,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
+    }
+
 @Composable
 internal fun MessageBlock(
     message: Message,
@@ -143,9 +181,21 @@ internal fun MessageBlock(
     /** 상대가 여기까지 읽었음 — 내 메시지 중 가장 최신 1건에만 붙는다 */
     showRead: Boolean = false,
     themeColor: Color,
+    /** 캡처 모드의 선택 상태. NONE이면 평상시와 완전히 같다 */
+    mark: CaptureMark = CaptureMark.NONE,
+    /** 캡처 모드에서 행 전체를 탭했을 때. 평상시에는 빈 람다라 clickable을 붙이지 않는다 */
+    onTap: (() -> Unit)? = null,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
+    val radiusPx = with(LocalDensity.current) { PbpDimens.rCell.toPx() }
+    var wrapper = Modifier
+        .fillMaxWidth()
+        .captureBand(mark, tokens.signature, radiusPx)
+    if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
+    if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = PbpDimens.gap2)
+    if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
+    Box(wrapper) {
     when {
         message.type == MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -276,6 +326,28 @@ internal fun MessageBlock(
             }
         }
     }
+    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
+    when (mark) {
+        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
+        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
+        else -> Unit
+    }
+    }
+}
+
+/** 밴드 양 끝의 '시작'·'끝' 배지 — 9sp는 배지 한정 예외 (토큰 문서) */
+@Composable
+private fun EdgeBadge(label: String, modifier: Modifier) {
+    Text(
+        label,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Black,
+        color = Color.White,
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Pbp.colors.signatureInk)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
 }
 
 /** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만). 본인은 길게 눌러 편집·삭제 */

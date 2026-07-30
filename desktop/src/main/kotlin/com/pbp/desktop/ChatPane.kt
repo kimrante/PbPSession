@@ -48,8 +48,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -125,6 +127,14 @@ internal fun ChatPane(
     onExport: () -> Unit,
     /** 입력창 "?" — 지원 문법 도움말 오버레이 열기 */
     onShowMarkupHelp: () -> Unit,
+    /** 캡처 범위 (messages 인덱스). null이면 캡처 모드가 아니다 */
+    captureIdx: IntRange?,
+    onCaptureTap: (Int) -> Unit,
+    onCaptureExit: () -> Unit,
+    onCaptureMake: () -> Unit,
+    captureRendering: Boolean,
+    captureWithBackground: Boolean,
+    onToggleCaptureBackground: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -137,6 +147,11 @@ internal fun ChatPane(
             // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션.
             // PC는 좌측 정렬 유지 (trpg-app-mockup-pc-light.html) — 넓은 창에서 제목이
             // 사이드바 쪽 시선 흐름과 이어지고, 부제 규격만 모바일과 공유한다.
+            if (captureIdx != null) CaptureModeBar(
+                subtitle = if (captureIdx.first == captureIdx.last) "끝 메시지를 클릭하세요"
+                else "양 끝을 다시 클릭해 조절할 수 있어요",
+                onClose = onCaptureExit,
+            ) else
             Row(
                 Modifier.fillMaxWidth().height(DesktopDimens.appBar)
                     .background(
@@ -207,10 +222,14 @@ internal fun ChatPane(
                         val grouped = isContinuation(messages.getOrNull(index - 1), message)
                         // 목록은 오름차순이라 "다음" 메시지는 index + 1 (모바일과 동일 규칙)
                         val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
+                        val mark = captureMarkOf(captureIdx, index)
+                        // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다
+                        val joinsAbove = captureIdx?.contains(index) == true &&
+                            captureIdx.contains(index - 1)
                         Box(
                             Modifier.padding(
                                 top = when {
-                                    index == 0 -> 0.dp
+                                    index == 0 || joinsAbove -> 0.dp
                                     grouped -> DesktopDimens.gap1 // 모바일과 같은 연속 간격
                                     else -> DesktopDimens.gap3
                                 }
@@ -219,13 +238,36 @@ internal fun ChatPane(
                             MessageBlock(
                                 message, myUid, room, avatarCache, firestore, grouped,
                                 showTime = showTime,
-                                onLongPress = onMessageLongPress,
+                                mark = mark,
+                                onTap = if (captureIdx != null) ({ onCaptureTap(index) }) else null,
+                                // 캡처 모드에서는 편집·삭제 팝업을 잠근다
+                                onLongPress = { if (captureIdx == null) onMessageLongPress(it) },
                             )
                         }
                     }
                 }
             }
 
+            // 캡처 모드면 입력 영역 자리를 캡처 바가 대신한다 (모바일과 같은 규칙)
+            if (captureIdx != null) {
+                val picked = messages.subList(
+                    captureIdx.first.coerceIn(0, messages.size),
+                    (captureIdx.last + 1).coerceIn(0, messages.size),
+                )
+                CaptureBar(
+                    count = picked.size,
+                    timeRange = if (captureIdx.first == captureIdx.last) null else timeRangeLabel(picked),
+                    startLabel = picked.firstOrNull()?.let {
+                        "시작 " + formatTime(it.createdAt) + " · " + it.senderName
+                    },
+                    overLimit = picked.size > CAPTURE_MAX,
+                    rendering = captureRendering,
+                    onMake = onCaptureMake,
+                    onCancel = onCaptureExit,
+                    withBackground = captureWithBackground,
+                    onToggleBackground = onToggleCaptureBackground,
+                )
+            } else
             // 입력 영역 — 전송 시 스크롤 플래그를 세워 실제 도착까지 유지 (N4)
             InputZone(
                 room = room,
@@ -255,9 +297,19 @@ internal fun MessageBlock(
     grouped: Boolean = false,
     /** false면 시간을 감춘다 — 같은 사람이 같은 분에 이어 보낸 중간 메시지 */
     showTime: Boolean = true,
+    /** 캡처 모드의 선택 상태. NONE이면 평상시·캡처 이미지와 완전히 같다 */
+    mark: CaptureMark = CaptureMark.NONE,
+    /** 캡처 모드에서 행 전체를 클릭했을 때 */
+    onTap: (() -> Unit)? = null,
     onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == myUid
+    val radiusPx = with(LocalDensity.current) { DesktopDimens.rCell.toPx() }
+    var wrapper = Modifier.fillMaxWidth().captureBand(mark, Tokens.Signature, radiusPx)
+    if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
+    if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = DesktopDimens.gap2)
+    if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
+    Box(wrapper) {
     when {
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -329,7 +381,7 @@ internal fun MessageBlock(
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
                             message, part.text,
-                            onLongPress = { if (mine) onLongPress(message) },
+                            onLongPress = { onLongPress(message) }, // 복사·캡처는 상대 서술에서도
                         )
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -369,6 +421,70 @@ internal fun MessageBlock(
             }
         }
     }
+    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
+    when (mark) {
+        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
+        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
+        else -> Unit
+    }
+    }
+}
+
+/** 캡처 범위 선택 표시 — 모바일 CaptureMark와 같은 규칙 (목업 mockup-capture 03장) */
+internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
+
+/**
+ * 밴드(선택 구간) 배경·테두리. 열린 쪽의 둥근 모서리는 캔버스 밖으로 밀어 잘리게 하는
+ * 방식이라, 인접한 밴드가 맞닿아도 가로선이 생기지 않는다 (모바일과 같은 구현).
+ */
+internal fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
+    drawBehind {
+        if (mark == CaptureMark.NONE || mark == CaptureMark.OUT) return@drawBehind
+        val stroke = 2.dp.toPx()
+        val over = radiusPx + stroke
+        val top = if (mark == CaptureMark.START || mark == CaptureMark.ONLY) 0f else -over
+        val bottom =
+            if (mark == CaptureMark.END || mark == CaptureMark.ONLY) size.height else size.height + over
+        val inset = stroke / 2
+        val corner = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+        drawRoundRect(
+            color = accent.copy(alpha = .26f),
+            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+            size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
+            cornerRadius = corner,
+        )
+        drawRoundRect(
+            color = accent,
+            topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
+            cornerRadius = corner,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
+    }
+
+/** 밴드 양 끝의 '시작'·'끝' 배지 */
+@Composable
+private fun EdgeBadge(label: String, modifier: Modifier) {
+    Text(
+        label,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Black,
+        color = Color.White,
+        modifier = modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Tokens.SignatureInk)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+    )
+}
+
+/** 선택 구간의 표시 상태 — 모바일 captureMarkOf와 같은 판정 */
+internal fun captureMarkOf(range: IntRange?, index: Int): CaptureMark = when {
+    range == null -> CaptureMark.NONE
+    index !in range -> CaptureMark.OUT
+    range.first == range.last -> CaptureMark.ONLY
+    index == range.first -> CaptureMark.START
+    index == range.last -> CaptureMark.END
+    else -> CaptureMark.IN
 }
 
 /**

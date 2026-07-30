@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 배경 — 시안 02 '포스트잇' (docs/app-icon-concepts.html):
+     시그니처 옐로에 우하단으로 은은히 어두워지는 라디얼 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 h108 v108 h-108 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="76"
+                android:centerY="84"
+                android:gradientRadius="78"
+                android:startColor="#EFB945"
+                android:endColor="#FFD05C" />
+        </aapt:attr>
+    </path>
+</vector>

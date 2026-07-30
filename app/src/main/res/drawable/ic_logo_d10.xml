@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 내 로고용 d10 마크 — 런처 아이콘(시안 02 '포스트잇')과 동일 지오메트리,
+     뷰포트를 꽉 채우는 버전 (방 목록 헤더 타일 등) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="25dp"
+    android:height="26dp"
+    android:viewportWidth="100"
+    android:viewportHeight="104">
+    <path
+        android:fillColor="#23272E"
+        android:strokeColor="#FFD05C"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M50,6 L9,54 L33,60 Z" />
+    <path
+        android:fillColor="#181C22"
+        android:strokeColor="#FFD05C"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M9,54 L50,98 L33,60 Z" />
+    <path
+        android:fillColor="#2A2F38"
+        android:strokeColor="#FFD05C"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M50,6 L91,54 L67,60 Z" />
+    <path
+        android:fillColor="#1D222A"
+        android:strokeColor="#FFD05C"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M91,54 L50,98 L67,60 Z" />
+    <path
+        android:fillColor="#23272E"
+        android:strokeColor="#FFD05C"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M50,6 L67,60 L50,98 L33,60 Z" />
+</vector>

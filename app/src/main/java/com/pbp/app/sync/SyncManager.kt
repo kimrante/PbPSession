@@ -167,6 +167,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
+    /**
+     * 방 참여 인원 — members 문서 수를 실시간으로 흘려보낸다 (상단 바 "N명 참여 중").
+     * 로컬 전용 방(공유 안 됨)은 나 혼자이므로 호출부에서 1을 쓴다.
+     * 오류·최초 응답 전에는 null을 흘려 호출부가 표기를 생략할 수 있게 한다.
+     */
+    fun observeMemberCount(remoteRoomId: String): kotlinx.coroutines.flow.Flow<Int?> =
+        kotlinx.coroutines.flow.callbackFlow {
+            ensureAuth() // 규칙상 인증 없이는 읽을 수 없다
+            val registration = firestore.collection("rooms").document(remoteRoomId)
+                .collection("members")
+                .addSnapshotListener { snapshot, error ->
+                    trySend(if (error != null || snapshot == null) null else snapshot.size())
+                }
+            kotlinx.coroutines.channels.awaitClose { registration.remove() }
+        }
+
     /** members/{myUid} 문서 보장 — 보안 규칙의 방 접근 근거 */
     private suspend fun ensureMembership(remoteRoomId: String) {
         firestore.collection("rooms").document(remoteRoomId)

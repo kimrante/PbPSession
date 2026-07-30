@@ -117,6 +117,19 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     val totalCount = repo.observeMessageCount(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    /**
+     * 상단 바 "N명 참여 중" — 공유된 방은 members 문서 수, 로컬 전용 방은 나 혼자(1).
+     * 서버 응답 전이거나 읽기에 실패하면 null이라 표기를 생략한다.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val memberCount = room
+        .flatMapLatest { current ->
+            val remoteId = current?.remoteId
+            if (remoteId == null) kotlinx.coroutines.flow.flowOf(1)
+            else app.syncManager.observeMemberCount(remoteId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val profiles = repo.observeProfilesForRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -180,6 +193,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val room by vm.room.collectAsState()
     val messages by vm.messages.collectAsState()
     val totalCount by vm.totalCount.collectAsState()
+    val memberCount by vm.memberCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
@@ -263,56 +277,84 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 .consumeWindowInsets(padding)
         ) {
             RoomBackdrop(backgroundKey = room?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND) {
-                // ── 상단 바: 좌측 룸명+테마, 우측 내보내기·설정 (스펙 4장)
-                Row(
+                // ── 상단 바: 타이틀 묶음은 정중앙, 버튼은 좌우 끝 (목업 mockup-chat-header)
+                Box(
                     Modifier
                         .fillMaxWidth()
                         .height(PbpDimens.appBarHeight)
                         .background(Color.Black.copy(alpha = if (tokens.isDark) 0.45f else 0.06f))
-                        .padding(horizontal = PbpDimens.sp2),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(onClick = { nav.popBackStack() }) {
-                        Text("←", fontSize = 20.sp, color = tokens.ink)
-                    }
-                    Column(Modifier.weight(1f)) {
-                        // 테마 컬러는 방 이름 옆에 — 아래 줄은 역할 표시만
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                room?.name ?: "",
-                                fontFamily = GowunBatang,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = tokens.ink,
-                                maxLines = 1,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                            Spacer(Modifier.width(PbpDimens.sp2))
-                            Box(
-                                Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(themeColor)
-                            )
+                    Row(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = PbpDimens.sp2),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = { nav.popBackStack() }) {
+                            Text("←", fontSize = 20.sp, color = tokens.ink)
                         }
+                        Spacer(Modifier.weight(1f))
+                        IconButton(onClick = {
+                            // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
+                            runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
+                                .onFailure {
+                                    Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
+                                }
+                        }) {
+                            Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+                        }
+                        IconButton(onClick = { nav.navigate("settings/$roomId") }) {
+                            Text("⚙", fontSize = 17.sp, color = tokens.ink)
+                        }
+                    }
+                    // 타이틀 묶음은 버튼 위에 겹쳐 화면 정중앙 — 좌우 인셋이 같아 중심이 흔들리지 않는다
+                    Column(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .height(PbpDimens.appBarHeight)
+                            .padding(horizontal = PbpDimens.titleInset),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
                         Text(
-                            if (room?.isMaster == true) "마스터" else "참여자",
-                            fontSize = 10.sp,
-                            color = tokens.inkDim,
+                            room?.name ?: "",
+                            fontFamily = GowunBatang,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            lineHeight = 15.sp,
+                            color = tokens.ink,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
-                    }
-                    IconButton(onClick = {
-                        // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
-                        runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
-                            .onFailure {
-                                Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
+                        Spacer(Modifier.height(PbpDimens.sp1))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // GM/PL · 참여 인원 — 방 테마 컬러 점을 둘 사이 구분점으로 쓴다
+                            Text(
+                                if (room?.isMaster == true) "GM" else "PL",
+                                fontSize = 11.sp,
+                                lineHeight = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = tokens.inkSub,
+                            )
+                            memberCount?.let { count ->
+                                Spacer(Modifier.width(PbpDimens.sp1))
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(themeColor)
+                                )
+                                Spacer(Modifier.width(PbpDimens.sp1))
+                                Text(
+                                    "${count}명 참여 중",
+                                    fontSize = 11.sp,
+                                    lineHeight = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = tokens.inkSub,
+                                )
                             }
-                    }) {
-                        Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
-                    }
-                    IconButton(onClick = { nav.navigate("settings/$roomId") }) {
-                        Text("⚙", fontSize = 17.sp, color = tokens.ink)
-                    }
+                        }
+                }
                 }
 
                 // ── 메시지 목록

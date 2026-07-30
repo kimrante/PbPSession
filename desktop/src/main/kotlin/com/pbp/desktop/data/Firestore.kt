@@ -332,6 +332,15 @@ class FirestoreRest(
         )
     }
 
+    /**
+     * 방 참여 인원 — members 문서 수 (상단 바 "N명 참여 중").
+     * 실패하면 null이라 호출부가 표기를 생략한다. 1:1 전제라 문서가 많지 않다.
+     */
+    fun countMembers(remoteRoomId: String): Int? = runCatching {
+        get("$base/rooms/$remoteRoomId/members?key=$apiKey&pageSize=100")
+            ?.getAsJsonArray("documents")?.size()
+    }.getOrNull()
+
     /** 초대 코드 → 방 매핑 문서 생성 (방 생성 시) */
     fun createInviteCode(code: String, remoteRoomId: String): Boolean = patch(
         "$base/inviteCodes/$code?key=$apiKey",

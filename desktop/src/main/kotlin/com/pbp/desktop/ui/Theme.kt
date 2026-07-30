@@ -34,6 +34,7 @@ object Tokens {
     val Line = Color(0x1414191F)
     val Ink = Color(0xFF23272E)
     val InkDim = Color(0xFF6E7683)
+    val InkSub = Color(0xB814191F)         // 상단 바 부제 — InkDim보다 진해 또렷
     val Signature = Color(0xFFFFD05C)     // 면(버튼 배경)용 — 옐로 텍스트 금지
     val SignatureRing = Color(0xFFE0B13E) // 링·테두리용 진한 골드
     val SignatureInk = Color(0xFFA3781A)  // 밝은 배경 위 옐로 '텍스트'용

@@ -79,10 +79,11 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
   width:var(--pc-sidebar);flex-shrink:0;display:flex;flex-direction:column;
   background:linear-gradient(180deg,#fbf9f4,#f0ede5);border-right:1px solid var(--line);
 }
-.side-head{height:var(--appbar-h);flex-shrink:0;display:flex;align-items:center;gap:var(--sp-3);padding:0 var(--sp-4)}
-.applogo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#ffd05c,#efb945);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.brand{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;color:var(--ink);line-height:1.2}
-.side-head small{display:block;font-size:11px;color:var(--ink-dim);font-family:'Noto Sans KR',sans-serif;font-weight:400}
+.side-head{height:var(--appbar-h);flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);padding:0 var(--sp-4)}
+.side-head .lock{display:flex;align-items:center;gap:var(--sp-2)}
+.applogo{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#ffd05c,#efb945);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand{font-family:'Gowun Batang',serif;font-weight:700;font-size:18px;color:var(--ink);line-height:1}
+.side-head small{display:block;font-size:11px;line-height:1;color:rgba(20,25,32,.72);font-family:'Noto Sans KR',sans-serif;font-weight:500}
 .roomlist{flex:1;overflow:hidden;padding:var(--sp-2) var(--sp-4) 0;display:flex;flex-direction:column;gap:var(--sp-3)}
 .room-card{display:flex;align-items:center;gap:var(--sp-3);background:rgba(20,25,32,.035);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-3) var(--sp-4)}
 .room-card.active{background:linear-gradient(120deg,rgba(95,158,199,.14),rgba(20,25,32,.02));border-color:rgba(95,158,199,.45)}
@@ -112,8 +113,8 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
   padding:0 var(--pc-edge);background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.35));
 }
 .chat-head .grow{flex:1;min-width:0}
-.roomname{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink)}
-.roomsub{font-size:10px;color:rgba(20,25,32,.55);display:flex;align-items:center;gap:5px}
+.roomname{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink);line-height:1;margin-bottom:4px}
+.roomsub{font-size:11px;font-weight:500;color:rgba(20,25,32,.72);display:flex;align-items:center;gap:4px;line-height:1}
 .invite{border:1px solid rgba(20,25,32,.25);background:rgba(255,255,255,.7);color:var(--ink-dim);font-size:11px;font-weight:700;border-radius:var(--r-pill);padding:7px 14px}
 .icon-btn{width:40px;height:40px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:16px;color:rgba(20,25,32,.7)}
 
@@ -187,8 +188,11 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       <!-- 사이드바 -->
       <div class="sidebar">
         <div class="side-head">
-          <div class="applogo"><svg viewBox="0 0 100 104" width="20" height="21"><g stroke="#ffd05c" stroke-width="2" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg></div>
-          <div><div class="brand">PbP</div><small>진행 중인 세션 3 · PC</small></div>
+          <div class="lock">
+            <div class="applogo"><svg viewBox="0 0 100 104" width="13" height="14"><g stroke="#ffd05c" stroke-width="2.8" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg></div>
+            <div class="brand">PbP</div>
+          </div>
+          <small>진행 중인 세션 3</small>
         </div>
         <div class="roomlist">
           <div class="room-card active">
@@ -227,7 +231,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
         <div class="chat-head">
           <div class="grow">
             <div class="roomname">등대에서 만나요</div>
-            <div class="roomsub"><i style="width:8px;height:8px;border-radius:3px;background:var(--theme);display:inline-block"></i> 마스터</div>
+            <div class="roomsub">GM <i style="width:6px;height:6px;border-radius:50%;background:var(--theme);display:inline-block"></i> 2명 참여 중</div>
           </div>
           <div class="invite">초대 코드</div>
           <div class="icon-btn">↓</div>

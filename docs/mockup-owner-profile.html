@@ -22,7 +22,7 @@
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
   --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-pill:999px;
   --appbar-h:56px;
-  --swatch:26px;   /* 색 스와치 — 프리셋+커스텀+최근 9개가 한 줄에 들어가는 크기 */
+  --swatch:26px;   /* 색 스와치 — 프리셋3+커스텀1+최근5 = 9개가 한 줄에 들어가는 크기 */
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';line-height:1.6}
@@ -80,7 +80,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
 .sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--ink-dim);margin:var(--sp-4) 0 var(--sp-2)}
 .input{border:1px solid var(--line);background:rgba(20,25,32,.04);border-radius:var(--r-cell);padding:10px 14px;font-size:13px;color:var(--ink)}
 
-/* ── 색 스와치 줄: [프리셋…] [커스텀] │ [최근 3개] ── */
+/* ── 색 스와치 줄: [프리셋 3] [커스텀] │ [최근 5] ── */
 .swrow{display:flex;gap:var(--sp-1);align-items:center}
 .swc{width:var(--swatch);height:var(--swatch);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--bubble-ink)}
 .swc.sel{outline:2px solid var(--ink);outline-offset:2px}
@@ -127,7 +127,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
 <header class="page">
   <h1>PbP <em>오너 프로필 설정 + 최근 사용한 색</em></h1>
   <p>두 가지 변경의 구현 지시서입니다. ① 오너 프로필을 기존 '프로필 편집' 화면과 같은 규격의 <b>전체 화면</b>으로 통일(개별 값은 미지원),
-  ② <b>모든 색 선택 줄</b>(오너 컬러 · 이름 색 · 말풍선 색 · 방 테마 컬러)의 커스텀 버튼 뒤에 <b>최근 사용한 색 3개를 스와치로 이어 붙임</b>.</p>
+  ② <b>모든 색 선택 줄</b>(오너 컬러 · 이름 색 · 말풍선 색 · 방 테마 컬러)의 커스텀 버튼 뒤에 <b>최근 사용한 색 5개를 스와치로 이어 붙임</b>. 예시 프리셋은 3종으로 축소.</p>
   <span class="principle">규격 원칙 — 센터 정렬 기본 · 상하 여백 동일 · 동류 항목은 같은 여백값</span>
 </header>
 
@@ -135,7 +135,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
 <section class="spec">
   <div class="spec-head"><span class="no">01</span><h2>최근 사용한 색 — 스와치 줄에 이어 붙이기</h2></div>
   <p class="spec-desc">헥사 코드 텍스트는 쓰지 않습니다. 모든 색 선택 줄을
-  <b>[프리셋…] [커스텀 ＋] │ [최근 3개]</b> 순서로 통일하고, 최근 색은 프리셋과 같은 원형 스와치로 붙입니다.
+  <b>[프리셋 3종] [커스텀 ＋] │ [최근 5개]</b> 순서로 통일하고, 최근 색은 프리셋과 같은 원형 스와치로 붙입니다.
   구분선 1dp만으로 그룹을 나눕니다.</p>
 
   <div class="row">
@@ -163,13 +163,13 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="swc sel" style="background:#c07b1f;color:#fff">✓</div>
               <div class="swc" style="background:#33719c"></div>
               <div class="swc" style="background:#7a5799"></div>
-              <div class="swc" style="background:#3f7d5a"></div>
-              <div class="swc" style="background:#a8474f"></div>
               <div class="swc rainbow">＋</div>
               <i class="grp"></i>
               <div class="swc recent" style="background:#7ec8a9"></div>
               <div class="swc recent" style="background:#e0b13e"></div>
               <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
             </div>
 
             <div class="sec-label">말풍선 색</div>
@@ -177,13 +177,13 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="swc sel" style="background:#ffd9a8">✓</div>
               <div class="swc" style="background:#bfe3f6"></div>
               <div class="swc" style="background:#e3d2f2"></div>
-              <div class="swc" style="background:#cdeed9"></div>
-              <div class="swc" style="background:#f6d3d6"></div>
               <div class="swc rainbow">＋</div>
               <i class="grp"></i>
               <div class="swc recent" style="background:#7ec8a9"></div>
               <div class="swc recent" style="background:#e0b13e"></div>
               <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
             </div>
 
             <div class="sec-label">캐릭터 값</div>
@@ -197,7 +197,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       </div>
 
       <div class="pcol">
-        <div class="tag">01-B · 방 설정 (테마 컬러) · 최근 색 0~2개 상태</div>
+        <div class="tag">01-B · 방 설정 (테마 컬러) · 최근 색 2/5개 상태</div>
         <div class="phone"><div class="screen">
           <div class="statusbar"><span>22:02</span><span>▲ ● ▮</span></div>
           <div class="appbar">
@@ -222,6 +222,8 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="swc recent" style="background:#7ec8a9"></div>
               <div class="swc recent" style="background:#e0b13e"></div>
               <div class="swc empty"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
             </div>
 
             <div class="sec-label">배경 이미지</div>
@@ -243,18 +245,17 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
 
     <div class="notes">
       <div class="note y"><h4>줄 구성과 규격</h4>
-        <p>순서는 <b>프리셋 → 커스텀(＋) → 구분선 → 최근 3개</b>로 모든 색 줄에서 동일합니다.
+        <p>순서는 <b>프리셋 3종 → 커스텀(＋) → 구분선 → 최근 5개</b>로 모든 색 줄에서 동일합니다.
         스와치는 <b>원형 26dp</b>(9개 + 구분선이 한 줄에 들어가는 크기 — 현행 32dp에서 축소) · 간격 <b>4dp</b> ·
         구분선 <b>1dp × 높이 16dp</b>(좌우 여백 2dp). 최근 스와치는 흰색 계열도 보이도록 안쪽 1dp 옅은 테두리를 넣습니다.
         선택 중인 색은 위치와 무관하게 잉크색 아웃라인으로 표시합니다.</p></div>
       <div class="note"><h4>목록 규칙</h4>
         <p>전역 1개 목록을 <b>모든 색 줄이 공유</b>합니다(오너 컬러 · 이름 색 · 말풍선 색 · 테마 컬러).
-        <b>최신순 · 중복 제거 · 최대 3개</b> — 4번째가 들어오면 가장 오래된 것이 밀려납니다.
+        <b>최신순 · 중복 제거 · 최대 5개</b> — 6번째가 들어오면 가장 오래된 것이 밀려납니다.
         커스텀 색을 어디서 적용해도 네 곳 모두에 즉시 나타납니다.</p></div>
-      <div class="note"><h4>3개가 안 찼을 때 (01-B)</h4>
-        <p>빈 자리는 <b>점선 빈 원</b>으로 두어 줄 길이를 고정합니다(동류 항목 여백 통일).
-        빈 원은 눌러도 아무 일이 없어야 하며, 하나도 없으면 구분선과 빈 원 3개만 보입니다.
-        ※ 빈 원이 '추가 버튼'처럼 보인다는 의견이 있으면 자리 표시 없이 개수만큼만 그리는 안으로 바꿉니다.</p></div>
+      <div class="note"><h4>5개가 안 찼을 때 (01-B · 02-B) — 확정</h4>
+        <p>빈 자리는 <b>점선 빈 원</b>으로 두어 줄 길이를 항상 고정합니다(동류 항목 여백 통일).
+        빈 원은 <b>눌러도 아무 동작이 없어야</b> 하며(리플·포커스도 없음), 하나도 없으면 구분선과 빈 원 5개만 보입니다.</p></div>
       <div class="note r"><h4>배경은 제외</h4>
         <p>방 설정의 <b>배경</b>은 프리셋 그라데이션 또는 갤러리 이미지라 '색 하나'로 지정하는 값이 아닙니다.
         따라서 최근 색은 <b>테마 컬러에만</b> 붙였습니다. 배경까지 단색 지정을 원하시면 별도 기능(단색 배경)이 필요합니다.</p></div>
@@ -298,13 +299,13 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="swc sel" style="background:#ffd9a8">✓</div>
               <div class="swc" style="background:#bfe3f6"></div>
               <div class="swc" style="background:#e3d2f2"></div>
-              <div class="swc" style="background:#cdeed9"></div>
-              <div class="swc" style="background:#f6d3d6"></div>
               <div class="swc rainbow">＋</div>
               <i class="grp"></i>
               <div class="swc recent" style="background:#7ec8a9"></div>
               <div class="swc recent" style="background:#e0b13e"></div>
               <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
             </div>
 
             <div class="sec-label">미리보기 — 잡담 말풍선</div>
@@ -346,10 +347,10 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="swc sel" style="background:#ffd9a8">✓</div>
               <div class="swc" style="background:#bfe3f6"></div>
               <div class="swc" style="background:#e3d2f2"></div>
-              <div class="swc" style="background:#cdeed9"></div>
-              <div class="swc" style="background:#f6d3d6"></div>
               <div class="swc rainbow">＋</div>
               <i class="grp"></i>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
               <div class="swc empty"></div>
               <div class="swc empty"></div>
               <div class="swc empty"></div>
@@ -400,7 +401,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       <td>없음</td>
       <td><b>신규</b> <code>data/RecentColors.kt</code> — <code>OwnerProfile</code>과 같은 <code>SharedPreferences("pbp-settings")</code>에
         <code>recentColors</code> 키로 ARGB CSV 저장. API: <code>list: List&lt;Long&gt;</code>(최신순), <code>load(context)</code>,
-        <code>add(context, argb)</code>(중복 제거 후 앞에 삽입 → <code>take(3)</code>).
+        <code>add(context, argb)</code>(중복 제거 후 앞에 삽입 → <code>take(5)</code>). 상한은 <code>const val MAX = 5</code>로 한 곳에서 관리.
         <code>OwnerProfile</code>처럼 <code>mutableStateOf</code>로 들고 있어야 적용 즉시 네 화면이 갱신됩니다.
         데스크톱은 <code>AppConfig.recentColors: MutableList&lt;Long&gt;</code> 추가 + <code>snapshot()</code>에 포함</td>
     </tr>
@@ -416,7 +417,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       <td>스와치 줄 부품</td>
       <td><code>ProfileEditScreen.SwatchRow</code> (private)</td>
       <td><b>공용으로 승격</b> <code>ui/common/ColorSwatchRow.kt</code> —
-        <code>ColorSwatchRow(presets, selected, onSelect, onCustom)</code> 안에서 프리셋 → 커스텀 → 구분선 → 최근 3개를 그립니다.
+        <code>ColorSwatchRow(presets, selected, onSelect, onCustom)</code> 안에서 프리셋 → 커스텀 → 구분선 → 최근 5개(빈 자리는 점선 원)를 그립니다.
         스와치 <b>32dp → 26dp</b>, 간격 <b>8dp → 4dp</b>. 네 화면(오너·이름·말풍선·테마)이 이 부품 하나를 씁니다.
         큰 글꼴·좁은 화면에서 넘칠 수 있으니 <code>Row</code> → <b>가로 스크롤</b>(<code>horizontalScroll</code>)로 감쌉니다</td>
     </tr>
@@ -450,10 +451,12 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
     <div class="note"><h4>기존 동작은 그대로</h4>
       <p>오너 프로필의 의미(잡담·참여 인사에만 사용, 프로필 스트립 미노출, 이 프로필로 발화 불가)와
       저장 키(<code>ownerName</code>/<code>ownerColor</code>/<code>ownerImagePath</code>)는 변경하지 않습니다.
-      프리셋 색 목록(<code>PbpPalette.namePresets</code> 5종 · <code>bubblePresets</code> 5종 · <code>themePresets</code> 7종)도 그대로입니다.</p></div>
-    <div class="note y"><h4>확인 필요 — 1건</h4>
-      <p>최근 색이 3개 미만일 때 <b>점선 빈 원으로 자리를 채울지</b>(현재 안 · 줄 길이 고정) 또는
-      <b>있는 개수만 그릴지</b>. 빈 원이 추가 버튼으로 오인될 여지가 있어 리뷰에서 정해 주세요.</p></div>
+      오너의 저장 키도 그대로입니다.</p></div>
+    <div class="note y"><h4>프리셋 축소 — 이름 색 · 말풍선 색만</h4>
+      <p><code>PbpPalette.namePresets</code> · <code>bubblePresets</code>를 <b>5종 → 앞 3종</b>으로 줄입니다(<code>take(3)</code> 아님, 목록 자체를 3개로).
+      오너 컬러는 <code>bubblePresets</code>를 그대로 쓰므로 함께 3종이 됩니다.
+      <b>테마 컬러 7종은 유지</b> — 이름이 붙은 큐레이션 프리셋(새벽 하늘·라일락…)이라 '예시 색'과 성격이 다릅니다.
+      테마도 줄이길 원하시면 말씀해 주세요.</p></div>
   </div>
 </section>
 

@@ -58,9 +58,19 @@ class MessageNotifier(private val context: Context) {
             .notify(notificationId, builder.build())
     }
 
+    /** 경로→원형 비트맵 캐시 — 알림마다 디코드+합성하지 않는다 (F3) */
+    private val avatarCache = HashMap<String, Pair<Long, Bitmap>>()
+
     /** 프로필 이미지는 항상 원형 — 알림 아이콘에서도 유지한다. */
     private fun circularAvatar(path: String?): Bitmap? {
         if (path == null) return null
+        val file = java.io.File(path)
+        if (!file.exists()) return null
+        synchronized(avatarCache) {
+            avatarCache[path]?.let { (modified, bitmap) ->
+                if (modified == file.lastModified()) return bitmap
+            }
+        }
         val source = BitmapFactory.decodeFile(path) ?: return null
         val size = minOf(source.width, source.height)
         val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -70,6 +80,7 @@ class MessageNotifier(private val context: Context) {
         }
         canvas.clipPath(clip)
         canvas.drawBitmap(source, (size - source.width) / 2f, (size - source.height) / 2f, Paint(Paint.ANTI_ALIAS_FLAG))
+        synchronized(avatarCache) { avatarCache[path] = file.lastModified() to output }
         return output
     }
 }

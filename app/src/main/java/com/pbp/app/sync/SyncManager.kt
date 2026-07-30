@@ -252,7 +252,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             }
         }
         attach(roomId, roomDoc.id)
-        registerFcmToken(force = true) // 새 방의 멤버 문서에 등록
+        registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
         code
     }.getOrNull()
 
@@ -301,7 +301,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
-        registerFcmToken(force = true) // 새 방의 멤버 문서에 등록
+        registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
         roomId
     }.getOrNull()
 
@@ -679,6 +679,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
+    /** 특정 방에만 토큰 등록 — 공유/참가 직후 그 방만. 전체 방 순회 쓰기 제거 (F3) */
+    fun registerFcmTokenForRoom(remoteRoomId: String) {
+        if (isDemo) return
+        scope.launch {
+            runCatching {
+                ensureAuth()
+                firestore // Firebase 초기화 보장
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance()
+                    .token.await()
+                uploadFcmTokenTo(remoteRoomId, token)
+                context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+                    .edit().putString("lastFcmToken", token).apply()
+            }
+        }
+    }
+
     /** FcmService.onNewToken에서 호출 — 갱신된 토큰 재등록 */
     fun onNewFcmToken(token: String) {
         if (isDemo) return
@@ -695,19 +711,23 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private suspend fun uploadFcmTokenInternal(token: String) {
         db.roomDao().listSynced().forEach { room ->
             val remote = room.remoteId ?: return@forEach
-            firestore.collection("rooms").document(remote)
-                .collection("members").document(myUid)
-                .set(
-                    mapOf("fcmToken" to token, "updatedAt" to System.currentTimeMillis()),
-                    com.google.firebase.firestore.SetOptions.merge(),
-                )
-                .await()
-            // 구버전 deviceId 키 멤버 문서 정리 — 같은 토큰으로 이중 푸시 방지
-            if (myUid != deviceId) {
-                runCatching {
-                    firestore.collection("rooms").document(remote)
-                        .collection("members").document(deviceId).delete().await()
-                }
+            uploadFcmTokenTo(remote, token)
+        }
+    }
+
+    private suspend fun uploadFcmTokenTo(remote: String, token: String) {
+        firestore.collection("rooms").document(remote)
+            .collection("members").document(myUid)
+            .set(
+                mapOf("fcmToken" to token, "updatedAt" to System.currentTimeMillis()),
+                com.google.firebase.firestore.SetOptions.merge(),
+            )
+            .await()
+        // 구버전 deviceId 키 멤버 문서 정리 — 같은 토큰으로 이중 푸시 방지
+        if (myUid != deviceId) {
+            runCatching {
+                firestore.collection("rooms").document(remote)
+                    .collection("members").document(deviceId).delete().await()
             }
         }
     }
@@ -718,7 +738,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     // 메시지 문서의 avatarId가 이 해시를 가리키고, 수신 측은 파일로 복원해 캐시한다.
 
     private val uploadedAvatars: MutableSet<String> =
-        java.util.concurrent.ConcurrentHashMap.newKeySet()
+        java.util.concurrent.ConcurrentHashMap.newKeySet<String>().also { set ->
+            // 완료 기록을 영속화해 프로세스 재시작 후 첫 전송마다 방당 1회
+            // 대형 문서(50-300KB)를 다시 쓰던 것 방지 (F3)
+            runCatching {
+                context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+                    .getStringSet("uploadedAvatars", emptySet())
+                    ?.let(set::addAll)
+            }
+        }
+
+    private fun persistUploadedAvatars() {
+        runCatching {
+            context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+                .edit().putStringSet("uploadedAvatars", uploadedAvatars.toSet()).apply()
+        }
+    }
 
     /** 경로→축소 JPEG 캐시 (lastModified 기준) — 메시지마다 디코딩·해시 재계산 방지 */
     private val avatarBytesCache =
@@ -745,6 +780,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 .set(mapOf("data" to Base64.encodeToString(bytes, Base64.NO_WRAP)))
                 .await()
             uploadedAvatars += key
+            persistUploadedAvatars() // 재시작 후 재업로드 방지 (F3)
         }
         return hash
     }

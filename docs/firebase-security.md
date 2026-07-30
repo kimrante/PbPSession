@@ -52,3 +52,8 @@ Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → 해당
 - 데스크톱: Bearer ID 토큰(리프레시 토큰은 `~/.pbp-desktop/config.json`에 보존)으로 요청. 메시지 `authorUid`는 기존 deviceId 유지(편집 기능 없음 → 규칙 충돌 없음)
 - 재설치 시 auth UID가 바뀌므로 과거 메시지의 좌우 정렬이 어긋날 수 있다(데이터 유실 아님)
 - `FirestoreRestLiveTest`(운영 DB에 쓰던 라이브 테스트, 자격증명 포함)는 삭제됨
+
+## 리전 (2026-07-30 확인)
+
+- Firestore DB 위치 = `asia-northeast3` (콘솔에서 사용자 확인). Cloud Functions
+  리전(`functions/index.js`의 `asia-northeast3`)과 동일 — 교차 리전 지연·이그레스 없음.

@@ -81,6 +81,7 @@ import com.pbp.desktop.data.FirestoreRest
 import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
+import com.pbp.desktop.data.RoomCacheStore
 import com.pbp.desktop.logic.CharacterCodec
 import com.pbp.desktop.logic.DiceBot
 import com.pbp.desktop.logic.ProfileStats
@@ -106,6 +107,10 @@ private class RoomSession {
     var messages: List<Message> = emptyList()
     var lastCreatedAt: Long = 0L
     val deletedDocIds: MutableSet<String> = mutableSetOf()
+    /** 파일 캐시(P3 근본 수정)에서 이미 복원 시도했는지 */
+    var diskLoaded: Boolean = false
+    /** 마지막 파일 캐시 저장 시각 — 30초 스로틀 */
+    var lastSavedAt: Long = 0L
 }
 
 // 모바일 앱과 같은 Firebase 프로젝트 (app/src/main/res/values/firebase.xml)
@@ -229,10 +234,21 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     LaunchedEffect(selected?.remoteId) {
         val room = selected ?: return@LaunchedEffect
         val session = sessionFor(room.remoteId)
+        // 재시작 후 첫 진입이면 파일 캐시에서 복원 — 전체 재다운로드 방지 (P3 근본 수정)
+        if (!session.diskLoaded) {
+            session.diskLoaded = true
+            if (session.messages.isEmpty() && session.lastCreatedAt == 0L) {
+                withContext(Dispatchers.IO) { RoomCacheStore.load(room.remoteId) }?.let { (cached, cursor) ->
+                    session.messages = cached
+                    session.lastCreatedAt = cursor
+                }
+            }
+        }
         messages = session.messages
         var lastCreatedAt = session.lastCreatedAt
         var lastMetaPollAt = 0L
         var lastActivityAt = System.currentTimeMillis()
+        try {
         while (isActive) {
             val now = System.currentTimeMillis()
             val focusedNow = windowFocused.get()
@@ -273,6 +289,14 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     }
                     lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
                     session.lastCreatedAt = lastCreatedAt
+                    // 파일 캐시 저장 — 30초 스로틀 (P3 근본 수정)
+                    if (now - session.lastSavedAt > 30_000) {
+                        session.lastSavedAt = now
+                        val snapshotMessages = session.messages
+                        withContext(Dispatchers.IO) {
+                            RoomCacheStore.save(room.remoteId, snapshotMessages, lastCreatedAt)
+                        }
+                    }
                 }
                 if (now - lastMetaPollAt >= 60_000 && now > metaFreezeUntil) {
                     lastMetaPollAt = now
@@ -303,6 +327,12 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 delay(step)
                 waited += step
                 if (lastLocalSendAt.get() > now || windowFocused.get() != focusedNow) break
+            }
+        }
+        } finally {
+            // 방 전환·창 종료 시 최종 상태를 파일 캐시에 남긴다 (P3 근본 수정)
+            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                RoomCacheStore.save(room.remoteId, session.messages, session.lastCreatedAt)
             }
         }
     }
@@ -383,6 +413,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 session.deletedDocIds.addAll(ids.orEmpty())
                 messages = emptyList()
                 session.messages = emptyList()
+                RoomCacheStore.delete(room.remoteId) // 파일 캐시도 초기화
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
                     room.remoteId,
@@ -402,8 +433,10 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     fun leaveRoom(room: JoinedRoom) {
         rooms = rooms.filterNot { it.remoteId == room.remoteId }
         if (selected?.remoteId == room.remoteId) selected = rooms.firstOrNull()
+        roomSessions.remove(room.remoteId)
         persist()
         scope.launch(Dispatchers.IO) {
+            RoomCacheStore.delete(room.remoteId)
             runCatching { firestore.leaveRoom(room.remoteId, config.deviceId) }
         }
     }
@@ -906,7 +939,10 @@ private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier
                 runCatching {
                     org.jetbrains.skia.Image.makeFromEncoded(java.io.File(backgroundKey).readBytes())
                         .toComposeImageBitmap()
-                }.getOrNull()?.also { backgroundBitmapCache[backgroundKey] = it }
+                }.getOrNull()?.also {
+                    if (backgroundBitmapCache.size >= 8) backgroundBitmapCache.clear() // 상한 (M3)
+                    backgroundBitmapCache[backgroundKey] = it
+                }
             }
         }
         bitmap?.let {
@@ -1449,7 +1485,11 @@ private fun MessageAvatar(
                 }
             }
             // 실패는 캐시하지 않는다 — 다음 표시 때 재시도 (P3-15)
-            if (bitmap != null) avatarCache[avatarId] = bitmap
+            if (bitmap != null) {
+                // 단순 상한 (M3) — 초과 시 비움. 디스크 캐시(P9)가 재적재를 싸게 만든다
+                if (avatarCache.size >= 64) avatarCache.clear()
+                avatarCache[avatarId] = bitmap
+            }
         } finally {
             avatarsInFlight.remove(avatarId)
         }

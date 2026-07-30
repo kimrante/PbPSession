@@ -192,9 +192,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     var actionTargetId by rememberSaveable {
         mutableStateOf<Long?>(null) // 길게 누른 내 메시지
     }
-    val editTarget = messages.find { it.id == editTargetId }
-    val deleteTarget = messages.find { it.id == deleteTargetId }
-    val actionTarget = messages.find { it.id == actionTargetId }
+    // 컴포지션마다 O(N) 재스캔하지 않는다 (F3)
+    val editTarget = remember(messages, editTargetId) { messages.find { it.id == editTargetId } }
+    val deleteTarget = remember(messages, deleteTargetId) { messages.find { it.id == deleteTargetId } }
+    val actionTarget = remember(messages, actionTargetId) { messages.find { it.id == actionTargetId } }
     var showAddProfile by rememberSaveable {
         mutableStateOf(false)
     }
@@ -209,7 +210,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     }
 
     // 읽음 처리: 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 DB 쓰기 방지)
-    val incomingCount = messages.count { it.incoming }
+    val incomingCount = remember(messages) { messages.count { it.incoming } }
     LaunchedEffect(roomId, incomingCount) { vm.markRead() }
 
     // 새 메시지가 오면 최신 위치로 스크롤 (reverseLayout에서 index 0 = 최신).

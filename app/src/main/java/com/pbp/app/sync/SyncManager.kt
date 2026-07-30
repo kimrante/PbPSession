@@ -728,7 +728,13 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .collection("avatars").document(avatarId).get().await()
         val data = doc.getString("data") ?: return null
         file.parentFile?.mkdirs()
-        file.writeBytes(Base64.decode(data, Base64.NO_WRAP))
+        // 임시 파일에 쓴 뒤 교체 — 쓰다 중단되면 깨진 파일이 영구 캐시되는 것 방지
+        val tmp = File(file.parentFile, "remote-$avatarId.tmp")
+        tmp.writeBytes(Base64.decode(data, Base64.NO_WRAP))
+        if (!tmp.renameTo(file)) {
+            tmp.delete()
+            return null
+        }
         return file.absolutePath
     }
 

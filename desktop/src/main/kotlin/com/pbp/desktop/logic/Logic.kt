@@ -241,6 +241,56 @@ object Rules {
         outcome in setOf("critical", "extreme", "hard", "success")
 }
 
+/**
+ * ccfolia식 캐릭터 코드(JSON) → 프로필 변환 — 모바일 CharacterCodec과 동일 규칙.
+ * `{"kind":"character","data":{...}}`에서 commands를 제외한 전부를 value 목록으로.
+ */
+object CharacterCodec {
+
+    data class Imported(val name: String, val stats: List<Pair<String, String>>)
+
+    fun parse(text: String): Imported? {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return null
+        // 스프레드시트 등에서 복사하면 따옴표가 ""로 겹쳐 있을 수 있다
+        return parseJson(trimmed)
+            ?: if ("\"\"" in trimmed) parseJson(trimmed.replace("\"\"", "\"")) else null
+    }
+
+    private fun parseJson(text: String): Imported? = runCatching {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end <= start) return null
+        val root = com.google.gson.JsonParser.parseString(text.substring(start, end + 1)).asJsonObject
+        if (root.get("kind")?.asString != "character") return null
+        val data = root.getAsJsonObject("data") ?: return null
+        val name = data.get("name")?.asString?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+
+        val stats = mutableListOf<Pair<String, String>>()
+        data.get("initiative")?.takeIf { it.isJsonPrimitive }?.let {
+            stats += "initiative" to it.asString
+        }
+        data.get("status")?.takeIf { it.isJsonArray }?.asJsonArray?.forEach { el ->
+            val o = el as? com.google.gson.JsonObject ?: return@forEach
+            val label = o.get("label")?.asString?.trim()?.takeIf { it.isNotEmpty() } ?: return@forEach
+            o.get("value")?.takeIf { it.isJsonPrimitive }?.let { stats += label to it.asString }
+            o.get("max")?.takeIf { it.isJsonPrimitive }?.let { stats += "${label}max" to it.asString }
+        }
+        data.get("params")?.takeIf { it.isJsonArray }?.asJsonArray?.forEach { el ->
+            val o = el as? com.google.gson.JsonObject ?: return@forEach
+            val label = o.get("label")?.asString?.trim()?.takeIf { it.isNotEmpty() } ?: return@forEach
+            o.get("value")?.takeIf { it.isJsonPrimitive }?.let { stats += label to it.asString }
+        }
+        data.get("memo")?.asString?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            stats += "memo" to it
+        }
+
+        // 같은 이름이 겹치면 먼저 나온 값을 유지
+        val seen = mutableSetOf<String>()
+        Imported(name, stats.filter { seen.add(it.first) })
+    }.getOrNull()
+}
+
 /** GM 발화에서 " " 인용만 말풍선으로 분리 */
 object GmSpeech {
     sealed interface Part {

@@ -221,6 +221,19 @@ class FirestoreRest(
         }
     }
 
+    private fun deleteDoc(url: String): Boolean {
+        val res = sendWithRetry {
+            HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout)
+                .auth()
+                .DELETE()
+                .build()
+        } ?: return false
+        if (res.statusCode() !in 200..299) {
+            System.err.println("Firestore DELETE ${res.statusCode()}: ${res.body().take(300)}")
+        }
+        return res.statusCode() in 200..299
+    }
+
     private fun patch(url: String, bodyJson: String): Boolean {
         val res = sendWithRetry {
             HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout)
@@ -454,6 +467,31 @@ class FirestoreRest(
 
     fun postMessage(remoteRoomId: String, values: Map<String, Any?>): Boolean =
         post("$base/rooms/$remoteRoomId/messages?key=$apiKey", gson.toJson(fields(values))) != null
+
+    /** 메시지 편집 전파 — 모바일 pushEdit과 동일 필드(body, editedAt) */
+    fun updateMessage(remoteRoomId: String, docId: String, body: String, editedAt: Long): Boolean =
+        patch(
+            "$base/rooms/$remoteRoomId/messages/$docId?key=$apiKey" +
+                "&updateMask.fieldPaths=body&updateMask.fieldPaths=editedAt",
+            gson.toJson(fields(mapOf("body" to body, "editedAt" to editedAt))),
+        )
+
+    /** 메시지 삭제 전파 — 모바일 pushDelete와 동일 */
+    fun deleteMessage(remoteRoomId: String, docId: String): Boolean =
+        deleteDoc("$base/rooms/$remoteRoomId/messages/$docId?key=$apiKey")
+
+    /**
+     * 방 나가기 — 내 멤버 문서 정리 (유령 푸시 방지, 모바일 leaveRoom과 동일).
+     * 레거시(deviceId) 문서를 먼저 지운다 — 내 문서를 먼저 지우면 멤버가 아니게 되어
+     * 이어지는 삭제가 규칙에 거부된다 (R5)
+     */
+    fun leaveRoom(remoteRoomId: String, deviceId: String) {
+        val myUid = uid ?: deviceId
+        if (myUid != deviceId) {
+            deleteDoc("$base/rooms/$remoteRoomId/members/$deviceId?key=$apiKey")
+        }
+        deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
+    }
 
     /** 프로필 이미지(base64 JPEG) — 모바일이 올린 avatars/{hash} 문서 */
     fun fetchAvatar(remoteRoomId: String, avatarId: String): ByteArray? {

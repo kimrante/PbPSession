@@ -1,12 +1,16 @@
 package com.pbp.desktop
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +29,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.LocalTextStyle
@@ -33,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -47,6 +53,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -55,6 +62,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -72,6 +80,7 @@ import com.pbp.desktop.data.FirestoreRest
 import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
+import com.pbp.desktop.logic.CharacterCodec
 import com.pbp.desktop.logic.DiceBot
 import com.pbp.desktop.logic.ProfileStats
 import com.pbp.desktop.logic.Rules
@@ -138,6 +147,17 @@ private fun App() {
 
     var overlay by remember { mutableStateOf<OverlayKind?>(null) }
 
+    // 내 메시지 길게 눌러 편집/삭제 — 앱과 동일 흐름 (팝업 → 편집/삭제)
+    var messageAction by remember { mutableStateOf<Message?>(null) }
+    var messageEdit by remember { mutableStateOf<Message?>(null) }
+    var messageDelete by remember { mutableStateOf<Message?>(null) }
+
+    // 프로필 칩 길게 눌러 편집 — 앱과 동일 흐름
+    var editProfileIndex by remember { mutableStateOf<Int?>(null) }
+
+    // 방 카드 길게 눌러 나가기 — 앱의 방 삭제(길게)와 동일 위계
+    var leaveTarget by remember { mutableStateOf<JoinedRoom?>(null) }
+
     // 앱 전체 글꼴 — config.json에 유지, 모바일 AppFonts와 동일 선택지
     var appFont by remember { mutableStateOf(config.appFont) }
 
@@ -170,11 +190,15 @@ private fun App() {
         }
     }
 
+    // 내가 방금 지운 메시지의 docId — 30초 재수신 윈도가 삭제를 '신규'로 되살리지 않게 (편집/삭제 이식)
+    val deletedDocIds = remember { mutableSetOf<String>() }
+
     // 선택된 방 폴링: 최초 전체 1회 + 이후 증분(createdAt 기준)만 — read 과금 최소화.
     // 방 메타(테마/배경)는 10초 주기.
     LaunchedEffect(selected?.remoteId) {
         val room = selected ?: return@LaunchedEffect
         messages = emptyList()
+        deletedDocIds.clear()
         var lastCreatedAt = 0L
         var tick = 0
         while (isActive) {
@@ -186,10 +210,11 @@ private fun App() {
                 // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
                 if (fetched != null && fetched.isNotEmpty()) {
                     val byId = messages.associateBy { it.docId }
-                    val fresh = fetched.filter { it.docId !in byId }
-                    // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10)
+                    val fresh = fetched.filter { it.docId !in byId && it.docId !in deletedDocIds }
+                    // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10).
+                    // 더 새로운 editedAt만 수용 — 내가 방금 편집한 걸 윈도의 구버전이 되돌리지 않게
                     val edited = fetched.filter { incoming ->
-                        byId[incoming.docId]?.let { it.editedAt != incoming.editedAt } == true
+                        byId[incoming.docId]?.let { (incoming.editedAt ?: 0) > (it.editedAt ?: 0) } == true
                     }.associateBy { it.docId }
                     if (fresh.isNotEmpty() || edited.isNotEmpty()) {
                         messages = (messages.map { edited[it.docId] ?: it } + fresh)
@@ -267,6 +292,89 @@ private fun App() {
         }
     }
 
+    /**
+     * 방 로그 리셋 — 서버를 먼저 비우고 성공 시에만 로컬을 비운다 (모바일 N2와 동일 순서).
+     * 문서 삭제가 상대 기기의 REMOVED 리스너로 전파되어 상대 로그도 함께 지워진다.
+     */
+    fun resetRoomLogs(onDone: (Boolean) -> Unit) {
+        val room = selected ?: return onDone(false)
+        scope.launch(Dispatchers.IO) {
+            val ids = firestore.listMessages(room.remoteId)?.map { it.docId }
+            val ok = ids != null && ids.all { firestore.deleteMessage(room.remoteId, it) }
+            if (ok) {
+                deletedDocIds.addAll(ids.orEmpty())
+                messages = emptyList()
+                // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
+                firestore.postMessage(
+                    room.remoteId,
+                    mapOf(
+                        "type" to "SYSTEM", "body" to "방 로그가 초기화되었습니다",
+                        "createdAt" to System.currentTimeMillis(),
+                        "authorUid" to authorUid(),
+                        "isOoc" to false, "senderIsGm" to false, "senderIsBot" to false,
+                    ),
+                )
+            }
+            onDone(ok)
+        }
+    }
+
+    /** 방 나가기 — 이 PC의 목록에서 제거 + 서버 멤버 문서 정리. 서버 로그는 남는다 */
+    fun leaveRoom(room: JoinedRoom) {
+        rooms = rooms.filterNot { it.remoteId == room.remoteId }
+        if (selected?.remoteId == room.remoteId) selected = rooms.firstOrNull()
+        persist()
+        scope.launch(Dispatchers.IO) {
+            runCatching { firestore.leaveRoom(room.remoteId, config.deviceId) }
+        }
+    }
+
+    /** 프로필 삭제 — 전역 목록의 인덱스를 참조하는 각 방의 활성 인덱스도 함께 재매핑 */
+    fun deleteProfileAt(index: Int) {
+        if (profiles.size <= 1) return
+        val newProfiles = profiles.filterIndexed { i, _ -> i != index }
+        rooms = rooms.map { r ->
+            val idx = r.activeProfileIndex
+            val fixed = when {
+                idx > index -> idx - 1
+                idx == index -> newProfiles.indexOfFirst { !it.isGm }.coerceAtLeast(0)
+                else -> idx
+            }
+            if (fixed != idx) r.copy(activeProfileIndex = fixed) else r
+        }
+        selected = rooms.firstOrNull { it.remoteId == selected?.remoteId }
+        profiles = newProfiles
+        persist()
+    }
+
+    /** 메시지 편집 — 로컬 즉시 반영 후 전파. 실패는 알림만 (모바일과 동일한 한계 수용) */
+    fun editMessage(target: Message, newBody: String) {
+        val body = newBody.trim()
+        if (body.isEmpty()) return
+        val room = selected ?: return
+        val editedAt = System.currentTimeMillis()
+        messages = messages.map {
+            if (it.docId == target.docId) it.copy(body = body, editedAt = editedAt) else it
+        }
+        scope.launch(Dispatchers.IO) {
+            if (!firestore.updateMessage(room.remoteId, target.docId, body, editedAt)) {
+                System.err.println("편집 전파 실패 — 상대 화면에는 반영되지 않을 수 있습니다")
+            }
+        }
+    }
+
+    /** 메시지 삭제 — 로컬 즉시 제거 후 전파 */
+    fun deleteMessage(target: Message) {
+        val room = selected ?: return
+        deletedDocIds += target.docId
+        messages = messages.filterNot { it.docId == target.docId }
+        scope.launch(Dispatchers.IO) {
+            if (!firestore.deleteMessage(room.remoteId, target.docId)) {
+                System.err.println("삭제 전파 실패 — 상대 화면에는 반영되지 않을 수 있습니다")
+            }
+        }
+    }
+
     fun switchProfile(index: Int) {
         val room = selected ?: return
         if (room.activeProfileIndex == index) return
@@ -305,6 +413,7 @@ private fun App() {
             onCreate = { overlay = OverlayKind.CreateRoom },
             onJoin = { overlay = OverlayKind.JoinRoom },
             onFontSetting = { overlay = OverlayKind.FontSetting },
+            onLeave = { leaveTarget = it },
         )
         Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.Line))
         val room = selected
@@ -325,6 +434,8 @@ private fun App() {
                 onAddProfile = { overlay = OverlayKind.NewProfile },
                 onShowCode = { overlay = OverlayKind.ShowCode },
                 onOpenSettings = { overlay = OverlayKind.RoomSettings },
+                onMessageLongPress = { messageAction = it },
+                onEditProfile = { editProfileIndex = it },
             )
         }
     }
@@ -396,6 +507,7 @@ private fun App() {
         OverlayKind.RoomSettings -> SettingsOverlay(
             room = selected,
             onDismiss = { overlay = null },
+            onResetLogs = ::resetRoomLogs,
             onApply = { theme, background ->
                 val room = selected ?: return@SettingsOverlay
                 // 같은 인스턴스의 var를 고치면 Compose가 변화를 모른다 —
@@ -435,6 +547,84 @@ private fun App() {
             },
         )
         null -> {}
+    }
+
+    // 메시지 편집/삭제 팝업 — 앱의 길게 누르기 액션 시트와 동일 흐름
+    leaveTarget?.let { target ->
+        OverlayScaffold("방 나가기", onDismiss = { leaveTarget = null }) {
+            Text(
+                "'${target.name}' 방을 이 PC의 목록에서 제거합니다.\n" +
+                    "서버 로그는 남아 있으며, 초대 코드로 다시 참여할 수 있습니다.",
+                fontSize = 13.sp, color = Tokens.InkDim,
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YellowButton("나가기", Modifier.weight(1f)) {
+                    leaveRoom(target)
+                    leaveTarget = null
+                }
+                GhostButton("취소", Modifier.weight(1f)) { leaveTarget = null }
+            }
+        }
+    }
+    messageAction?.let { target ->
+        OverlayScaffold("메시지", onDismiss = { messageAction = null }) {
+            YellowButton("편집", Modifier.fillMaxWidth()) {
+                messageEdit = target
+                messageAction = null
+            }
+            Spacer(Modifier.height(8.dp))
+            GhostButton("삭제", Modifier.fillMaxWidth()) {
+                messageDelete = target
+                messageAction = null
+            }
+        }
+    }
+    messageEdit?.let { target ->
+        EditMessageOverlay(
+            initial = target.body,
+            onDismiss = { messageEdit = null },
+            onSave = { body ->
+                editMessage(target, body)
+                messageEdit = null
+            },
+        )
+    }
+    editProfileIndex?.let { idx ->
+        profiles.getOrNull(idx)?.let { prof ->
+            ProfileOverlay(
+                onDismiss = { editProfileIndex = null },
+                onSave = { updated ->
+                    profiles = profiles.mapIndexed { i, p -> if (i == idx) updated else p }
+                    persist()
+                    editProfileIndex = null
+                },
+                editing = prof,
+                // GM은 서술의 주체라 삭제 불가, 마지막 남은 프로필도 삭제 불가
+                onDelete = if (!prof.isGm && profiles.size > 1) {
+                    {
+                        deleteProfileAt(idx)
+                        editProfileIndex = null
+                    }
+                } else null,
+            )
+        }
+    }
+    messageDelete?.let { target ->
+        OverlayScaffold("메시지 삭제", onDismiss = { messageDelete = null }) {
+            Text(
+                "이 메시지를 삭제합니다. 상대 화면에서도 삭제됩니다.",
+                fontSize = 13.sp, color = Tokens.InkDim,
+            )
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YellowButton("삭제", Modifier.weight(1f)) {
+                    deleteMessage(target)
+                    messageDelete = null
+                }
+                GhostButton("취소", Modifier.weight(1f)) { messageDelete = null }
+            }
+        }
     }
     } // CompositionLocalProvider — 앱 전체 글꼴
 }
@@ -483,6 +673,7 @@ private fun messageValues(
 // ══════════════ 왼쪽 패널: 방 목록 ══════════════
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun LeftPane(
     rooms: List<JoinedRoom>,
     selected: JoinedRoom?,
@@ -490,6 +681,7 @@ private fun LeftPane(
     onCreate: () -> Unit,
     onJoin: () -> Unit,
     onFontSetting: () -> Unit,
+    onLeave: (JoinedRoom) -> Unit,
 ) {
     // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
     Column(
@@ -527,7 +719,7 @@ private fun LeftPane(
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp),
+            contentPadding = PaddingValues(top = 8.dp),
         ) {
             items(rooms, key = { it.remoteId }) { room ->
                 val active = room.remoteId == selected?.remoteId
@@ -543,7 +735,11 @@ private fun LeftPane(
                             if (active) Color(room.themeColor).copy(alpha = .45f) else Tokens.Line,
                             RoundedCornerShape(16.dp),
                         )
-                        .clickable { onSelect(room) }
+                        // 탭 = 선택, 길게 = 나가기 (앱 방 목록의 길게 누르기와 동일 위계)
+                        .combinedClickable(
+                            onClick = { onSelect(room) },
+                            onLongClick = { onLeave(room) },
+                        )
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -598,9 +794,9 @@ private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier
             }
         }
         bitmap?.let {
-            androidx.compose.foundation.Image(
+            Image(
                 bitmap = it, contentDescription = null, modifier = modifier,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                contentScale = ContentScale.Crop,
             )
             return
         }
@@ -635,6 +831,8 @@ private fun ChatPane(
     onAddProfile: () -> Unit,
     onShowCode: () -> Unit,
     onOpenSettings: () -> Unit,
+    onMessageLongPress: (Message) -> Unit,
+    onEditProfile: (Int) -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -677,16 +875,28 @@ private fun ChatPane(
             // (안드로이드 P1-7과 같은 규칙, C9)
             val listState = rememberLazyListState()
             // 방 입장 직후의 첫 로드는 무조건 최하단으로 (S2 — 빈 목록 기준 lastVisible=-1이라
-            // 근접 판정이 항상 실패했음). 내 전송이 도착했을 때도 무조건 따라간다.
+            // 근접 판정이 항상 실패했음). 내 전송은 앱과 동일하게 전송 시점에 플래그를
+            // 세워 실제 도착까지 유지한다 (N4와 동일 규칙).
             var initialScrollDone by remember(room.remoteId) { mutableStateOf(false) }
-            LaunchedEffect(messages.lastOrNull()?.docId) {
-                if (messages.isEmpty()) return@LaunchedEffect
+            var pendingScrollToLatest by remember(room.remoteId) { mutableStateOf(false) }
+            // 한 폴링 배치로 여러 건이 오면(판정 쌍·오랜만의 수신) 근접 판정이 도착 수만큼
+            // 어긋난다 — 직전 최신 메시지 위치로 추가 수를 세어 보정 (모바일과 동일 규칙)
+            var prevLatestId by remember(room.remoteId) { mutableStateOf<String?>(null) }
+            LaunchedEffect(messages.lastOrNull()?.docId, pendingScrollToLatest) {
+                if (messages.isEmpty()) {
+                    prevLatestId = null
+                    return@LaunchedEffect
+                }
+                val prevIndex = prevLatestId?.let { id -> messages.indexOfLast { it.docId == id } } ?: -1
+                val appended = if (prevIndex >= 0) messages.size - 1 - prevIndex else messages.size
+                prevLatestId = messages.last().docId
                 val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-                val nearBottom = lastVisible >= messages.size - 2
+                val nearBottom = lastVisible >= messages.size - appended - 2
                 val myMessageArrived = messages.last().authorUid == deviceId
-                if (!initialScrollDone || nearBottom || myMessageArrived) {
+                if (!initialScrollDone || pendingScrollToLatest || nearBottom || myMessageArrived) {
                     listState.scrollToItem(messages.size - 1)
                     initialScrollDone = true
+                    if (myMessageArrived) pendingScrollToLatest = false
                 }
             }
             // 본문 최대 폭 720dp 중앙 정렬 — 초광폭에서 말풍선이 늘어지지 않게 (PC 규격)
@@ -694,7 +904,7 @@ private fun ChatPane(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
                 ) {
                     // 같은 인물의 연속 메시지는 아바타·이름 생략 + 간격 축소 (모바일과 동일)
                     items(messages.size, key = { messages[it].docId }) { index ->
@@ -703,25 +913,33 @@ private fun ChatPane(
                         Box(
                             Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
                         ) {
-                            MessageBlock(message, deviceId, room, avatarCache, firestore, grouped)
+                            MessageBlock(
+                                message, deviceId, room, avatarCache, firestore, grouped,
+                                onLongPress = onMessageLongPress,
+                            )
                         }
                     }
                 }
             }
 
-            // 입력 영역
+            // 입력 영역 — 전송 시 스크롤 플래그를 세워 실제 도착까지 유지 (N4)
             InputZone(
                 room = room,
                 profiles = profiles,
                 theme = theme,
-                onSend = onSend,
+                onSend = { text, ooc, onResult ->
+                    pendingScrollToLatest = true
+                    onSend(text, ooc, onResult)
+                },
                 onSwitchProfile = onSwitchProfile,
                 onAddProfile = onAddProfile,
+                onEditProfile = onEditProfile,
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBlock(
     message: Message,
@@ -730,7 +948,9 @@ private fun MessageBlock(
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
     grouped: Boolean = false,
+    onLongPress: (Message) -> Unit = {},
 ) {
+    val mine = message.authorUid == deviceId
     when {
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -779,6 +999,10 @@ private fun MessageBlock(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(chatterColor)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { if (mine) onLongPress(message) },
+                        )
                         .padding(horizontal = 12.dp, vertical = 3.dp)
                 ) {
                     Text(
@@ -793,12 +1017,16 @@ private fun MessageBlock(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 GmSpeech.split(message.body).forEach { part ->
                     when (part) {
-                        is GmSpeech.Part.Narration -> NarrationBlock(message, part.text)
+                        is GmSpeech.Part.Narration -> NarrationBlock(
+                            message, part.text,
+                            onLongPress = { if (mine) onLongPress(message) },
+                        )
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message, deviceId = deviceId, room = room,
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text, overrideName = "GM",
                             overrideBubbleColor = Tokens.gmQuoteBubble,
+                            onLongPress = onLongPress,
                         )
                     }
                 }
@@ -811,6 +1039,7 @@ private fun MessageBlock(
                 BubbleRow(
                     message, deviceId, room, avatarCache, firestore,
                     showHeader = !grouped,
+                    onLongPress = onLongPress,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -822,6 +1051,7 @@ private fun MessageBlock(
                             quoteBubble = part is GmSpeech.Part.Quote,
                             showHeader = !grouped && index == 0,
                             showTime = index == parts.lastIndex,
+                            onLongPress = onLongPress,
                         )
                     }
                 }
@@ -843,14 +1073,16 @@ private fun GmSpeech.Part.text(): String = when (this) {
     is GmSpeech.Part.Quote -> text
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun NarrationBlock(message: Message, text: String) {
+private fun NarrationBlock(message: Message, text: String, onLongPress: () -> Unit = {}) {
     val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
     Column(
         Modifier.fillMaxWidth()
             .shadow(3.dp, shape) // 목업 box-shadow 0 3px 12px
             .clip(shape)
             .background(Tokens.NarrBg)
+            .combinedClickable(onClick = {}, onLongClick = onLongPress)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         // 서술은 문단 자체가 화면 — 서술자·시간 등 메타 표기는 두지 않는다 (모바일과 동일)
@@ -861,6 +1093,7 @@ private fun NarrationBlock(message: Message, text: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun BubbleRow(
     message: Message,
@@ -875,8 +1108,11 @@ private fun BubbleRow(
     quoteBubble: Boolean = false,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
     showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
+    onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == deviceId && overrideName == null
+    // 편집/삭제 대상 여부는 표시 방향(mine)과 무관하게 실제 작성자 기준 (앱과 동일)
+    val editable = message.authorUid == deviceId
     val body = overrideBody ?: message.body
     // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 mockup-quote-bubble)
     val quoteInner = when {
@@ -934,6 +1170,10 @@ private fun BubbleRow(
                         Modifier.widthIn(max = 420.dp)
                             .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
                             .clip(shape).background(bubbleColor)
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { if (editable) onLongPress(message) },
+                            )
                     ) {
                         QuoteMark(
                             "“",
@@ -957,6 +1197,10 @@ private fun BubbleRow(
                         Modifier.widthIn(max = 420.dp)
                             .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
                             .clip(shape).background(bubbleColor)
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { if (editable) onLongPress(message) },
+                            )
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Row {
@@ -1066,10 +1310,10 @@ private fun MessageAvatar(
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
-            androidx.compose.foundation.Image(
+            Image(
                 bitmap = bitmap, contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                contentScale = ContentScale.Crop,
             )
         } else {
             Text(message.senderEmoji ?: "🙂", fontSize = 16.sp)
@@ -1079,6 +1323,7 @@ private fun MessageAvatar(
 
 // ══════════════ 입력 영역 ══════════════
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun InputZone(
     room: JoinedRoom,
@@ -1087,6 +1332,7 @@ private fun InputZone(
     onSend: (String, Boolean, (Boolean, Boolean) -> Unit) -> Unit,
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
+    onEditProfile: (Int) -> Unit,
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
@@ -1136,7 +1382,11 @@ private fun InputZone(
                     val on = index == room.activeProfileIndex
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onSwitchProfile(index) },
+                        // 탭 = 전환, 길게 = 편집 (앱 프로필 스트립과 동일)
+                        modifier = Modifier.combinedClickable(
+                            onClick = { onSwitchProfile(index) },
+                            onLongClick = { onEditProfile(index) },
+                        ),
                     ) {
                         Box(
                             Modifier.size(36.dp)
@@ -1229,7 +1479,7 @@ private fun InputZone(
                         color = if (oocOn) Color(0xFF7A5B12) else Tokens.InkDim,
                     )
                 }
-                androidx.compose.foundation.text.BasicTextField(
+                BasicTextField(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f)
@@ -1246,8 +1496,8 @@ private fun InputZone(
                         .background(Color(0x0D14191F))
                         .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
                         .padding(horizontal = 14.dp, vertical = 11.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Tokens.Ink, fontSize = 13.sp),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.SignatureRing),
+                    textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
+                    cursorBrush = SolidColor(Tokens.SignatureRing),
                     maxLines = 4,
                     decorationBox = { inner ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1315,7 +1565,7 @@ private fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Comp
 
 @Composable
 private fun OverlayField(value: String, onChange: (String) -> Unit, placeholder: String) {
-    androidx.compose.foundation.text.BasicTextField(
+    BasicTextField(
         value = value,
         onValueChange = onChange,
         modifier = Modifier.fillMaxWidth()
@@ -1323,8 +1573,8 @@ private fun OverlayField(value: String, onChange: (String) -> Unit, placeholder:
             .background(Color(0x0A14191F))
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
             .padding(horizontal = 13.dp, vertical = 11.dp),
-        textStyle = androidx.compose.ui.text.TextStyle(color = Tokens.Ink, fontSize = 14.sp),
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(Tokens.SignatureRing),
+        textStyle = TextStyle(color = Tokens.Ink, fontSize = 14.sp),
+        cursorBrush = SolidColor(Tokens.SignatureRing),
         singleLine = true,
         decorationBox = { inner ->
             Box {
@@ -1396,17 +1646,43 @@ private fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
 }
 
 @Composable
-private fun ProfileOverlay(onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var emoji by remember { mutableStateOf("") }
-    var nameColor by remember { mutableStateOf(Tokens.namePresets.first()) }
-    var bubbleColor by remember { mutableStateOf(Tokens.bubblePresets.first()) }
+private fun ProfileOverlay(
+    onDismiss: () -> Unit,
+    onSave: (Profile) -> Unit,
+    /** null이면 새 캐릭터, 아니면 이 프로필을 편집 */
+    editing: Profile? = null,
+    /** 편집 모드에서만 — null이면 삭제 버튼 숨김 */
+    onDelete: (() -> Unit)? = null,
+) {
+    var name by remember { mutableStateOf(editing?.name ?: "") }
+    var emoji by remember { mutableStateOf(editing?.emoji ?: "") }
+    var nameColor by remember { mutableStateOf(editing?.nameColor ?: Tokens.namePresets.first()) }
+    var bubbleColor by remember { mutableStateOf(editing?.bubbleColor ?: Tokens.bubblePresets.first()) }
     var nameCustomOpen by remember { mutableStateOf(false) }
     var bubbleCustomOpen by remember { mutableStateOf(false) }
-    OverlayScaffold("새 캐릭터", onDismiss) {
+    // 캐릭터 값 — 앱 프로필 편집기의 value 목록과 동일 개념. {값이름} 치환·팔레트에 쓰인다
+    val stats = remember {
+        mutableStateListOf<Pair<String, String>>().apply {
+            editing?.stats?.forEach { (k, v) -> add(k to v) }
+        }
+    }
+    OverlayScaffold(if (editing == null) "새 캐릭터" else "캐릭터 편집", onDismiss) {
         OverlayField(name, { name = it }, "캐릭터 이름")
         Spacer(Modifier.height(10.dp))
         OverlayField(emoji, { emoji = it }, "이모지 아바타 (비우면 🙂)")
+        Spacer(Modifier.height(10.dp))
+        // 앱의 '클립보드 코드로 생성'과 동일 — ccfolia 캐릭터 JSON을 붙여넣은 상태로 클릭
+        GhostButton("클립보드 캐릭터 코드 불러오기", Modifier.fillMaxWidth()) {
+            runCatching {
+                val clip = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                    .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+                CharacterCodec.parse(clip ?: "")
+            }.getOrNull()?.let { imported ->
+                name = imported.name
+                stats.clear()
+                imported.stats.forEach { stats.add(it) }
+            }
+        }
         Spacer(Modifier.height(14.dp))
         Text("이름 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
@@ -1433,6 +1709,34 @@ private fun ProfileOverlay(onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
             Spacer(Modifier.height(8.dp))
             ColorPalettePicker(bubbleColor) { bubbleColor = it }
         }
+        Spacer(Modifier.height(14.dp))
+        Text("캐릭터 값", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Text(
+            "메시지의 {값이름}이 값으로 치환되고, 숫자 값은 판정 팔레트에 뜹니다",
+            fontSize = 10.sp, color = Tokens.InkDim,
+        )
+        Spacer(Modifier.height(7.dp))
+        stats.forEachIndexed { index, (key, value) ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 6.dp),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    OverlayField(key, { stats[index] = it to stats[index].second }, "이름")
+                }
+                Box(Modifier.weight(1f)) {
+                    OverlayField(value, { stats[index] = stats[index].first to it }, "값")
+                }
+                Text(
+                    "✕", fontSize = 13.sp, color = Tokens.InkDim,
+                    modifier = Modifier.clip(CircleShape)
+                        .clickable { stats.removeAt(index) }
+                        .padding(6.dp),
+                )
+            }
+        }
+        GhostButton("＋ 값 추가", Modifier.fillMaxWidth()) { stats.add("" to "") }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("저장", Modifier.weight(1f)) {
@@ -1442,10 +1746,16 @@ private fun ProfileOverlay(onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
                         emoji = emoji.trim().ifEmpty { "🙂" },
                         nameColor = nameColor,
                         bubbleColor = bubbleColor,
+                        isGm = editing?.isGm ?: false,
+                        stats = ProfileStats.sanitize(stats.toMap()).takeIf { it.isNotEmpty() },
                     )
                 )
             }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
+        }
+        onDelete?.let { delete ->
+            Spacer(Modifier.height(8.dp))
+            GhostButton("이 캐릭터 삭제", Modifier.fillMaxWidth(), delete)
         }
     }
 }
@@ -1486,7 +1796,12 @@ private fun CodeOverlay(code: String, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (Long, String) -> Unit) {
+private fun SettingsOverlay(
+    room: JoinedRoom?,
+    onDismiss: () -> Unit,
+    onApply: (Long, String) -> Unit,
+    onResetLogs: ((Boolean) -> Unit) -> Unit,
+) {
     if (room == null) return
     val scope = rememberCoroutineScope()
     var theme by remember { mutableStateOf(room.themeColor) }
@@ -1573,6 +1888,40 @@ private fun SettingsOverlay(room: JoinedRoom?, onDismiss: () -> Unit, onApply: (
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("적용", Modifier.weight(1f)) { onApply(theme, background) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
+        }
+        // 방 로그 초기화 — 앱 방 설정과 동일 (로컬·서버·상대 로그 전부 삭제)
+        Spacer(Modifier.height(14.dp))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
+        Spacer(Modifier.height(12.dp))
+        var resetConfirm by remember { mutableStateOf(false) }
+        var resetting by remember { mutableStateOf(false) }
+        var resetResult by remember { mutableStateOf<String?>(null) }
+        if (!resetConfirm) {
+            GhostButton("방 로그 초기화", Modifier.fillMaxWidth()) { resetConfirm = true }
+        } else {
+            Text(
+                "이 방의 모든 메시지가 삭제됩니다. 상대방의 로그도 함께 삭제되며, 되돌릴 수 없습니다.",
+                fontSize = 12.sp, color = Tokens.Danger,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YellowButton(if (resetting) "삭제 중…" else "전부 삭제", Modifier.weight(1f)) {
+                    if (!resetting) {
+                        resetting = true
+                        onResetLogs { ok ->
+                            resetting = false
+                            resetConfirm = false
+                            resetResult = if (ok) "방 로그를 초기화했습니다"
+                            else "서버 삭제가 완료되지 않아 중단했습니다 — 네트워크 확인 후 다시 시도해주세요"
+                        }
+                    }
+                }
+                GhostButton("취소", Modifier.weight(1f)) { resetConfirm = false }
+            }
+        }
+        resetResult?.let {
+            Spacer(Modifier.height(6.dp))
+            Text(it, fontSize = 11.sp, color = Tokens.InkDim)
         }
     }
 }
@@ -1792,6 +2141,33 @@ private fun pickBackgroundFile(): String? {
             dest.absolutePath
         }
     }.onFailure { System.err.println("배경 이미지 저장 실패: $it") }.getOrNull()
+}
+
+/** 메시지 편집 — 앱의 편집 다이얼로그와 동일 흐름 (여러 줄 입력 + 저장/취소) */
+@Composable
+private fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var body by remember { mutableStateOf(initial) }
+    OverlayScaffold("메시지 편집", onDismiss) {
+        BasicTextField(
+            value = body,
+            onValueChange = { body = it },
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0x0A14191F))
+                .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
+                .padding(horizontal = 13.dp, vertical = 11.dp),
+            textStyle = TextStyle(color = Tokens.Ink, fontSize = 14.sp),
+            cursorBrush = SolidColor(Tokens.SignatureRing),
+            maxLines = 8,
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            YellowButton("저장", Modifier.weight(1f)) {
+                if (body.isNotBlank()) onSave(body)
+            }
+            GhostButton("취소", Modifier.weight(1f), onDismiss)
+        }
+    }
 }
 
 /** 앱 전체 글꼴 선택 — 모바일 FontSettingDialog와 동일 선택지, 즉시 반영·config.json 유지 */

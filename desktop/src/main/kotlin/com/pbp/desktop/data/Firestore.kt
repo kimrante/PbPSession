@@ -493,6 +493,13 @@ class FirestoreRest(
         deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
     }
 
+    /** 프로필 이미지 업로드 — 모바일 ensureAvatarUploaded와 같은 문서 형태 (data=base64) */
+    fun uploadAvatar(remoteRoomId: String, avatarId: String, base64: String): Boolean =
+        patch(
+            "$base/rooms/$remoteRoomId/avatars/$avatarId?key=$apiKey",
+            gson.toJson(fields(mapOf("data" to base64))),
+        )
+
     /** 프로필 이미지(base64 JPEG) — 모바일이 올린 avatars/{hash} 문서 */
     fun fetchAvatar(remoteRoomId: String, avatarId: String): ByteArray? {
         val doc = get("$base/rooms/$remoteRoomId/avatars/$avatarId?key=$apiKey") ?: return null

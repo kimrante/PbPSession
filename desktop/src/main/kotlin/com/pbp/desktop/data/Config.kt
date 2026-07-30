@@ -12,8 +12,10 @@ data class Profile(
     val nameColor: Long = 0xFFFFC46B,
     val bubbleColor: Long = 0xFFFFD9A8,
     val isGm: Boolean = false,
-    /** 캐릭터 값(모바일과 동일 개념). config.json에서 직접 편집 — {값이름} 치환에 쓰인다 */
+    /** 캐릭터 값(모바일과 동일 개념) — {값이름} 치환·판정 팔레트에 쓰인다 */
     val stats: Map<String, String>? = null,
+    /** 프로필 이미지 로컬 경로 — 전송 시 축소본이 방 avatars 문서로 업로드된다 */
+    val imagePath: String? = null,
 )
 
 data class JoinedRoom(

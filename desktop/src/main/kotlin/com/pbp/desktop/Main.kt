@@ -36,6 +36,7 @@ import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -85,6 +86,7 @@ import com.pbp.desktop.logic.DiceBot
 import com.pbp.desktop.logic.ProfileStats
 import com.pbp.desktop.logic.Rules
 import com.pbp.desktop.logic.GmSpeech
+import com.pbp.desktop.notify.DesktopNotifier
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
 import com.pbp.desktop.ui.Pretendard
@@ -109,12 +111,27 @@ fun main() = application {
         title = "PbP — 1:1 TRPG 채팅",
         state = rememberWindowState(width = 1200.dp, height = 760.dp),
     ) {
-        App()
+        // 창 포커스 추적 — 포커스가 없을 때만 OS 알림 (모바일 isForeground와 동일 역할)
+        val windowFocused = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+        DisposableEffect(Unit) {
+            val listener = object : java.awt.event.WindowFocusListener {
+                override fun windowGainedFocus(e: java.awt.event.WindowEvent?) {
+                    windowFocused.set(true)
+                }
+
+                override fun windowLostFocus(e: java.awt.event.WindowEvent?) {
+                    windowFocused.set(false)
+                }
+            }
+            window.addWindowFocusListener(listener)
+            onDispose { window.removeWindowFocusListener(listener) }
+        }
+        App(windowFocused)
     }
 }
 
 @Composable
-private fun App() {
+private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     // 파일 읽기+쓰기라 UI 스레드에서 하면 첫 프레임이 지연된다 — 별도 스레드에서 로드 (C8)
     val config = remember { runBlockingIo { AppConfig.load() } }
     val firestore = remember {
@@ -211,6 +228,12 @@ private fun App() {
                 if (fetched != null && fetched.isNotEmpty()) {
                     val byId = messages.associateBy { it.docId }
                     val fresh = fetched.filter { it.docId !in byId && it.docId !in deletedDocIds }
+                    // 창이 포커스를 잃었을 때 새 수신 알림 — 모바일과 동일 규칙
+                    // (본문 비노출, SYSTEM 제외). 최초 전체 로드(lastCreatedAt=0)는 제외
+                    if (lastCreatedAt > 0 && !windowFocused.get()) {
+                        fresh.lastOrNull { it.authorUid != authorUid() && it.type != "SYSTEM" }
+                            ?.let { DesktopNotifier.notifyMessage(it.senderName ?: "상대") }
+                    }
                     // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10).
                     // 더 새로운 editedAt만 수용 — 내가 방금 편집한 걸 윈도의 구버전이 되돌리지 않게
                     val edited = fetched.filter { incoming ->
@@ -264,11 +287,29 @@ private fun App() {
         // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
         val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
         scope.launch(Dispatchers.IO) {
+            // 프로필 이미지가 있으면 축소본을 방 avatars 문서로 업로드 (모바일과 동일 스키마)
+            val avatarId = sender.imagePath?.let { path ->
+                runCatching {
+                    val bytes = encodeAvatarBytes(path) ?: return@runCatching null
+                    val hash = md5Hex(bytes)
+                    val key = "${room.remoteId}/$hash"
+                    if (key in uploadedAvatarKeys ||
+                        firestore.uploadAvatar(
+                            room.remoteId, hash,
+                            java.util.Base64.getEncoder().encodeToString(bytes),
+                        )
+                    ) {
+                        uploadedAvatarKeys += key
+                        hash
+                    } else null
+                }.getOrNull()
+            }
             val textOk = firestore.postMessage(
                 room.remoteId,
                 messageValues(
                     type = "TEXT", body = marked, sender = sender,
                     isOoc = isOoc, authorUid = authorUid(),
+                    avatarId = avatarId,
                 ),
             )
             var diceOk = true
@@ -326,6 +367,31 @@ private fun App() {
         persist()
         scope.launch(Dispatchers.IO) {
             runCatching { firestore.leaveRoom(room.remoteId, config.deviceId) }
+        }
+    }
+
+    /** HTML 로그 내보내기 — 모바일과 동일 형식. 아바타는 방 avatars 문서에서 받아 내장 */
+    fun exportLogs() {
+        val room = selected ?: return
+        val snapshot = messages
+        scope.launch(Dispatchers.IO) {
+            val fd = java.awt.FileDialog(null as java.awt.Frame?, "세션 로그 저장", java.awt.FileDialog.SAVE)
+            fd.file = "${room.name}-log.html"
+            fd.isVisible = true
+            val dir = fd.directory ?: return@launch
+            val file = fd.file ?: return@launch
+            runCatching {
+                val html = com.pbp.desktop.export.LogExporter.buildHtml(
+                    roomName = room.name,
+                    messages = snapshot,
+                    myUid = authorUid(),
+                    avatarDataUri = { id ->
+                        firestore.fetchAvatar(room.remoteId, id)
+                            ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
+                    },
+                )
+                java.io.File(dir, file).writeText(html, Charsets.UTF_8)
+            }.onFailure { System.err.println("로그 저장 실패: $it") }
         }
     }
 
@@ -436,6 +502,7 @@ private fun App() {
                 onOpenSettings = { overlay = OverlayKind.RoomSettings },
                 onMessageLongPress = { messageAction = it },
                 onEditProfile = { editProfileIndex = it },
+                onExport = ::exportLogs,
             )
         }
     }
@@ -653,6 +720,7 @@ private fun messageValues(
     diceExpr: String? = null,
     isBot: Boolean = false,
     diceOutcome: String? = null,
+    avatarId: String? = null,
 ): Map<String, Any?> = mapOf(
     "type" to type,
     "body" to body,
@@ -667,7 +735,7 @@ private fun messageValues(
     "isOoc" to isOoc,
     "createdAt" to System.currentTimeMillis(),
     "authorUid" to authorUid,
-    "avatarId" to null,
+    "avatarId" to avatarId,
 )
 
 // ══════════════ 왼쪽 패널: 방 목록 ══════════════
@@ -833,6 +901,7 @@ private fun ChatPane(
     onOpenSettings: () -> Unit,
     onMessageLongPress: (Message) -> Unit,
     onEditProfile: (Int) -> Unit,
+    onExport: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -865,6 +934,8 @@ private fun ChatPane(
                         )
                     }
                 }
+                GhostButton("내보내기", Modifier, onExport)
+                Spacer(Modifier.width(8.dp))
                 GhostButton("초대 코드", Modifier, onShowCode)
                 // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
                 Spacer(Modifier.width(8.dp))
@@ -1403,11 +1474,19 @@ private fun InputZone(
                                 .background(Tokens.Panel2),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(
-                                profile.emoji, fontSize = 15.sp,
-                                fontFamily = if (profile.isGm) GowunBatang else null,
-                                color = if (profile.isGm) Tokens.SignatureInk else Tokens.Ink,
-                            )
+                            val chipImage = rememberLocalBitmap(profile.imagePath)
+                            if (chipImage != null) {
+                                Image(
+                                    chipImage, null, Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            } else {
+                                Text(
+                                    profile.emoji, fontSize = 15.sp,
+                                    fontFamily = if (profile.isGm) GowunBatang else null,
+                                    color = if (profile.isGm) Tokens.SignatureInk else Tokens.Ink,
+                                )
+                            }
                         }
                         Text(
                             profile.name, fontSize = 10.sp,
@@ -1666,10 +1745,51 @@ private fun ProfileOverlay(
             editing?.stats?.forEach { (k, v) -> add(k to v) }
         }
     }
+    var imagePath by remember { mutableStateOf(editing?.imagePath) }
+    var pickingImage by remember { mutableStateOf(false) }
+    val overlayScope = rememberCoroutineScope()
     OverlayScaffold(if (editing == null) "새 캐릭터" else "캐릭터 편집", onDismiss) {
         OverlayField(name, { name = it }, "캐릭터 이름")
         Spacer(Modifier.height(10.dp))
         OverlayField(emoji, { emoji = it }, "이모지 아바타 (비우면 🙂)")
+        Spacer(Modifier.height(10.dp))
+        // 프로필 이미지 — 로컬 512px 축소 저장, 전송 시 256px 축소본이 방에 업로드 (앱과 동일)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Tokens.Panel2)
+                    .border(1.dp, Tokens.Line, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                val bmp = rememberLocalBitmap(imagePath)
+                if (bmp != null) {
+                    Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Text(emoji.trim().ifEmpty { "🙂" }, fontSize = 17.sp)
+                }
+            }
+            GhostButton(
+                if (imagePath == null) "프로필 이미지 선택" else "이미지 변경",
+                Modifier.weight(1f),
+            ) {
+                if (!pickingImage) {
+                    pickingImage = true
+                    overlayScope.launch(Dispatchers.IO) {
+                        try {
+                            pickAndStoreImage("프로필 이미지 선택", "avatars-local", 512)
+                                ?.let { imagePath = it }
+                        } finally {
+                            pickingImage = false
+                        }
+                    }
+                }
+            }
+            if (imagePath != null) {
+                GhostButton("제거") { imagePath = null }
+            }
+        }
         Spacer(Modifier.height(10.dp))
         // 앱의 '클립보드 코드로 생성'과 동일 — ccfolia 캐릭터 JSON을 붙여넣은 상태로 클릭
         GhostButton("클립보드 캐릭터 코드 불러오기", Modifier.fillMaxWidth()) {
@@ -1748,6 +1868,7 @@ private fun ProfileOverlay(
                         bubbleColor = bubbleColor,
                         isGm = editing?.isGm ?: false,
                         stats = ProfileStats.sanitize(stats.toMap()).takeIf { it.isNotEmpty() },
+                        imagePath = imagePath,
                     )
                 )
             }
@@ -1869,7 +1990,8 @@ private fun SettingsOverlay(
                         picking = true
                         scope.launch(Dispatchers.IO) {
                             try {
-                                pickBackgroundFile()?.let { background = it }
+                                pickAndStoreImage("배경 이미지 선택", "backgrounds", 1600)
+                                    ?.let { background = it }
                             } finally {
                                 picking = false
                             }
@@ -2101,12 +2223,12 @@ private fun argbToHsv(argb: Long): Triple<Float, Float, Float> {
 }
 
 /**
- * OS 파일 선택창으로 배경 이미지를 골라 설정 폴더에 저장, 저장본 경로를 돌려준다.
- * 원본이 크면 최대 1600px로 줄여 JPEG로 저장 — 모바일 Images.kt와 동일 정책
- * (매 실행 풀사이즈 디코딩으로 인한 메모리·시작 지연 방지).
+ * OS 파일 선택창으로 이미지를 골라 설정 폴더(~/.pbp-desktop/<subDir>)에 저장,
+ * 저장본 경로를 돌려준다. 원본이 크면 maxSize(긴 변)로 줄여 JPEG로 저장 —
+ * 모바일 Images.kt와 동일 정책 (풀사이즈 디코딩으로 인한 메모리·지연 방지).
  */
-private fun pickBackgroundFile(): String? {
-    val fd = java.awt.FileDialog(null as java.awt.Frame?, "배경 이미지 선택", java.awt.FileDialog.LOAD)
+private fun pickAndStoreImage(title: String, subDir: String, maxSize: Int): String? {
+    val fd = java.awt.FileDialog(null as java.awt.Frame?, title, java.awt.FileDialog.LOAD)
     fd.setFilenameFilter { _, name ->
         name.lowercase().substringAfterLast('.', "") in setOf("png", "jpg", "jpeg", "webp", "bmp")
     }
@@ -2114,17 +2236,17 @@ private fun pickBackgroundFile(): String? {
     val dir = fd.directory ?: return null
     val file = fd.file ?: return null
     val src = java.io.File(dir, file)
-    val destDir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/backgrounds")
+    val destDir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/$subDir")
     return runCatching {
         destDir.mkdirs()
         val image = org.jetbrains.skia.Image.makeFromEncoded(src.readBytes())
         val maxDim = maxOf(image.width, image.height)
-        if (maxDim <= 1600) {
-            val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.${src.extension.ifEmpty { "img" }}")
+        if (maxDim <= maxSize) {
+            val dest = java.io.File(destDir, "img-${System.currentTimeMillis()}.${src.extension.ifEmpty { "img" }}")
             src.copyTo(dest, overwrite = true)
             dest.absolutePath
         } else {
-            val scale = 1600f / maxDim
+            val scale = maxSize.toFloat() / maxDim
             val w = (image.width * scale).toInt().coerceAtLeast(1)
             val h = (image.height * scale).toInt().coerceAtLeast(1)
             val surface = org.jetbrains.skia.Surface.makeRasterN32Premul(w, h)
@@ -2135,12 +2257,59 @@ private fun pickBackgroundFile(): String? {
             )
             val jpeg = surface.makeImageSnapshot()
                 .encodeToData(org.jetbrains.skia.EncodedImageFormat.JPEG, 85)
-                ?: error("배경 이미지 인코딩 실패")
-            val dest = java.io.File(destDir, "bg-${System.currentTimeMillis()}.jpg")
+                ?: error("이미지 인코딩 실패")
+            val dest = java.io.File(destDir, "img-${System.currentTimeMillis()}.jpg")
             dest.writeBytes(jpeg.bytes)
             dest.absolutePath
         }
-    }.onFailure { System.err.println("배경 이미지 저장 실패: $it") }.getOrNull()
+    }.onFailure { System.err.println("이미지 저장 실패: $it") }.getOrNull()
+}
+
+/**
+ * 아바타 업로드용 축소 인코딩 — 모바일 downscaleToJpeg와 동일 정책:
+ * 긴 변 256px, 투명이 있으면 PNG, 아니면 JPEG(82).
+ */
+private fun encodeAvatarBytes(path: String, maxSize: Int = 256): ByteArray? = runCatching {
+    val image = org.jetbrains.skia.Image.makeFromEncoded(java.io.File(path).readBytes())
+    val maxDim = maxOf(image.width, image.height)
+    val scale = if (maxDim > maxSize) maxSize.toFloat() / maxDim else 1f
+    val w = (image.width * scale).toInt().coerceAtLeast(1)
+    val h = (image.height * scale).toInt().coerceAtLeast(1)
+    val surface = org.jetbrains.skia.Surface.makeRasterN32Premul(w, h)
+    surface.canvas.drawImageRect(
+        image,
+        org.jetbrains.skia.Rect.makeWH(image.width.toFloat(), image.height.toFloat()),
+        org.jetbrains.skia.Rect.makeWH(w.toFloat(), h.toFloat()),
+    )
+    val opaque = image.imageInfo.isOpaque
+    surface.makeImageSnapshot()
+        .encodeToData(
+            if (opaque) org.jetbrains.skia.EncodedImageFormat.JPEG
+            else org.jetbrains.skia.EncodedImageFormat.PNG,
+            if (opaque) 82 else 100,
+        )?.bytes
+}.getOrNull()
+
+private fun md5Hex(bytes: ByteArray): String =
+    java.security.MessageDigest.getInstance("MD5").digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+/** 방별 업로드 완료 표시 — 같은 이미지의 중복 업로드 방지 (모바일 uploadedAvatars와 동일) */
+private val uploadedAvatarKeys: MutableSet<String> =
+    java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+/** 로컬 이미지 파일 로더 — 실패는 캐시하지 않고 null (호출부는 이모지 폴백) */
+@Composable
+private fun rememberLocalBitmap(path: String?): ImageBitmap? {
+    val bitmap by produceState<ImageBitmap?>(null, path) {
+        value = if (path == null) null else withContext(Dispatchers.IO) {
+            runCatching {
+                org.jetbrains.skia.Image.makeFromEncoded(java.io.File(path).readBytes())
+                    .toComposeImageBitmap()
+            }.getOrNull()
+        }
+    }
+    return bitmap
 }
 
 /** 메시지 편집 — 앱의 편집 다이얼로그와 동일 흐름 (여러 줄 입력 + 저장/취소) */

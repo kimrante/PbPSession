@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 목업 — 오너 프로필 설정 + 최근 사용한 색</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   디자인 토큰 — 라이트 모드 기준(PbP-design-spec.md 0장) + v2 스페이싱.
+   디자인 원칙: 센터 정렬 기본 · 패딩/마진 상하 동일 · 동류 항목은 같은 여백값.
+   ※ 라벨·필드는 기존 '프로필 편집' 화면과의 통일감을 우선해 좌측 정렬을
+     유지한다(폼 라벨 관례). 사진 블록·미리보기는 센터.
+   ═══════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f4f2ec; --panel:#ffffff; --panel-2:#efeade;
+  --line:rgba(20,25,32,.10); --ink:#23272e;
+  --ink-sub:rgba(20,25,32,.72); --ink-dim:#6d7480;
+  --postit:#ffd05c; --accent:#e0b13e; --accent-ink:#a3781a;
+  --value:#3b82f6; --bubble-ink:#10151c; --danger:#c94f4f;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-pill:999px;
+  --appbar-h:56px;
+  --swatch:26px;   /* 색 스와치 — 프리셋3+커스텀1+최근5 = 9개가 한 줄에 들어가는 크기 */
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';line-height:1.6}
+
+/* ─── 문서 프레임 ─── */
+.wrap{max-width:1320px;margin:0 auto;padding:56px 24px 96px}
+header.page h1{font-family:'Gowun Batang',serif;font-weight:700;font-size:clamp(24px,3.4vw,34px);line-height:1.3}
+header.page h1 em{font-style:normal;color:var(--accent-ink)}
+header.page p{color:var(--ink-dim);margin-top:10px;max-width:700px;font-size:14px}
+.principle{display:inline-block;margin-top:14px;font-size:12.5px;font-weight:700;color:#7a5b12;background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5);border-radius:var(--r-pill);padding:6px 14px}
+section.spec{margin-top:52px}
+.spec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.spec-head .no{font-family:'Gowun Batang',serif;font-size:15px;color:var(--accent-ink);letter-spacing:.08em}
+.spec-head h2{font-size:20px;font-weight:700}
+.spec-desc{color:var(--ink-dim);font-size:13.5px;max-width:820px;margin-bottom:24px}
+code{background:#f3edda;border:1px solid rgba(20,25,32,.1);border-radius:5px;padding:1px 6px;font-size:12px;color:#8a6d1c;font-family:ui-monospace,Menlo,monospace}
+.row{display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start}
+.notes{flex:1;min-width:300px;display:flex;flex-direction:column;gap:14px}
+.note{border-left:2px solid #5f9ec7;background:linear-gradient(90deg,rgba(95,158,199,.10),transparent 70%);padding:12px 16px;border-radius:0 8px 8px 0}
+.note h4{font-size:13px;color:#33719c;margin-bottom:3px;font-weight:700}
+.note p{font-size:12.5px;color:var(--ink-dim)}
+.note.y{border-left-color:var(--accent);background:linear-gradient(90deg,rgba(224,177,62,.12),transparent 70%)}
+.note.y h4{color:var(--accent-ink)}
+.note.r{border-left-color:var(--danger);background:linear-gradient(90deg,rgba(201,79,79,.10),transparent 70%)}
+.note.r h4{color:var(--danger)}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden}
+th{background:#f7f4ec;color:var(--ink-dim);font-weight:700;font-size:11px;letter-spacing:.08em;text-align:left;padding:10px 14px;border-bottom:1px solid var(--line)}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap;font-weight:700}
+footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);margin-top:64px;padding-top:20px;line-height:2}
+
+/* ─── 폰 프레임 ─── */
+.phones{display:flex;gap:32px;flex-wrap:wrap}
+.pcol{display:flex;flex-direction:column;align-items:center;gap:14px}
+.tag{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--ink-dim);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);padding:6px 16px;white-space:nowrap}
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px}
+.screen{border-radius:29px;overflow:hidden;background:linear-gradient(180deg,#fbf9f4,#f0ede5);height:704px;display:flex;flex-direction:column;position:relative}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700}
+
+/* 상단 바 — 프로필 편집 화면과 동일 규격(56dp) */
+.appbar{height:var(--appbar-h);flex-shrink:0;display:flex;align-items:center;padding:0 var(--sp-2);gap:2px}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink)}
+.icon-btn.off{opacity:.28}
+.bar-title{font-size:15px;font-weight:700;flex:1}
+.savepill{background:var(--postit);color:#1a1a1a;font-size:11px;font-weight:700;border-radius:var(--r-pill);padding:8px 16px;margin-right:var(--sp-2);box-shadow:0 2px 8px rgba(224,177,62,.35)}
+.savepill.dis{opacity:.4;box-shadow:none}
+
+.body16{padding:0 var(--sp-4);flex:1;overflow:hidden}
+.photo{display:flex;flex-direction:column;align-items:center;gap:6px;padding:var(--sp-2) 0 0}
+.avatar-lg{width:72px;height:72px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 0 5px rgba(224,177,62,.16);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:var(--bubble-ink)}
+.pickbtn{border:1px solid rgba(20,25,32,.25);border-radius:var(--r-pill);padding:5px 12px;font-size:11px;font-weight:700;background:var(--panel)}
+.hint{font-size:10px;color:var(--ink-dim);text-align:center}
+
+.sec-label{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--ink-dim);margin:var(--sp-4) 0 var(--sp-2)}
+.input{border:1px solid var(--line);background:rgba(20,25,32,.04);border-radius:var(--r-cell);padding:10px 14px;font-size:13px;color:var(--ink)}
+
+/* ── 색 스와치 줄: [프리셋 3] [커스텀] │ [최근 5] ── */
+.swrow{display:flex;gap:var(--sp-1);align-items:center}
+.swc{width:var(--swatch);height:var(--swatch);border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--bubble-ink)}
+.swc.sel{outline:2px solid var(--ink);outline-offset:2px}
+.swc.rainbow{background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666);color:#fff;font-size:13px}
+/* 최근 색 그룹 구분선 — 프리셋/커스텀과 시각적으로 갈라준다 (텍스트 없음) */
+.grp{width:1px;height:16px;background:rgba(20,25,32,.18);flex-shrink:0;margin:0 2px}
+.swc.recent{box-shadow:inset 0 0 0 1px rgba(20,25,32,.12)}
+.swc.empty{border:1px dashed rgba(20,25,32,.2);background:transparent}
+
+.preview{background:linear-gradient(135deg,#c3d8e8,#e9f0f5);border:1px solid rgba(20,25,32,.2);border-radius:var(--r-card);padding:var(--sp-4);margin-top:var(--sp-2)}
+.pv-row{display:flex;justify-content:flex-end;gap:var(--sp-2);align-items:flex-start}
+.pv-name{font-size:11px;font-weight:700;margin-bottom:var(--sp-1);text-align:right}
+.bubble{border-radius:var(--r-card) 4px var(--r-card) var(--r-card);padding:var(--sp-2) var(--sp-3);font-size:13px;line-height:1.5;color:var(--bubble-ink);font-weight:500;width:fit-content;box-shadow:0 2px 8px rgba(60,70,85,.10)}
+.bubble.ooc{background:rgba(20,25,32,.06);color:rgba(20,25,32,.5);border:1px dashed rgba(20,25,32,.25);font-weight:400;box-shadow:none}
+.ooc-tag{display:inline-block;font-size:9px;border:1px solid rgba(20,25,32,.3);border-radius:var(--r-pill);padding:0 5px;margin-right:5px;vertical-align:1px}
+.pv-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--bubble-ink)}
+
+.value-card{border:1px solid var(--line);border-radius:var(--r-card);background:var(--panel);box-shadow:0 3px 12px rgba(60,70,85,.08);padding:var(--sp-2) var(--sp-4)}
+.statrow{display:flex;align-items:center;gap:var(--sp-2);padding:10px 0;border-bottom:1px solid var(--line)}
+.statrow:last-of-type{border-bottom:none}
+.statrow b{color:var(--value);font-size:13px;flex:1;font-weight:700}
+.statrow .v{font-size:13px;font-weight:700}
+.statrow .del{width:24px;height:24px;border-radius:50%;background:rgba(20,25,32,.06);color:var(--ink-dim);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.footer-del{text-align:center;color:var(--accent-ink);font-size:13px;font-weight:700;padding:var(--sp-4) 0 var(--sp-2)}
+.band{background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5);border-radius:var(--r-cell);padding:8px 12px;font-size:11px;font-weight:500;color:#7a5b12;margin-top:var(--sp-2);text-align:center}
+
+/* 방 설정 — 테마 컬러 그리드 / 배경 그리드 */
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-2)}
+.tcell{border:1.5px solid var(--line);border-radius:var(--r-cell);padding:var(--sp-2);display:flex;flex-direction:column;gap:4px;align-items:center;background:rgba(20,25,32,.02)}
+.tcell .tsw{width:100%;height:26px;border-radius:8px}
+.tcell span{font-size:10px;color:var(--ink-dim)}
+.tcell.sel{border-color:var(--accent);background:rgba(255,208,92,.16)}
+.tcell.sel span{color:var(--accent-ink);font-weight:700}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2)}
+.bgcell{height:64px;border-radius:var(--r-cell);border:1.5px solid var(--line);position:relative}
+.bgcell.sel{border-color:var(--accent)}
+.bgcell .use{position:absolute;left:5px;bottom:5px;background:var(--postit);color:#1a1a1a;font-size:9px;font-weight:700;border-radius:5px;padding:1px 5px}
+.bgcell.dash{border-style:dashed;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--ink-dim);text-align:center;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page">
+  <h1>PbP <em>오너 프로필 설정 + 최근 사용한 색</em></h1>
+  <p>두 가지 변경의 구현 지시서입니다. ① 오너 프로필을 기존 '프로필 편집' 화면과 같은 규격의 <b>전체 화면</b>으로 통일(개별 값은 미지원),
+  ② <b>모든 색 선택 줄</b>(오너 컬러 · 이름 색 · 말풍선 색 · 방 테마 컬러)의 커스텀 버튼 뒤에 <b>최근 사용한 색 5개를 스와치로 이어 붙임</b>. 예시 프리셋은 3종으로 축소.</p>
+  <span class="principle">규격 원칙 — 센터 정렬 기본 · 상하 여백 동일 · 동류 항목은 같은 여백값</span>
+</header>
+
+<!-- ═══════════ 01. 최근 사용한 색 ═══════════ -->
+<section class="spec">
+  <div class="spec-head"><span class="no">01</span><h2>최근 사용한 색 — 스와치 줄에 이어 붙이기</h2></div>
+  <p class="spec-desc">헥사 코드 텍스트는 쓰지 않습니다. 모든 색 선택 줄을
+  <b>[프리셋 3종] [커스텀 ＋] │ [최근 5개]</b> 순서로 통일하고, 최근 색은 프리셋과 같은 원형 스와치로 붙입니다.
+  구분선 1dp만으로 그룹을 나눕니다.</p>
+
+  <div class="row">
+    <div class="phones">
+      <div class="pcol">
+        <div class="tag">01-A · 캐릭터 프로필 편집 (이름 색 · 말풍선 색 모두)</div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>21:55</span><span>▲ ● ▮</span></div>
+          <div class="appbar">
+            <div class="icon-btn">←</div>
+            <div class="bar-title">프로필 편집</div>
+            <div class="savepill">저장</div>
+          </div>
+          <div class="body16">
+            <div class="photo">
+              <div class="avatar-lg" style="background:var(--panel-2);font-size:30px">🗡️</div>
+              <div class="pickbtn">이미지 선택</div>
+            </div>
+
+            <div class="sec-label">캐릭터 이름</div>
+            <div class="input">리안</div>
+
+            <div class="sec-label">이름 색</div>
+            <div class="swrow">
+              <div class="swc sel" style="background:#c07b1f;color:#fff">✓</div>
+              <div class="swc" style="background:#33719c"></div>
+              <div class="swc" style="background:#7a5799"></div>
+              <div class="swc rainbow">＋</div>
+              <i class="grp"></i>
+              <div class="swc recent" style="background:#7ec8a9"></div>
+              <div class="swc recent" style="background:#e0b13e"></div>
+              <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
+            </div>
+
+            <div class="sec-label">말풍선 색</div>
+            <div class="swrow">
+              <div class="swc sel" style="background:#ffd9a8">✓</div>
+              <div class="swc" style="background:#bfe3f6"></div>
+              <div class="swc" style="background:#e3d2f2"></div>
+              <div class="swc rainbow">＋</div>
+              <i class="grp"></i>
+              <div class="swc recent" style="background:#7ec8a9"></div>
+              <div class="swc recent" style="background:#e0b13e"></div>
+              <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
+            </div>
+
+            <div class="sec-label">캐릭터 값</div>
+            <div class="value-card">
+              <div class="statrow"><b>{근력}</b><span class="v">60</span><div class="del">✕</div></div>
+              <div class="statrow"><b>{은신}</b><span class="v">50</span><div class="del">✕</div></div>
+            </div>
+            <div class="footer-del">캐릭터 삭제</div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="pcol">
+        <div class="tag">01-B · 방 설정 (테마 컬러) · 최근 색 2/5개 상태</div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>22:02</span><span>▲ ● ▮</span></div>
+          <div class="appbar">
+            <div class="icon-btn">←</div>
+            <div class="bar-title">방 설정 · 등대에서 만나요</div>
+          </div>
+          <div class="body16">
+            <div class="sec-label">테마 컬러</div>
+            <div class="grid4">
+              <div class="tcell sel"><div class="tsw" style="background:#5f9ec7"></div><span>새벽 하늘</span></div>
+              <div class="tcell"><div class="tsw" style="background:#c9a7e8"></div><span>라일락</span></div>
+              <div class="tcell"><div class="tsw" style="background:#e8b48e"></div><span>호박등</span></div>
+              <div class="tcell"><div class="tsw" style="background:#9fe0b8"></div><span>이끼</span></div>
+              <div class="tcell"><div class="tsw" style="background:#f2a1a8"></div><span>동백</span></div>
+              <div class="tcell"><div class="tsw" style="background:#e8d48e"></div><span>사금</span></div>
+              <div class="tcell"><div class="tsw" style="background:#a8b4c8"></div><span>잿빛</span></div>
+              <div class="tcell"><div class="tsw" style="background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666)"></div><span>커스텀</span></div>
+            </div>
+            <!-- 그리드는 라벨 있는 셀 체계라, 최근 색은 그리드 아래 같은 스와치 줄로 -->
+            <div class="swrow" style="margin-top:var(--sp-3);padding-left:2px">
+              <i class="grp"></i>
+              <div class="swc recent" style="background:#7ec8a9"></div>
+              <div class="swc recent" style="background:#e0b13e"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+            </div>
+
+            <div class="sec-label">배경 이미지</div>
+            <div class="grid3">
+              <div class="bgcell sel" style="background:linear-gradient(180deg,#a8c4da,#7d97ac)"><span class="use">사용 중</span></div>
+              <div class="bgcell" style="background:linear-gradient(180deg,#c3b1d6,#9c88b4)"></div>
+              <div class="bgcell" style="background:linear-gradient(180deg,#d6c9a3,#a89b78)"></div>
+              <div class="bgcell" style="background:linear-gradient(180deg,#a9c9b4,#7fa48c)"></div>
+              <div class="bgcell" style="background:linear-gradient(180deg,#d3aca6,#a8807b)"></div>
+              <div class="bgcell dash">갤러리에서<br>선택</div>
+            </div>
+            <div class="hint" style="text-align:left;margin-top:var(--sp-2)">
+              배경은 이미지·그라데이션이라 색 하나로 지정하지 않습니다 — 최근 색은 테마 컬러에만 붙습니다
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>줄 구성과 규격</h4>
+        <p>순서는 <b>프리셋 3종 → 커스텀(＋) → 구분선 → 최근 5개</b>로 모든 색 줄에서 동일합니다.
+        스와치는 <b>원형 26dp</b>(9개 + 구분선이 한 줄에 들어가는 크기 — 현행 32dp에서 축소) · 간격 <b>4dp</b> ·
+        구분선 <b>1dp × 높이 16dp</b>(좌우 여백 2dp). 최근 스와치는 흰색 계열도 보이도록 안쪽 1dp 옅은 테두리를 넣습니다.
+        선택 중인 색은 위치와 무관하게 잉크색 아웃라인으로 표시합니다.</p></div>
+      <div class="note"><h4>목록 규칙</h4>
+        <p>전역 1개 목록을 <b>모든 색 줄이 공유</b>합니다(오너 컬러 · 이름 색 · 말풍선 색 · 테마 컬러).
+        <b>최신순 · 중복 제거 · 최대 5개</b> — 6번째가 들어오면 가장 오래된 것이 밀려납니다.
+        커스텀 색을 어디서 적용해도 네 곳 모두에 즉시 나타납니다.</p></div>
+      <div class="note"><h4>5개가 안 찼을 때 (01-B · 02-B) — 확정</h4>
+        <p>빈 자리는 <b>점선 빈 원</b>으로 두어 줄 길이를 항상 고정합니다(동류 항목 여백 통일).
+        빈 원은 <b>눌러도 아무 동작이 없어야</b> 하며(리플·포커스도 없음), 하나도 없으면 구분선과 빈 원 5개만 보입니다.</p></div>
+      <div class="note r"><h4>배경은 제외</h4>
+        <p>방 설정의 <b>배경</b>은 프리셋 그라데이션 또는 갤러리 이미지라 '색 하나'로 지정하는 값이 아닙니다.
+        따라서 최근 색은 <b>테마 컬러에만</b> 붙였습니다. 배경까지 단색 지정을 원하시면 별도 기능(단색 배경)이 필요합니다.</p></div>
+      <div class="note"><h4>테마 컬러 그리드는 왜 줄로?</h4>
+        <p>테마 컬러는 라벨("새벽 하늘")이 붙은 <b>4열 그리드</b>라, 최근 색 셀을 그리드에 끼우면 라벨이 빈 셀이 생기고
+        그리드가 2행 → 3행으로 늘어납니다. 그래서 그리드는 그대로 두고 <b>바로 아래 같은 스와치 줄</b>을 붙였습니다
+        — 다른 화면과 같은 부품·같은 규격입니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 02. 오너 프로필 ═══════════ -->
+<section class="spec">
+  <div class="spec-head"><span class="no">02</span><h2>오너 프로필 설정 화면</h2></div>
+  <p class="spec-desc">현재는 방 목록의 <code>AlertDialog</code>(<code>OwnerProfileDialog</code>)입니다. 이를 <b>프로필 편집과 동일한 전체 화면</b>으로 올려
+  상단 바(56dp) + 저장 캡슐 + 사진 블록 + 섹션 라벨 구조를 그대로 공유합니다. 오너는 캐릭터가 아니므로 <b>캐릭터 값 섹션은 없습니다</b>.</p>
+
+  <div class="row">
+    <div class="phones">
+      <div class="pcol">
+        <div class="tag">02-A · 일반 진입 (설정 완료)</div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>21:52</span><span>▲ ● ▮</span></div>
+          <div class="appbar">
+            <div class="icon-btn">←</div>
+            <div class="bar-title">오너 프로필</div>
+            <div class="savepill">저장</div>
+          </div>
+          <div class="body16">
+            <div class="photo">
+              <div class="avatar-lg" style="background:#ffd9a8">김</div>
+              <div class="pickbtn">이미지 변경</div>
+              <div class="hint">잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다<br>세션 캐릭터 목록에는 나타나지 않습니다</div>
+            </div>
+
+            <div class="sec-label">이름</div>
+            <div class="input">김란테</div>
+
+            <div class="sec-label">컬러</div>
+            <div class="swrow">
+              <div class="swc sel" style="background:#ffd9a8">✓</div>
+              <div class="swc" style="background:#bfe3f6"></div>
+              <div class="swc" style="background:#e3d2f2"></div>
+              <div class="swc rainbow">＋</div>
+              <i class="grp"></i>
+              <div class="swc recent" style="background:#7ec8a9"></div>
+              <div class="swc recent" style="background:#e0b13e"></div>
+              <div class="swc recent" style="background:#5f6b9c"></div>
+              <div class="swc recent" style="background:#c4646e"></div>
+              <div class="swc recent" style="background:#8a6bb0"></div>
+            </div>
+
+            <div class="sec-label">미리보기 — 잡담 말풍선</div>
+            <div class="preview">
+              <div class="pv-row">
+                <div>
+                  <div class="pv-name" style="color:#8a6a3c">김란테</div>
+                  <div class="bubble ooc"><span class="ooc-tag">잡담</span>오늘은 여기까지 할까요?</div>
+                </div>
+                <div class="pv-avatar" style="background:#ffd9a8">김</div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="pcol">
+        <div class="tag">02-B · 최초 실행 (미설정 · 강제)</div>
+        <div class="phone"><div class="screen">
+          <div class="statusbar"><span>21:40</span><span>▲ ● ▮</span></div>
+          <div class="appbar">
+            <div class="icon-btn off">←</div>
+            <div class="bar-title">오너 프로필</div>
+            <div class="savepill dis">저장</div>
+          </div>
+          <div class="body16">
+            <div class="photo">
+              <div class="avatar-lg" style="background:#ffd9a8">?</div>
+              <div class="pickbtn">이미지 선택</div>
+              <div class="hint">잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다<br>세션 캐릭터 목록에는 나타나지 않습니다</div>
+            </div>
+            <div class="band">이름을 정해야 시작할 수 있습니다 — 뒤로 나갈 수 없는 상태</div>
+
+            <div class="sec-label">이름</div>
+            <div class="input" style="color:var(--ink-dim)">플레이어 이름</div>
+
+            <div class="sec-label">컬러</div>
+            <div class="swrow">
+              <div class="swc sel" style="background:#ffd9a8">✓</div>
+              <div class="swc" style="background:#bfe3f6"></div>
+              <div class="swc" style="background:#e3d2f2"></div>
+              <div class="swc rainbow">＋</div>
+              <i class="grp"></i>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+              <div class="swc empty"></div>
+            </div>
+
+            <div class="sec-label">미리보기 — 잡담 말풍선</div>
+            <div class="preview">
+              <div class="pv-row">
+                <div>
+                  <div class="pv-name" style="color:#8a6a3c">이름</div>
+                  <div class="bubble ooc"><span class="ooc-tag">잡담</span>이 색으로 잡담하게 됩니다.</div>
+                </div>
+                <div class="pv-avatar" style="background:#ffd9a8">?</div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note y"><h4>프로필 편집과 공유하는 규격</h4>
+        <p>상단 바 56dp(좌 ← / 우 저장 캡슐) · 본문 좌우 16dp · 섹션 라벨 11sp(위 16·아래 8) ·
+        입력 필드 반경 12dp · 사진 원형 72dp + 골드 링. 라벨·필드는 기존 화면과의 통일감을 위해
+        좌측 정렬을 유지하고(폼 관례), 사진·미리보기 블록은 센터 정렬입니다.</p></div>
+      <div class="note r"><h4>차이점 — 캐릭터 값 없음</h4>
+        <p>오너는 판정 주체가 아니므로 <code>캐릭터 값</code> 섹션과 <code>{값이름}</code> 치환을 지원하지 않습니다.
+        이름 색/말풍선 색을 따로 두지 않고 <b>컬러 1개</b>만 둡니다 — 잡담 이름 색과 아바타 배경에 함께 쓰입니다.</p></div>
+      <div class="note"><h4>최초 실행 강제 상태 (02-B)</h4>
+        <p>이름이 비어 있으면 뒤로 가기 <b>비활성</b>(← 28% 불투명) + 저장 캡슐 비활성 + 안내 밴드 1줄.
+        현재 <code>OwnerProfileDialog(forced = !OwnerProfile.isSet)</code>의 "닫을 수 없음" 규칙을 그대로 옮깁니다.</p></div>
+      <div class="note"><h4>미리보기</h4>
+        <p>오너는 잡담으로만 발화하므로 <b>회색 점선 잡담 말풍선</b>을 보여줍니다. 잡담 말풍선 색 자체는
+        <code>chatterBubble</code> 토큰으로 고정이라, 컬러 변경으로 바뀌는 것은 <b>아바타 배경과 이름 색</b>입니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ 03. 구현 지시 ═══════════ -->
+<section class="spec">
+  <div class="spec-head"><span class="no">03</span><h2>구현 지시 — 손댈 지점</h2></div>
+  <p class="spec-desc">현재 코드(main 기준) 기준의 반영 지점입니다. 모바일·데스크톱 모두 같은 규칙을 적용합니다.</p>
+
+  <table>
+    <tr><th>대상</th><th>현재</th><th>변경</th></tr>
+    <tr>
+      <td>최근 색 저장</td>
+      <td>없음</td>
+      <td><b>신규</b> <code>data/RecentColors.kt</code> — <code>OwnerProfile</code>과 같은 <code>SharedPreferences("pbp-settings")</code>에
+        <code>recentColors</code> 키로 ARGB CSV 저장. API: <code>list: List&lt;Long&gt;</code>(최신순), <code>load(context)</code>,
+        <code>add(context, argb)</code>(중복 제거 후 앞에 삽입 → <code>take(5)</code>). 상한은 <code>const val MAX = 5</code>로 한 곳에서 관리.
+        <code>OwnerProfile</code>처럼 <code>mutableStateOf</code>로 들고 있어야 적용 즉시 네 화면이 갱신됩니다.
+        데스크톱은 <code>AppConfig.recentColors: MutableList&lt;Long&gt;</code> 추가 + <code>snapshot()</code>에 포함</td>
+    </tr>
+    <tr>
+      <td>기록 시점</td>
+      <td><code>HexColorDialog(onPick)</code></td>
+      <td>커스텀 색 <b>적용</b> 콜백에서 <code>RecentColors.add()</code>. 호출부 3곳:
+        <code>ProfileEditScreen</code>(<code>customTarget</code> 분기 — 이름/말풍선 공용),
+        <code>OwnerProfileDialog</code>(<code>showCustomColor</code>),
+        <code>RoomSettingsScreen</code>(<code>showCustomTheme</code>). 프리셋 선택은 기록하지 않습니다(위 줄에 이미 있어 중복)</td>
+    </tr>
+    <tr>
+      <td>스와치 줄 부품</td>
+      <td><code>ProfileEditScreen.SwatchRow</code> (private)</td>
+      <td><b>공용으로 승격</b> <code>ui/common/ColorSwatchRow.kt</code> —
+        <code>ColorSwatchRow(presets, selected, onSelect, onCustom)</code> 안에서 프리셋 → 커스텀 → 구분선 → 최근 5개(빈 자리는 점선 원)를 그립니다.
+        스와치 <b>32dp → 26dp</b>, 간격 <b>8dp → 4dp</b>. 네 화면(오너·이름·말풍선·테마)이 이 부품 하나를 씁니다.
+        큰 글꼴·좁은 화면에서 넘칠 수 있으니 <code>Row</code> → <b>가로 스크롤</b>(<code>horizontalScroll</code>)로 감쌉니다</td>
+    </tr>
+    <tr>
+      <td>방 설정 테마 컬러</td>
+      <td><code>LazyVerticalGrid</code> 4열 + <code>ThemeCell</code>(라벨 있음)</td>
+      <td>그리드는 그대로(2행 유지). <b>그리드 바로 아래</b>에 <code>ColorSwatchRow</code>의 최근 색 부분만 재사용한
+        줄을 배치하고, 탭 시 <code>vm.setThemeColor()</code> 호출. 그리드 고정 높이(<code>150.dp</code>)는 변경 없음</td>
+    </tr>
+    <tr>
+      <td>방 설정 배경</td>
+      <td>프리셋 그라데이션 + 갤러리 이미지</td>
+      <td><b>변경 없음</b> — 색 하나로 지정하는 값이 아니라 최근 색 대상이 아닙니다(01-B 주석 참조)</td>
+    </tr>
+    <tr>
+      <td>오너 프로필 화면</td>
+      <td><code>RoomListScreen.OwnerProfileDialog</code> (AlertDialog)</td>
+      <td><b>신규</b> <code>ui/profile/OwnerProfileScreen.kt</code> 전체 화면 + <code>MainActivity</code> NavHost에
+        <code>"owner"</code> 라우트 추가. <code>RoomListScreen</code>의 <code>showOwner</code>는 <code>nav.navigate("owner")</code>로 교체.
+        미설정 강제는 <code>OwnerProfile.isSet</code> 검사 + <code>BackHandler</code>로 뒤로 가기 차단</td>
+    </tr>
+    <tr>
+      <td>데스크톱</td>
+      <td><code>Main.kt</code> <code>SwatchRow</code>(private) · 오너/프로필/방 설정 오버레이</td>
+      <td>데스크톱 <code>SwatchRow</code>에도 같은 순서로 최근 3개를 붙이고 <code>AppConfig.recentColors</code>를 읽습니다.
+        PC는 창이 넉넉해 오버레이 형태 유지</td>
+    </tr>
+  </table>
+
+  <div class="notes" style="margin-top:24px">
+    <div class="note"><h4>기존 동작은 그대로</h4>
+      <p>오너 프로필의 의미(잡담·참여 인사에만 사용, 프로필 스트립 미노출, 이 프로필로 발화 불가)와
+      저장 키(<code>ownerName</code>/<code>ownerColor</code>/<code>ownerImagePath</code>)는 변경하지 않습니다.
+      오너의 저장 키도 그대로입니다.</p></div>
+    <div class="note y"><h4>프리셋 축소 — 이름 색 · 말풍선 색만</h4>
+      <p><code>PbpPalette.namePresets</code> · <code>bubblePresets</code>를 <b>5종 → 앞 3종</b>으로 줄입니다(<code>take(3)</code> 아님, 목록 자체를 3개로).
+      오너 컬러는 <code>bubblePresets</code>를 그대로 쓰므로 함께 3종이 됩니다.
+      <b>테마 컬러 7종은 유지</b> — 이름이 붙은 큐레이션 프리셋(새벽 하늘·라일락…)이라 '예시 색'과 성격이 다릅니다.
+      테마도 줄이길 원하시면 말씀해 주세요.</p></div>
+  </div>
+</section>
+
+<footer>
+  PbP · 오너 프로필 설정 + 최근 사용한 색 목업 · 2026-07-30 · 라이트 모드 기준<br>
+  선행 문서: <code>PbP-design-spec.md</code>(색·규칙) · <code>trpg-app-mockup-v2.html</code>(스페이싱 토큰) · <code>mockup-profile-values.html</code>(캐릭터 편집 기준)
+</footer>
+
+</div>
+</body>
+</html>

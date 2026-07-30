@@ -289,7 +289,7 @@ internal fun MessageBlock(
                         Spacer(Modifier.width(8.dp))
                         Text(
                             label,
-                            fontSize = 11.5.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (Rules.isSuccess(message.diceOutcome)) Color(0xFF5E9EFF)
                             else Color(0xFFFF6B6B),
@@ -629,7 +629,7 @@ internal fun MessageAvatar(
                 contentScale = ContentScale.Crop,
             )
         } else {
-            Text(message.senderEmoji ?: "🙂", fontSize = 16.sp)
+            Text(message.senderEmoji ?: "🙂", fontSize = 15.sp)
         }
     }
 }
@@ -830,7 +830,7 @@ internal fun InputZone(
                                 if (input.isEmpty()) {
                                     Text(
                                         if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
-                                        fontSize = 12.sp, color = Tokens.InkDim,
+                                        fontSize = 11.sp, color = Tokens.InkDim,
                                     )
                                 }
                                 inner()

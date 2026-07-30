@@ -415,7 +415,7 @@ private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
             Text(title, fontSize = 13.sp, color = tokens.ink)
             Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
         }
-        Text("›", fontSize = 16.sp, color = tokens.inkDim)
+        Text("›", fontSize = 15.sp, color = tokens.inkDim)
     }
 }
 

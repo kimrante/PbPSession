@@ -259,7 +259,7 @@ internal fun InputZone(
                 placeholder = {
                     Text(
                         if (oocOn) "잡담으로 보내기…" else "**굵게** · |等臺《등대》 · 1d100",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp, // 입력줄 플레이스홀더 = 본문과 같은 단(스케일)
                         color = tokens.inkDim,
                     )
                 },

@@ -490,7 +490,7 @@ private fun SwatchRow(
                     .clickable { onSelect(color) },
                 contentAlignment = Alignment.Center,
             ) {
-                if (sel) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C))
+                if (sel) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C))
             }
         }
         // 커스텀 컬러
@@ -503,6 +503,6 @@ private fun SwatchRow(
                 )
                 .clickable(onClick = onCustom),
             contentAlignment = Alignment.Center,
-        ) { Text("＋", color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp) }
+        ) { Text("＋", color = Color.White, fontWeight = FontWeight.Black, fontSize = 15.sp) }
     }
 }

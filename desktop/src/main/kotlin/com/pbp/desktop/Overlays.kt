@@ -123,7 +123,7 @@ internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Com
                 .padding(22.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
             Spacer(Modifier.height(14.dp))
             content()
         }
@@ -140,7 +140,7 @@ internal fun OverlayField(value: String, onChange: (String) -> Unit, placeholder
             .background(Tokens.FieldBg)
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
             .padding(horizontal = 13.dp, vertical = 11.dp),
-        textStyle = TextStyle(color = Tokens.Ink, fontSize = 14.sp),
+        textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
         cursorBrush = SolidColor(Tokens.SignatureRing),
         singleLine = true,
         decorationBox = { inner ->
@@ -159,7 +159,7 @@ internal fun YellowButton(label: String, modifier: Modifier = Modifier, onClick:
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
     }
 }
 
@@ -172,7 +172,7 @@ internal fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: 
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
     }
 }
 
@@ -184,7 +184,7 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
         OverlayField(code, { code = it; failed = false }, "초대 코드 (6자리)")
         if (failed) {
             Spacer(Modifier.height(8.dp))
-            Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 12.sp, color = Tokens.Danger)
+            Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 11.sp, color = Tokens.Danger)
         }
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -201,9 +201,9 @@ internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
         OverlayField(name, { name = it }, "방 이름")
         Spacer(Modifier.height(8.dp))
         // 방 아이콘 폐지 — 배경으로만 구분. TRPG 룰은 크툴루의 부름 7판 고정 (모바일과 동일)
-        Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 12.sp, color = Tokens.Ink)
+        Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 11.sp, color = Tokens.Ink)
         Spacer(Modifier.height(4.dp))
-        Text("방을 만들면 마스터 권한과 초대 코드가 부여됩니다.", fontSize = 12.sp, color = Tokens.InkDim)
+        Text("방을 만들면 마스터 권한과 초대 코드가 부여됩니다.", fontSize = 11.sp, color = Tokens.InkDim)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             YellowButton("만들기", Modifier.weight(1f)) { onCreate(name) }
@@ -222,7 +222,7 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         Text(
             "상대가 모바일/PC의 '참여'에서 이 코드를 입력하면 같은 방에 연결됩니다.",
-            fontSize = 12.5.sp, color = Tokens.InkDim,
+            fontSize = 13.sp, color = Tokens.InkDim,
         )
         Spacer(Modifier.height(16.dp))
         YellowButton("닫기", Modifier.fillMaxWidth(), onDismiss)
@@ -336,7 +336,7 @@ internal fun SettingsOverlay(
         } else {
             Text(
                 "이 방의 모든 메시지가 삭제됩니다. 상대방의 로그도 함께 삭제되며, 되돌릴 수 없습니다.",
-                fontSize = 12.sp, color = Tokens.Danger,
+                fontSize = 11.sp, color = Tokens.Danger,
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -374,7 +374,7 @@ internal fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: 
                 .background(Tokens.FieldBg)
                 .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
                 .padding(horizontal = 13.dp, vertical = 11.dp),
-            textStyle = TextStyle(color = Tokens.Ink, fontSize = 14.sp),
+            textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
             cursorBrush = SolidColor(Tokens.SignatureRing),
             maxLines = 8,
         )

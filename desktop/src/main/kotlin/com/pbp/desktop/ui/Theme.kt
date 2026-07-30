@@ -28,6 +28,12 @@ import com.pbp.shared.PbpMarkup
  * trpg-app-mockup-pc-light.html). 색 값은 모바일 PbpLightColors와 동일.
  */
 object Tokens {
+    /*
+     * 글자 크기는 모바일과 같은 18/15/13/11/10sp 5단계를 리터럴로 쓴다 (리뷰 E).
+     * 본문 스케일 밖의 글리프는 아이콘·장식뿐: 인용 따옴표 24 · 초대 코드 34 ·
+     * 빈 상태 '🎲' 44. 이 목록 밖의 새 크기는 금지.
+     */
+
     val Bg = Color(0xFFF4F2EC)
     val Panel = Color(0xFFFFFFFF)
     val Panel2 = Color(0xFFF7F4EC)

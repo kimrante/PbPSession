@@ -180,7 +180,7 @@ internal fun ProfileOverlay(
                 if (bmp != null) {
                     Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else {
-                    Text(emoji.trim().ifEmpty { "🙂" }, fontSize = 17.sp)
+                    Text(emoji.trim().ifEmpty { "🙂" }, fontSize = 15.sp)
                 }
             }
             GhostButton(
@@ -307,7 +307,7 @@ internal fun SwatchRow(presets: List<Long>, selected: Long, onSelect: (Long) -> 
                     .background(Color(color))
                     .clickable { onSelect(color) },
                 contentAlignment = Alignment.Center,
-            ) { if (on) Text("✓", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
+            ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
         }
     }
 }
@@ -515,7 +515,7 @@ internal fun ProfileManagerOverlay(
             Column {
                 Text(
                     ownerName.ifBlank { "오너 프로필" },
-                    fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
                 )
                 Text("오너 · 잡담과 참여 인사에 사용", fontSize = 11.sp, color = Tokens.InkDim)
             }
@@ -552,7 +552,7 @@ internal fun ProfileManagerOverlay(
                 Column {
                     Text(
                         profile.name.ifBlank { "이름 없음" },
-                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
                     )
                     Text(
                         if (profile.isGm) "GM · 모든 방 공통" else "캐릭터 · 모든 방 공통",
@@ -592,7 +592,7 @@ internal fun OwnerProfileOverlay(
         Text(
             "잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다. " +
                 "세션 캐릭터 목록에는 나타나지 않습니다.",
-            fontSize = 12.sp, color = Tokens.InkDim,
+            fontSize = 11.sp, color = Tokens.InkDim,
         )
         Spacer(Modifier.height(12.dp))
         Row(

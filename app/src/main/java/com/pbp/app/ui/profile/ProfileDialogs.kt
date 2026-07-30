@@ -139,7 +139,7 @@ private fun ManagerRow(
         avatar()
         Spacer(Modifier.width(PbpDimens.gap3))
         Column {
-            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
             Text(sub, fontSize = 11.sp, color = tokens.inkDim)
         }
     }
@@ -176,7 +176,7 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                 Text(
                     "잡담과 참여 인사에 쓰이는 플레이어 본인 프로필입니다. " +
                         "세션 캐릭터 목록에는 나타나지 않습니다.",
-                    fontSize = 12.sp, color = tokens.inkDim,
+                    fontSize = 11.sp, color = tokens.inkDim,
                 )
                 Spacer(Modifier.height(PbpDimens.gap3))
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -79,7 +79,7 @@ fun ImageCropDialog(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (source == null) {
                     Box(Modifier.size(cropSizeDp), contentAlignment = Alignment.Center) {
-                        Text("이미지를 불러오는 중…", fontSize = 12.sp, color = tokens.inkDim)
+                        Text("이미지를 불러오는 중…", fontSize = 13.sp, color = tokens.inkDim)
                     }
                 } else {
                     // 커버 배율: zoom=1일 때 짧은 변이 프레임을 가득 채운다

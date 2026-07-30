@@ -298,7 +298,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                         }
                         IconButton(onClick = { nav.navigate(com.pbp.app.Routes.settings(roomId)) }) {
-                            Text("⚙", fontSize = 17.sp, color = tokens.ink)
+                            Text("⚙", fontSize = 18.sp, color = tokens.ink)
                         }
                     }
                     // 타이틀 묶음은 버튼 위에 겹쳐 화면 정중앙 — 좌우 인셋이 같아 중심이 흔들리지 않는다

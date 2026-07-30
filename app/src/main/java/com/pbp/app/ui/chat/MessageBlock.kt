@@ -113,6 +113,25 @@ internal fun sharesTimeLabel(current: Message, next: Message?): Boolean {
     return formatTime(current.createdAt) == formatTime(next.createdAt)
 }
 
+/**
+ * "읽음" 배지를 붙일 메시지 id — 상대가 읽은 내 메시지 중 **말풍선이 있는** 가장 최신 1건.
+ *
+ * 다이스·잡담·시스템과 인용 없는 GM 서술은 중앙 정렬 블록이라 시간·배지를 그리는 자리가
+ * 아예 없다. 그런 메시지를 고르면 배지가 어디에도 뜨지 않으므로 직전 말풍선으로 물러난다 (R3).
+ */
+internal fun readMarkTarget(messages: List<Message>, peerReadAt: Long?): Long? {
+    if (peerReadAt == null) return null
+    return messages.lastOrNull { it.createdAt <= peerReadAt && rendersBubble(it) }?.id
+}
+
+/** 이 메시지가 말풍선(=시간·읽음 배지를 담는 줄)으로 그려지는가 */
+private fun rendersBubble(message: Message): Boolean {
+    if (message.incoming || message.type != MessageType.TEXT || message.isOoc) return false
+    if (!message.senderIsGm) return true
+    // GM은 인용(대사)만 말풍선 — 서술 문단뿐이면 배지를 얹을 곳이 없다
+    return GmSpeech.split(message.body).any { it is GmSpeech.Part.Quote }
+}
+
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
 @Composable
 internal fun MessageBlock(
@@ -200,14 +219,16 @@ internal fun MessageBlock(
         message.senderIsGm && !message.isOoc -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
+            // 배지·시간은 마지막 인용 말풍선에만 — 인용이 여럿이면 중복으로 붙는다 (R4)
+            val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                parts.forEach { part ->
+                parts.forEachIndexed { index, part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
-                            showTime = showTime,
-                            showRead = showRead,
+                            showTime = showTime && index == lastQuote,
+                            showRead = showRead && index == lastQuote,
                             overrideBody = part.text,
                             overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
@@ -344,9 +365,12 @@ internal fun BubbleRow(
         Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
-                if (showTime) {
+                // 시간이 접힌 줄이어도 배지는 남긴다 — 상대가 연속 발화의 중간까지만
+                // 읽었을 때 표시가 통째로 사라지지 않도록 (R3)
+                if (showTime || showRead) {
                     TimeStamp(
-                        message, themeColor, alignEnd = true, showRead = showRead,
+                        message, themeColor, alignEnd = true,
+                        showTime = showTime, showRead = showRead,
                         modifier = Modifier.align(Alignment.Bottom),
                     )
                 }
@@ -494,6 +518,8 @@ internal fun TimeStamp(
     themeColor: Color,
     alignEnd: Boolean,
     modifier: Modifier = Modifier,
+    /** false면 시각·수정됨을 감춘다 (동일 시각 접힘) — 읽음 배지는 별개다 */
+    showTime: Boolean = true,
     /** 상대(모바일)가 읽었음 — 시간 위에 작게 */
     showRead: Boolean = false,
 ) {
@@ -502,9 +528,11 @@ internal fun TimeStamp(
         if (showRead) {
             Text("읽음", fontSize = 9.sp, color = tokens.inkDim)
         }
-        if (message.editedAt != null) {
-            Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+        if (showTime) {
+            if (message.editedAt != null) {
+                Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+            }
+            Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
         }
-        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
     }
 }

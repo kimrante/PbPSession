@@ -203,11 +203,14 @@ internal fun ChatPane(
                     items(messages.size, key = { messages[it].docId }) { index ->
                         val message = messages[index]
                         val grouped = isContinuation(messages.getOrNull(index - 1), message)
+                        // 목록은 오름차순이라 "다음" 메시지는 index + 1 (모바일과 동일 규칙)
+                        val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
                         Box(
                             Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
                         ) {
                             MessageBlock(
                                 message, myUid, room, avatarCache, firestore, grouped,
+                                showTime = showTime,
                                 onLongPress = onMessageLongPress,
                             )
                         }

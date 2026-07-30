@@ -23,7 +23,7 @@ com.pbp.app
 ├── data/                  Room DB — 엔티티·DAO·마이그레이션·리포지토리
 ├── dice/                  다이스봇 파서·굴림 (supportedSides = [6,10,20,100] + d66)
 ├── text/                  텍스트 엔진 (순수 Kotlin, JVM 테스트)
-│   ├── PbpMarkup.kt       **굵게**·*기울임*·~~취소선~~·|等臺《등대》 루비 파서
+│   ├── PbpMarkup.kt       **굵게**·*기울임*·~~취소선~~·(등대)[等臺] 루비 파서
 │   └── GmSpeech.kt        GM 발화에서 " " 인용만 말풍선으로 분리
 ├── sync/                  Firestore 2인 동기화 (수정/삭제 전파 포함)
 ├── export/                HTML 로그 내보내기 (형태 보존, 종이 톤)

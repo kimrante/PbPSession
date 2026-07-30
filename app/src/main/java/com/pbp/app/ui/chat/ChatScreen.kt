@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,7 +86,9 @@ import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,12 +123,18 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * 상대가 어디까지 읽었는지 — 화면이 열려 있는 동안만 구독한다.
+     * 상대가 어디까지 읽었는지 — 화면이 보이는 동안만 구독한다.
      * 상대가 데스크톱이거나 로컬 전용 방이면 null이라 "읽음"을 표시하지 않는다.
+     *
+     * remoteId만 뽑아 distinctUntilChanged로 거르는 이유(R1): room 엔티티에는 로컬
+     * lastReadAt이 들어 있어 markRead마다 새 값이 방출된다. 엔티티째로 flatMapLatest에
+     * 넣으면 메시지 1건마다 Firestore 리스너가 해제·재등록된다.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val peerReadAt = room
-        .flatMapLatest { repo.observePeerReadAt(it?.remoteId) }
+        .map { it?.remoteId }
+        .distinctUntilChanged()
+        .flatMapLatest { repo.observePeerReadAt(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
@@ -182,7 +191,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val messages by vm.messages.collectAsState()
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
-    val peerReadAt by vm.peerReadAt.collectAsState()
+    // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
+    val peerReadAt by vm.peerReadAt.collectAsStateWithLifecycle()
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
@@ -328,9 +338,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 // ── 메시지 목록
                 val reversed = messages.asReversed()
                 // "읽음"은 상대가 읽은 내 메시지 중 가장 최신 1건에만 붙인다
-                val readMarkId = peerReadAt?.let { readAt ->
-                    messages.lastOrNull { !it.incoming && it.createdAt <= readAt }?.id
-                }
+                val readMarkId = remember(messages, peerReadAt) { readMarkTarget(messages, peerReadAt) }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),

@@ -4,7 +4,10 @@
 디자인 기준 3종 — ① `Tokens.kt`/목업 v2 0장 토큰(4dp 그리드 6단계 여백·반경 4단계·
 타이포 5단계), ② CLAUDE.md §0(센터 정렬 / 상하 대칭 패딩 / 동류 컴포넌트 동일 스페이싱),
 ③ `PbP-design-spec.md`(라이트 모드 기준, 옐로 텍스트→signatureInk, 파괴 동작→danger) —
-에 대조해 전수 감사했다. **이 문서는 점검 보고서 + 수정 지시서이며, 코드는 아직 수정하지 않았다.**
+에 대조해 전수 감사했다. **적용 현황(2026-07-30): P1~P4는 코드에 반영·푸시됨**
+(P5 접근성·품질 제안은 별도 판단 대상으로 보류). 신규 토큰: `rTail`(꼬리 4) ·
+`avatarBar`(32) · `avatarProfile`(92) · 데스크톱 `gap1~6`/`rCell·rCard·rSheet·rTail`/
+`touchTarget`/`OnSignature`/`StatBlue`, `themePresets`는 `:shared Palette`로 이관.
 
 총평: 색 팔레트 자체는 양 플랫폼 완전 일치하고 토큰 체계도 건실하다. 문제는
 값이 아니라 **토큰이 있는데 안 쓰는 하드코딩**, **라이트 모드에서 파탄 나는

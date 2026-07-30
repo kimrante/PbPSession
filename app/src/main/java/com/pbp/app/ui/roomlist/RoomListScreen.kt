@@ -146,8 +146,8 @@ fun RoomListScreen(nav: NavController) {
             FloatingActionButton(
                 onClick = { showCreate = true },
                 containerColor = tokens.signature,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.rotate(-4f),
+                shape = RoundedCornerShape(PbpDimens.rCard),
+                modifier = Modifier.rotate(-4f), // -4° 포스트잇 모티프 — 브랜드 예외 (가이드 5장)
             ) { Text("＋", fontSize = 24.sp, color = Pbp.colors.onSignature) }
         },
     ) { padding ->
@@ -404,10 +404,12 @@ private fun RoomCard(
                     )
                 }
             }
+            // 테마 점 — 좌표 하드코딩 대신 우하단 정렬 + 3dp 돌출 (목업 mockup-home-header)
             Box(
                 Modifier
+                    .align(Alignment.BottomEnd)
                     .size(14.dp)
-                    .offset(x = 38.dp, y = 37.dp)
+                    .offset(x = 3.dp, y = 3.dp)
                     .border(3.dp, tokens.bg, CircleShape)
                     .clip(CircleShape)
                     .background(Color(room.themeColor))

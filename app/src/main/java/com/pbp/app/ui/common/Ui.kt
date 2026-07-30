@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,7 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -56,11 +58,11 @@ import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -87,7 +89,8 @@ fun Avatar(
     val ring = if (ringColor != null) {
         Modifier.border(2.dp, ringColor, CircleShape)
     } else {
-        Modifier.border(1.5.dp, Color.White.copy(alpha = .22f), CircleShape)
+        // 기본 링은 line 토큰 — 흰색 고정은 라이트 모드에서 의미가 없다 (감사 P1-2)
+        Modifier.border(1.5.dp, Pbp.colors.line, CircleShape)
     }
     Box(
         modifier = Modifier
@@ -189,8 +192,8 @@ fun MarkupText(
     // buildMarkup은 컴포저블이 아니라 토큰을 직접 못 읽는다 — 여기서 넘긴다
     val valueColor = Pbp.colors.statBlue
     // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight, lineHeight, valueColor) {
-        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight, lineHeight, valueColor)
+    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight, valueColor) {
+        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight, valueColor)
     }
     Text(
         annotated,
@@ -220,18 +223,10 @@ private fun buildMarkup(
     rubyColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
-    lineHeight: TextUnit,
     /** 캐릭터 값 치환 강조색 — 컴포저블이 아니라 호출부에서 토큰을 받는다 */
     valueColor: Color,
 ): Pair<androidx.compose.ui.text.AnnotatedString, Map<String, InlineTextContent>> {
     val nodes = PbpMarkup.parse(text)
-    // 루비 상자는 줄 높이를 넘지 않아야 한다 — 넘으면 그 줄만 벌어져 문단이 어긋난다.
-    // 줄 높이가 지정돼 있으면 그 값에 맞추고, 없으면 안전한 기본값.
-    val lineEm = if (lineHeight.isSpecified && fontSize.value > 0f) {
-        (lineHeight.value / fontSize.value).coerceAtLeast(MIN_RUBY_BOX_EM)
-    } else {
-        MIN_RUBY_BOX_EM
-    }
     val inline = mutableMapOf<String, InlineTextContent>()
     val annotated = buildAnnotatedString {
         nodes.forEachIndexed { index, node ->
@@ -260,35 +255,13 @@ private fun buildMarkup(
                     val width = maxOf(textUnits(node.base), textUnits(node.ruby) * 0.46f) + 0.12f
                     appendInlineContent(id, node.base)
                     inline[id] = InlineTextContent(
-                        // 줄 높이 안에 들어가는 상자 — 루비가 있는 줄만 벌어지지 않는다
-                        Placeholder(width.em, lineEm.em, PlaceholderVerticalAlign.Center)
+                        // 상자 밑변 = 바깥 텍스트의 베이스라인. 높이는 어센트보다 작게 —
+                        // 줄 메트릭을 건드리지 않아 루비가 있는 줄만 벌어지는 일이 없다.
+                        // (Center 정렬은 상자를 줄 상자가 아니라 폰트 메트릭 중앙에 앉히므로
+                        // 상자가 글자 높이보다 크면 그 줄이 벌어지고 베이스라인도 어긋난다.)
+                        Placeholder(width.em, RUBY_BOX_EM.em, PlaceholderVerticalAlign.AboveBaseline)
                     ) {
-                        // 본문은 아래쪽 기준, 독음은 그 위 남는 공간에
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Bottom,
-                            modifier = Modifier.fillMaxHeight(),
-                        ) {
-                            Text(
-                                node.ruby,
-                                fontSize = fontSize * RUBY_SCALE,
-                                lineHeight = fontSize * (RUBY_SCALE + 0.04f),
-                                color = rubyColor,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                            Text(
-                                node.base,
-                                fontSize = fontSize,
-                                lineHeight = fontSize * 1.0f,
-                                color = color,
-                                fontFamily = fontFamily,
-                                fontWeight = fontWeight,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                        }
+                        RubyStack(node.base, node.ruby, fontSize, color, rubyColor, fontFamily, fontWeight)
                     }
                 }
             }
@@ -297,12 +270,66 @@ private fun buildMarkup(
     return annotated to inline
 }
 
-/** 대략적 글자 폭(em) 추정 — CJK/한글 1em, 그 외 0.55em */
+/**
+ * 루비 스택 — 본문 텍스트의 베이스라인을 인라인 상자 밑변(= 바깥 텍스트의 베이스라인)에
+ * 정확히 맞추고, 독음은 본문 글리프 위 줄 간격 여백으로 넘겨 그린다. 배치가 실측
+ * 베이스라인 기준이라 사용자 지정 서체처럼 메트릭이 다른 폰트에서도 어긋나지 않는다.
+ */
+@Composable
+private fun RubyStack(
+    base: String,
+    ruby: String,
+    fontSize: TextUnit,
+    color: Color,
+    rubyColor: Color,
+    fontFamily: FontFamily?,
+    fontWeight: FontWeight?,
+) {
+    // 위아래 폰트 여백 제거 — 글리프 상단 ≈ 상자 상단이 되어 독음 위치가 정확해진다
+    val tight = androidx.compose.ui.text.TextStyle(
+        platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+    )
+    Layout(content = {
+        Text(
+            base,
+            fontSize = fontSize,
+            lineHeight = fontSize,
+            color = color,
+            fontFamily = fontFamily,
+            fontWeight = fontWeight,
+            maxLines = 1,
+            softWrap = false,
+            style = tight,
+        )
+        Text(
+            ruby,
+            fontSize = fontSize * RUBY_SCALE,
+            lineHeight = fontSize * RUBY_SCALE,
+            color = rubyColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            style = tight,
+        )
+    }) { measurables, constraints ->
+        // 디센더·독음이 상자 밖으로 넘칠 수 있으므로 무제한으로 측정한다
+        val basePl = measurables[0].measure(Constraints())
+        val rubyPl = measurables[1].measure(Constraints())
+        val fb = basePl[FirstBaseline]
+        val baseline = if (fb != AlignmentLine.Unspecified) fb else basePl.height
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            val baseY = constraints.maxHeight - baseline // 베이스라인을 상자 밑변에
+            basePl.place((constraints.maxWidth - basePl.width) / 2, baseY)
+            rubyPl.place((constraints.maxWidth - rubyPl.width) / 2, baseY - rubyPl.height)
+        }
+    }
+}
+
 /** 독음 글자 크기 = 본문의 42% */
 private const val RUBY_SCALE = 0.42f
 
-/** 줄 높이 지정이 없을 때 쓰는 루비 상자 높이(본문 기준 배수) */
-private const val MIN_RUBY_BOX_EM = 1.45f
+/** 루비 인라인 상자 높이(em) — 본문 어센트보다 작아야 줄 메트릭에 영향이 없다 */
+private const val RUBY_BOX_EM = 0.8f
 
 private fun textUnits(text: String): Float =
     text.sumOf { ch -> if (ch.code >= 0x1100) 1.0 else 0.55 }.toFloat()

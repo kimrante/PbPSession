@@ -281,7 +281,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     Row(
                         Modifier
                             .fillMaxSize()
-                            .padding(horizontal = PbpDimens.sp2),
+                            .padding(horizontal = PbpDimens.gap2),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(onClick = { nav.popBackStack() }) {
@@ -320,7 +320,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.height(PbpDimens.sp1))
+                        Spacer(Modifier.height(PbpDimens.gap1))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             // GM/PL · 참여 인원 — 방 테마 컬러 점을 둘 사이 구분점으로 쓴다
                             Text(
@@ -331,14 +331,14 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                 color = tokens.inkSub,
                             )
                             memberCount?.let { count ->
-                                Spacer(Modifier.width(PbpDimens.sp1))
+                                Spacer(Modifier.width(PbpDimens.gap1))
                                 Box(
                                     Modifier
                                         .size(6.dp)
                                         .clip(CircleShape)
                                         .background(themeColor)
                                 )
-                                Spacer(Modifier.width(PbpDimens.sp1))
+                                Spacer(Modifier.width(PbpDimens.gap1))
                                 Text(
                                     "${count}명 참여 중",
                                     fontSize = 11.sp,
@@ -357,13 +357,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     reverseLayout = true,
-                    contentPadding = PaddingValues(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
+                    contentPadding = PaddingValues(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
                 ) {
                     items(reversed.size, key = { reversed[it].id }) { revIdx ->
                         val message = reversed[revIdx]
                         // 같은 인물의 연속 메시지는 아바타·이름을 생략하고 간격을 좁힌다
                         val grouped = isContinuation(reversed.getOrNull(revIdx + 1), message)
-                        Box(Modifier.padding(top = if (grouped) PbpDimens.sp1 else PbpDimens.sp3)) {
+                        Box(Modifier.padding(top = if (grouped) PbpDimens.gap1 else PbpDimens.gap3)) {
                             MessageBlock(
                                 message = message,
                                 grouped = grouped,
@@ -376,7 +376,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     if (messages.size < totalCount) {
                         item(key = "load-older") {
                             Box(
-                                Modifier.fillMaxWidth().padding(top = PbpDimens.sp3),
+                                Modifier.fillMaxWidth().padding(top = PbpDimens.gap3),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(

@@ -121,7 +121,7 @@ fun ImageCropDialog(
                             }
                         }
                     }
-                    Spacer(Modifier.height(PbpDimens.sp2))
+                    Spacer(Modifier.height(PbpDimens.gap2))
                     Text(
                         "드래그로 이동 · 두 손가락으로 확대/축소",
                         fontSize = 11.sp,

@@ -125,11 +125,11 @@ internal fun InputZone(
         Modifier
             .fillMaxWidth()
             .background(if (tokens.isDark) Color(0xE0090C11) else tokens.panel.copy(alpha = .93f))
-            .padding(start = PbpDimens.sp4, end = PbpDimens.sp4, top = PbpDimens.sp2, bottom = PbpDimens.sp3),
+            .padding(start = PbpDimens.gap4, end = PbpDimens.gap4, top = PbpDimens.gap2, bottom = PbpDimens.gap3),
     ) {
         // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
+            horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
             verticalAlignment = Alignment.Top,
         ) {
             items(profiles, key = { it.id }) { profile ->
@@ -170,9 +170,9 @@ internal fun InputZone(
                 }
             }
         }
-        Spacer(Modifier.height(PbpDimens.sp2))
+        Spacer(Modifier.height(PbpDimens.gap2))
         if (suggestions.isNotEmpty()) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 items(suggestions, key = { it }) { name ->
                     Text(
                         "$name 판정",
@@ -189,13 +189,13 @@ internal fun InputZone(
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }
-                            .padding(horizontal = PbpDimens.sp3, vertical = 5.dp),
+                            .padding(horizontal = PbpDimens.gap3, vertical = 5.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(PbpDimens.sp2))
+            Spacer(Modifier.height(PbpDimens.gap2))
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
             // 잡담 토글
             Row(
                 Modifier

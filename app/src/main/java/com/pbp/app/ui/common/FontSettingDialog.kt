@@ -45,7 +45,7 @@ fun FontSettingDialog(onDismiss: () -> Unit) {
                             .combinedClickable(onClick = {
                                 com.pbp.app.ui.theme.AppFonts.set(context, value)
                             })
-                            .padding(PbpDimens.sp3),
+                            .padding(PbpDimens.gap3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -53,7 +53,7 @@ fun FontSettingDialog(onDismiss: () -> Unit) {
                             color = if (selected) tokens.signature else tokens.inkDim,
                             fontSize = 13.sp,
                         )
-                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Spacer(Modifier.width(PbpDimens.gap2))
                         Text(
                             label,
                             fontSize = 13.sp,

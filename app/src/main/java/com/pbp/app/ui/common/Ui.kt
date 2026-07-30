@@ -531,7 +531,7 @@ private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCell))
             .clickable(onClick = onClick)
-            .padding(PbpDimens.sp3),
+            .padding(PbpDimens.gap3),
     ) {
         Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
         Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)

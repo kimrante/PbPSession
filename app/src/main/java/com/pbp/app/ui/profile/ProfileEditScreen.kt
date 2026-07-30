@@ -176,7 +176,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Modifier
                     .fillMaxWidth()
                     .height(PbpDimens.appBarHeight)
-                    .padding(horizontal = PbpDimens.sp2),
+                    .padding(horizontal = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { nav.popBackStack() }) {
@@ -200,7 +200,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 nav.popBackStack()
                             }
                         }
-                        .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp2),
+                        .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
                 ) {
                     Text("저장", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Pbp.colors.onSignature)
                 }
@@ -211,11 +211,11 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     .fillMaxSize()
                     .imePadding() // 키보드가 필드를 가리지 않도록
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = PbpDimens.sp4),
+                    .padding(horizontal = PbpDimens.gap4),
             ) {
                 // 사진
                 Column(
-                    Modifier.fillMaxWidth().padding(vertical = PbpDimens.sp3),
+                    Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box {
@@ -242,7 +242,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             )
                         }
                     }
-                    Spacer(Modifier.height(PbpDimens.sp2))
+                    Spacer(Modifier.height(PbpDimens.gap2))
                     OutlinedButton(onClick = {
                         picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }) { Text("이미지 선택", fontSize = 11.sp) }
@@ -260,7 +260,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
-                Spacer(Modifier.height(PbpDimens.sp5))
+                Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("이름 색")
                 SwatchRow(
@@ -269,7 +269,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     onSelect = { nameColor = it },
                     onCustom = { customTarget = "name" },
                 )
-                Spacer(Modifier.height(PbpDimens.sp5))
+                Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("말풍선 색")
                 SwatchRow(
@@ -278,7 +278,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     onSelect = { bubbleColor = it },
                     onCustom = { customTarget = "bubble" },
                 )
-                Spacer(Modifier.height(PbpDimens.sp5))
+                Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("캐릭터 값")
                 // 값 목록은 패널 카드로 묶는다 (목업 mockup-profile-values)
@@ -288,12 +288,12 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         .clip(RoundedCornerShape(PbpDimens.rCard))
                         .background(tokens.panel)
                         .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
-                        .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp2),
+                        .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
                 ) {
                     stats.forEach { statEntry ->
                         val (statName, statValue) = statEntry
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = PbpDimens.sp3),
+                            Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -304,7 +304,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 modifier = Modifier.weight(1f),
                             )
                             Text(statValue, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
-                            Spacer(Modifier.width(PbpDimens.sp2))
+                            Spacer(Modifier.width(PbpDimens.gap2))
                             Box(
                                 Modifier
                                     .size(24.dp)
@@ -318,7 +318,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         HorizontalDivider(thickness = 1.dp, color = tokens.line)
                     }
                     Row(
-                        Modifier.padding(vertical = PbpDimens.sp2),
+                        Modifier.padding(vertical = PbpDimens.gap2),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         OutlinedTextField(
@@ -328,7 +328,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
                             singleLine = true,
                         )
-                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Spacer(Modifier.width(PbpDimens.gap2))
                         OutlinedTextField(
                             value = newStatValue,
                             onValueChange = { newStatValue = it },
@@ -336,7 +336,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             label = { Text("값 (예: 50)", fontSize = 10.sp) },
                             singleLine = true,
                         )
-                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Spacer(Modifier.width(PbpDimens.gap2))
                         TextButton(
                             onClick = {
                                 val statName = newStatName.trim()
@@ -358,9 +358,9 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     "메시지에 {값이름}을 쓰면 값으로 바뀌고, 입력창에 값 이름을 입력하면 판정 매크로가 추천됩니다",
                     fontSize = 10.sp,
                     color = tokens.inkDim,
-                    modifier = Modifier.padding(top = PbpDimens.sp2),
+                    modifier = Modifier.padding(top = PbpDimens.gap2),
                 )
-                Spacer(Modifier.height(PbpDimens.sp5))
+                Spacer(Modifier.height(PbpDimens.gap5))
 
                 // 실시간 미리보기 — 방 배경 위 조합 확인 (스펙 3장 화면3)
                 Column(
@@ -369,10 +369,10 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         .clip(RoundedCornerShape(PbpDimens.rCard))
                         .background(Brush.linearGradient(listOf(Color(0xFF233248), Color(0xFF141D2B))))
                         .border(1.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(PbpDimens.rCard))
-                        .padding(PbpDimens.sp4),
+                        .padding(PbpDimens.gap4),
                 ) {
                     Text("미 리 보 기 — 방 배경 위", fontSize = 9.sp, letterSpacing = 3.sp, color = tokens.inkDim)
-                    Spacer(Modifier.height(PbpDimens.sp3))
+                    Spacer(Modifier.height(PbpDimens.gap3))
                     Row(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
@@ -385,7 +385,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 fontWeight = FontWeight.Bold,
                                 color = Color(nameColor ?: PbpPalette.namePresets.first()),
                             )
-                            Spacer(Modifier.height(PbpDimens.sp1))
+                            Spacer(Modifier.height(PbpDimens.gap1))
                             Box(
                                 Modifier
                                     .clip(
@@ -397,12 +397,12 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                         )
                                     )
                                     .background(Color(bubbleColor ?: PbpPalette.bubblePresets.first()))
-                                    .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2),
+                                    .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                             ) {
                                 Text("이 색으로 말하게 됩니다.", fontSize = 13.sp, color = Color(0xFF10151C))
                             }
                         }
-                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Spacer(Modifier.width(PbpDimens.gap2))
                         if (pickedPath != null) {
                             Box(Modifier.size(34.dp).clip(CircleShape)) {
                                 AsyncImage(
@@ -420,13 +420,13 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
 
                 // 삭제 (GM 프로필은 방과 운명을 같이하므로 삭제 불가)
                 if (existing != null && existing?.isGm != true) {
-                    Spacer(Modifier.height(PbpDimens.sp4))
+                    Spacer(Modifier.height(PbpDimens.gap4))
                     TextButton(
                         onClick = { vm.delete(existing!!) { nav.popBackStack() } },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) { Text("캐릭터 삭제", color = tokens.signatureInk, fontSize = 13.sp) }
                 }
-                Spacer(Modifier.height(PbpDimens.sp6))
+                Spacer(Modifier.height(PbpDimens.gap6))
             }
         }
     }
@@ -464,7 +464,7 @@ private fun FieldLabel(text: String) {
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.sp,
         color = Pbp.colors.inkDim,
-        modifier = Modifier.padding(bottom = PbpDimens.sp2),
+        modifier = Modifier.padding(bottom = PbpDimens.gap2),
     )
 }
 
@@ -475,7 +475,7 @@ private fun SwatchRow(
     onSelect: (Long) -> Unit,
     onCustom: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
         presets.forEach { color ->
             val sel = selected == color
             Box(

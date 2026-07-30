@@ -154,13 +154,13 @@ fun RoomListScreen(nav: NavController) {
             // 버튼은 우측 끝 (목업 mockup-home-header)
             Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
                 Row(
-                    Modifier.fillMaxSize().padding(horizontal = PbpDimens.sp4),
+                    Modifier.fillMaxSize().padding(horizontal = PbpDimens.gap4),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Spacer(Modifier.weight(1f))
                     CompactBarButton("Aa") { showFont = true }
                     CompactBarButton("참여") { showJoin = true }
-                    Spacer(Modifier.width(PbpDimens.sp1))
+                    Spacer(Modifier.width(PbpDimens.gap1))
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                     com.pbp.app.ui.common.OwnerAvatar(
                         OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 30.dp,
@@ -178,7 +178,7 @@ fun RoomListScreen(nav: NavController) {
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                        horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
                     ) {
                         // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
                         Box(
@@ -205,7 +205,7 @@ fun RoomListScreen(nav: NavController) {
                             color = tokens.titleAccent,
                         )
                     }
-                    Spacer(Modifier.height(PbpDimens.sp1))
+                    Spacer(Modifier.height(PbpDimens.gap1))
                     Text(
                         "진행 중인 세션 ${rooms.size}",
                         fontSize = 11.sp,
@@ -228,9 +228,9 @@ fun RoomListScreen(nav: NavController) {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = PbpDimens.sp4, end = PbpDimens.sp4, bottom = 88.dp, // FAB 높이 + 여백×2
+                        start = PbpDimens.gap4, end = PbpDimens.gap4, bottom = 88.dp, // FAB 높이 + 여백×2
                     ),
-                    verticalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
+                    verticalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
                 ) {
                     items(rooms, key = { it.id }) { room ->
                         RoomCard(
@@ -350,7 +350,7 @@ private fun CompactBarButton(label: String, onClick: () -> Unit) {
             .height(PbpDimens.touchTarget)
             .clip(RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = PbpDimens.sp2),
+            .padding(horizontal = PbpDimens.gap2),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = Pbp.colors.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -374,7 +374,7 @@ private fun RoomCard(
             .background(if (tokens.isDark) Color(0x09FFFFFF) else tokens.panel)
             .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
+            .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // 썸네일: 방 배경(프리셋 그라데이션 또는 갤러리 이미지 크롭) + 테마 컬러 점
@@ -414,7 +414,7 @@ private fun RoomCard(
                     .background(Color(room.themeColor))
             )
         }
-        Spacer(Modifier.width(PbpDimens.sp3))
+        Spacer(Modifier.width(PbpDimens.gap3))
         Column(Modifier.weight(1f)) {
             Text(room.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
             Text(
@@ -473,7 +473,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
         onDismissRequest = onDismiss,
         title = { Text("새 세션") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -488,7 +488,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
                             .clip(RoundedCornerShape(PbpDimens.rCell))
                             .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCell))
                             .combinedClickable(onClick = { ruleMenuOpen = true })
-                            .padding(PbpDimens.sp3),
+                            .padding(PbpDimens.gap3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(Modifier.weight(1f)) {
@@ -533,7 +533,7 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String, () -> Unit) -
         onDismissRequest = onDismiss,
         title = { Text("초대 코드로 참여") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },

@@ -106,7 +106,7 @@ fun ProfileManagerDialog(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(PbpDimens.rCell))
                         .combinedClickable(onClick = onAdd)
-                        .padding(PbpDimens.sp3),
+                        .padding(PbpDimens.gap3),
                 ) {
                     Text(
                         "＋ 프로필 추가하기",
@@ -133,11 +133,11 @@ private fun ManagerRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCell))
             .combinedClickable(onClick = onClick)
-            .padding(PbpDimens.sp2),
+            .padding(PbpDimens.gap2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         avatar()
-        Spacer(Modifier.width(PbpDimens.sp3))
+        Spacer(Modifier.width(PbpDimens.gap3))
         Column {
             Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
             Text(sub, fontSize = 11.sp, color = tokens.inkDim)
@@ -178,10 +178,10 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                         "세션 캐릭터 목록에는 나타나지 않습니다.",
                     fontSize = 12.sp, color = tokens.inkDim,
                 )
-                Spacer(Modifier.height(PbpDimens.sp3))
+                Spacer(Modifier.height(PbpDimens.gap3))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     com.pbp.app.ui.common.OwnerAvatar(name, color, imagePath, 56.dp)
-                    Spacer(Modifier.width(PbpDimens.sp3))
+                    Spacer(Modifier.width(PbpDimens.gap3))
                     TextButton(onClick = {
                         imagePicker.launch(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -191,17 +191,17 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                         TextButton(onClick = { imagePath = null }) { Text("제거") }
                     }
                 }
-                Spacer(Modifier.height(PbpDimens.sp2))
+                Spacer(Modifier.height(PbpDimens.gap2))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("이름") },
                     singleLine = true,
                 )
-                Spacer(Modifier.height(PbpDimens.sp3))
+                Spacer(Modifier.height(PbpDimens.gap3))
                 Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkDim)
-                Spacer(Modifier.height(PbpDimens.sp2))
-                Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+                Spacer(Modifier.height(PbpDimens.gap2))
+                Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                     PbpPalette.bubblePresets.forEach { preset ->
                         Box(
                             Modifier

@@ -117,7 +117,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 .verticalScroll(rememberScrollState()),
         ) {
             Row(
-                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.sp2),
+                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { nav.popBackStack() }) {
@@ -135,9 +135,9 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             SectionTitle("테마 컬러")
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                modifier = Modifier.padding(horizontal = PbpDimens.sp4).height(150.dp),
-                horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
-                verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                modifier = Modifier.padding(horizontal = PbpDimens.gap4).height(150.dp),
+                horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
+                verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
                 userScrollEnabled = false,
             ) {
                 items(PbpPalette.themePresets) { (color, label) ->
@@ -175,10 +175,10 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier
-                    .padding(horizontal = PbpDimens.sp4)
+                    .padding(horizontal = PbpDimens.gap4)
                     .height((72 * bgRows + 8 * (bgRows - 1) + 2).dp),
-                horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
-                verticalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
+                verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
                 userScrollEnabled = false,
             ) {
                 items(PbpPalette.backgroundPresets.keys.toList()) { key ->
@@ -264,7 +264,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 title = "방 로그 초기화",
                 subtitle = "모든 메시지를 삭제합니다 · 상대방의 로그도 함께 삭제됩니다",
             ) { showResetConfirm = true }
-            Spacer(Modifier.height(PbpDimens.sp6))
+            Spacer(Modifier.height(PbpDimens.gap6))
         }
     }
 
@@ -323,7 +323,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(PbpDimens.sp2))
+                    Spacer(Modifier.height(PbpDimens.gap2))
                     Text(
                         "상대가 방 목록의 '참여'에서 이 코드를 입력하면 같은 방에 연결됩니다.",
                         fontSize = 13.sp,
@@ -370,7 +370,7 @@ private fun ThemeCell(
                 RoundedCornerShape(PbpDimens.rCell),
             )
             .clickable(onClick = onClick)
-            .padding(PbpDimens.sp2),
+            .padding(PbpDimens.gap2),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         swatch(
@@ -379,7 +379,7 @@ private fun ThemeCell(
                 .height(26.dp)
                 .clip(RoundedCornerShape(8.dp))
         )
-        Spacer(Modifier.height(PbpDimens.sp1))
+        Spacer(Modifier.height(PbpDimens.gap1))
         Text(
             label,
             fontSize = 10.sp,
@@ -397,7 +397,7 @@ private fun SectionTitle(text: String) {
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp,
         color = Pbp.colors.inkDim,
-        modifier = Modifier.padding(start = PbpDimens.sp4, top = PbpDimens.sp5, bottom = PbpDimens.sp2),
+        modifier = Modifier.padding(start = PbpDimens.gap4, top = PbpDimens.gap5, bottom = PbpDimens.gap2),
     )
 }
 
@@ -408,7 +408,7 @@ private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
+            .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {

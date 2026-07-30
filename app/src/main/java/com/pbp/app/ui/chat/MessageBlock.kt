@@ -160,7 +160,7 @@ internal fun MessageBlock(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
-                    Spacer(Modifier.width(PbpDimens.sp2))
+                    Spacer(Modifier.width(PbpDimens.gap2))
                     Text(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp,
@@ -171,7 +171,7 @@ internal fun MessageBlock(
                     // (CoC7 하향 판정은 대성공·대단한 성공·어려운 성공 단계까지)
                     com.pbp.shared.Rules.outcomeLabel(message.diceOutcome)?.let { label ->
                         val success = com.pbp.shared.Rules.isSuccess(message.diceOutcome)
-                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Spacer(Modifier.width(PbpDimens.gap2))
                         Text(
                             label,
                             fontSize = 11.sp,
@@ -212,7 +212,7 @@ internal fun MessageBlock(
                     themeColor = themeColor, onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp1)) {
+                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap1)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message,
@@ -260,7 +260,7 @@ internal fun NarrationBlock(
                     onClick = {},
                     onLongClick = { if (!message.incoming) onLongPress(message) },
                 )
-                .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
+                .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
         ) {
             // 서술은 문단 자체가 화면이 되도록 — 서술자·시간 등 메타 표기는 두지 않는다
             MarkupText(
@@ -318,7 +318,7 @@ internal fun BubbleRow(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
             if (mine) {
                 // 내 메시지: 시간은 말풍선 왼쪽
                 if (showTime) {
@@ -345,7 +345,7 @@ internal fun BubbleRow(
                         fontWeight = FontWeight.Bold,
                         color = nameColor,
                     )
-                    Spacer(Modifier.height(PbpDimens.sp1))
+                    Spacer(Modifier.height(PbpDimens.gap1))
                 }
                 val r = PbpDimens.rCard
                 val shape = if (mine) {
@@ -389,7 +389,7 @@ internal fun BubbleRow(
                         )
                     }
                 } else {
-                    Box(bubbleBase.padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2)) {
+                    Box(bubbleBase.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (message.isOoc) {
                                 Text(

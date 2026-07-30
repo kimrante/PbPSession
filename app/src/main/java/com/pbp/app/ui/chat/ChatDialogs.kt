@@ -120,7 +120,7 @@ internal fun MessageActionDialog(
                         .clip(bubbleShape)
                         .background(Color(message.senderBubbleColor ?: PbpPalette.bubblePresets.first()))
                         .border(2.dp, tokens.signature, bubbleShape)
-                        .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2),
+                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 ) {
                     Text(
                         message.body,
@@ -131,16 +131,16 @@ internal fun MessageActionDialog(
                     )
                 }
             }
-            Spacer(Modifier.height(PbpDimens.sp3))
+            Spacer(Modifier.height(PbpDimens.gap3))
             Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(PbpDimens.rSheet))
                     .background(tokens.panel)
-                    .padding(PbpDimens.sp4),
+                    .padding(PbpDimens.gap4),
             ) {
                 Text("메시지", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
-                Spacer(Modifier.height(PbpDimens.sp2))
+                Spacer(Modifier.height(PbpDimens.gap2))
                 MessageActionRow(
                     icon = "✏️",
                     tileColor = tokens.signature,
@@ -166,7 +166,7 @@ internal fun MessageActionDialog(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .clickable(onClick = onDismiss)
-                            .padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2),
+                            .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     )
                 }
             }
@@ -188,9 +188,9 @@ internal fun MessageActionRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCell))
             .clickable(onClick = onClick)
-            .padding(PbpDimens.sp3),
+            .padding(PbpDimens.gap3),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp3),
+        horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
     ) {
         Box(
             Modifier

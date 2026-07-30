@@ -209,7 +209,8 @@ td b{color:var(--ink)}
 <div class="dochead">
   <h1>대화 캡처 — 범위 선택 → 이미지 내보내기</h1>
   <p>특정 메시지부터 특정 메시지까지를 골라 한 장의 이미지로 합칩니다. 기존 <b>HTML 로그 내보내기(↓)</b>는 방 전체를 문서로 남기는 기능이라 그대로 두고,<br>
-  캡처는 <b>지금 이 대목만 잘라 공유</b>하는 별개 경로로 둡니다. 라이트 모드 기준 · 스페이싱은 4dp 그리드 6단계만 사용.</p>
+  캡처는 <b>지금 이 대목만 잘라 공유</b>하는 별개 경로로 둡니다. 라이트 모드 기준 · 스페이싱은 4dp 그리드 6단계만 사용.<br>
+  <b>구현 순서·지점은 <code>docs/capture-implementation.md</code>(작업 지시서)에 있습니다.</b></p>
 </div>
 
 <!-- ══════════ 01. 흐름 ══════════ -->
@@ -446,7 +447,7 @@ td b{color:var(--ink)}
             <div class="btn fill">저장</div>
           </div>
         </div>
-        <div class="toast">갤러리에 저장했습니다</div>
+        <div class="toast">이미지를 저장했습니다</div>
       </div></div>
       <div class="cap"><b>D · 미리보기 — 저장 전에 결과를 그대로 확인</b>
         <span>합쳐진 이미지를 실제 비율로 보여줍니다. <b>방 배경 포함</b> 토글 하나만 두고(끄면 종이 톤), 오른쪽에 공유·저장. 저장 후 토스트.</span></div>
@@ -536,9 +537,10 @@ td b{color:var(--ink)}
       <div class="note b"><h4>선택 도중 새 메시지가 오면</h4>
         <p>목록에는 그대로 쌓이지만 <b>자동 스크롤은 멈춥니다</b>(고르던 자리가 밀리지 않게). 새 메시지는 범위 밖이라 흐리게 보이고,
         끝점으로 탭해 담을 수 있습니다. 범위 안 메시지가 상대에 의해 삭제되면 그 건만 범위에서 빠지고 개수가 줄어듭니다.</p></div>
-      <div class="note r"><h4>PC(데스크톱)는 같은 규칙, 다른 손</h4>
-        <p>롱프레스가 없으므로 <b>우클릭 메뉴에 '캡처'</b>를 넣고, 모드 중에는 클릭으로 범위를 잡습니다.
-        <code>Shift+클릭</code>으로 끝점 지정, <code>Esc</code>로 모드 종료. 결과는 파일 저장 대화상자로 PNG를 씁니다.</p></div>
+      <div class="note r"><h4>PC(데스크톱)도 같은 손을 씁니다</h4>
+        <p>데스크톱 <code>ChatPane</code>은 이미 <b>길게 클릭</b>(<code>combinedClickable</code>)으로 액션을 띄우므로
+        진입 방식을 새로 만들지 않습니다. 모드 중에는 클릭으로 범위를 잡고 <code>Esc</code>로 종료,
+        결과는 기존 로그 내보내기와 같은 <code>java.awt.FileDialog</code>로 PNG를 씁니다.</p></div>
     </div>
   </div>
 </div>
@@ -598,9 +600,10 @@ td b{color:var(--ink)}
     <tr>
       <td>저장·공유</td>
       <td>HTML은 <code>CreateDocument("text/html")</code></td>
-      <td>저장은 <code>MediaStore.Images</code>(갤러리에 바로 보이도록, <code>Pictures/PbP/</code>),
-        공유는 <code>FileProvider</code> + <code>ACTION_SEND</code> <code>image/png</code>.
-        문서 프로바이더가 없을 때를 대비한 <code>runCatching</code> 처리는 기존 내보내기와 동일하게</td>
+      <td>저장은 기존 ↓ 내보내기와 같은 <code>CreateDocument("image/png")</code>(SAF — <b>권한 0</b>),
+        공유는 <code>FileProvider</code> + <code>ACTION_SEND</code>. 갤러리에 바로 띄우려면 <code>MediaStore</code>가 필요한데
+        <code>minSdk 26</code>이라 API 28 이하 권한 분기가 붙습니다 — 지시서의 열린 결정 참조.
+        문서 프로바이더가 없을 때의 <code>runCatching</code> 처리는 기존 내보내기와 동일하게</td>
     </tr>
     <tr>
       <td>배경 포함 토글</td>
@@ -618,8 +621,8 @@ td b{color:var(--ink)}
     </tr>
     <tr>
       <td>데스크톱</td>
-      <td><code>ChatPane</code> 우클릭 메뉴 없음</td>
-      <td>같은 규칙을 우클릭 메뉴 + <code>Shift+클릭</code> + <code>Esc</code>로 이식.
+      <td><code>ChatPane</code>이 이미 길게 클릭 → <code>onMessageLongPress</code></td>
+      <td>기존 <b>길게 클릭</b> 진입을 그대로 쓰고 <code>Esc</code> 종료만 추가.
         렌더는 <code>ImageComposeScene</code>으로 같은 <code>360dp</code> 폭에 그려
         <b>모바일과 결과 이미지가 동일</b>하게 맞춥니다. 저장은 파일 대화상자(PNG)</td>
     </tr>

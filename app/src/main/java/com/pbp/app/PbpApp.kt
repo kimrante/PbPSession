@@ -17,9 +17,18 @@ class PbpApp : Application() {
     val database by lazy { AppDatabase.build(this) }
     val syncManager by lazy { SyncManager(this, database) }
     val repository by lazy {
-        PbpRepository(database).also {
-            it.syncManager = syncManager
-            syncManager.repository = it
+        PbpRepository(database).also { repo ->
+            repo.syncManager = syncManager
+            // 참여 시 로컬 방 생성 능력만 넘긴다 — 상호 참조 대신 단방향 (리뷰 B6)
+            syncManager.createLocalRoom = { name, themeColor, backgroundKey, rule ->
+                repo.createRoom(
+                    name = name,
+                    isMaster = false, // 참여자 표시용 (설정 변경은 누구나 가능)
+                    themeColor = themeColor,
+                    backgroundKey = backgroundKey,
+                    rule = rule,
+                )
+            }
         }
     }
     private val notifier by lazy { MessageNotifier(this) }

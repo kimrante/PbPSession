@@ -226,7 +226,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     Box(
                         Modifier
                             .height(72.dp)
-                            .dashedCell(tokens.line)
+                            .outlinedCell(tokens.line)
                             .clickable {
                                 bgPicker.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -419,6 +419,6 @@ private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
     }
 }
 
-private fun Modifier.dashedCell(color: Color): Modifier = this
+private fun Modifier.outlinedCell(color: Color): Modifier = this
     .clip(RoundedCornerShape(PbpDimens.rCell))
     .border(1.5.dp, color, RoundedCornerShape(PbpDimens.rCell))

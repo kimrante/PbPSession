@@ -13,7 +13,6 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.pbp.app.R
 import com.pbp.app.data.AppDatabase
 import com.pbp.app.data.Message
-import com.pbp.app.data.PbpRepository
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -40,8 +39,14 @@ import com.pbp.shared.Protocol
  */
 class SyncManager(private val context: Context, private val db: AppDatabase) {
 
-    /** 참여(join) 시 방+GM 생성에 필요. PbpApp에서 주입한다. */
-    var repository: PbpRepository? = null
+    /**
+     * 참여(join) 시 로컬 방 생성 — Repository 전체가 아니라 이 한 가지 능력만 주입받는다.
+     * 과거에는 서로를 `var …? = null`로 물고 있어 두 클래스를 독립적으로 읽을 수 없었다 (리뷰 B6).
+     */
+    var createLocalRoom: (suspend (name: String, themeColor: Long, backgroundKey: String, rule: String) -> Long)? = null
+
+    /** 프로필 이미지 업로드·복원 (B5로 분리) */
+    private val avatars by lazy { AvatarStore(context) { firestore } }
 
     /** 상대 메시지 수신 시 호출(알림용, 두 번째 인자는 원격 방 ID). PbpApp에서 주입한다. */
     var onIncomingMessage: ((Message, String) -> Unit)? = null
@@ -253,7 +258,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             val batch = firestore.batch()
             val refs = chunk.mapNotNull { message ->
                 val avatarId = message.senderImagePath?.let { path ->
-                    runCatching { ensureAvatarUploaded(roomDoc.id, path) }.getOrNull()
+                    runCatching { avatars.ensureUploaded(roomDoc.id, path) }.getOrNull()
                 }
                 // 원자 선점 (L3) — 동시 전송 중인 메시지에 두 번째 문서를 만들지 않는다
                 val remoteId = resolveRemoteId(
@@ -300,7 +305,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }.getOrNull() ?: firestore.collection("rooms")
             .whereEqualTo("inviteCode", code).limit(1).get().await()
             .documents.firstOrNull() ?: return null
-        val repo = repository ?: return null
+        val create = createLocalRoom ?: return null
 
         // 코드가 달라도 같은 원격 방이면 기존 로컬 방을 재사용 (L2)
         db.roomDao().findByRemoteId(roomDoc.id)?.let { return it.id }
@@ -308,15 +313,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // 멤버 등록이 규칙상 메시지 읽기의 전제 — 리스너 attach보다 먼저
         ensureMembership(roomDoc.id)
 
-        val roomId = repo.createRoom(
-            name = roomDoc.getString("name") ?: "공유 캠페인",
-            icon = "", // 방 아이콘 폐지 — 배경 이미지로만 구분
-            isMaster = false, // 참여자 표시용 (설정 변경은 누구나 가능)
-            themeColor = roomDoc.getLong("themeColor")
-                ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_THEME_COLOR,
-            backgroundKey = roomDoc.getString("backgroundKey")
-                ?: com.pbp.app.ui.theme.PbpPalette.DEFAULT_BACKGROUND,
-            rule = roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
+        val roomId = create(
+            roomDoc.getString("name") ?: "공유 캠페인",
+            roomDoc.getLong("themeColor") ?: com.pbp.shared.Protocol.DEFAULT_THEME_COLOR,
+            roomDoc.getString("backgroundKey") ?: com.pbp.shared.Protocol.DEFAULT_BACKGROUND,
+            roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
         // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번)
@@ -389,7 +390,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     private suspend fun pushMessage(remoteRoomId: String, message: Message) {
         val avatarId = message.senderImagePath?.let { path ->
-            runCatching { ensureAvatarUploaded(remoteRoomId, path) }.getOrNull()
+            runCatching { avatars.ensureUploaded(remoteRoomId, path) }.getOrNull()
         }
         val collection = firestore.collection("rooms").document(remoteRoomId)
             .collection("messages")
@@ -558,7 +559,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
                 // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
                 val avatarPath = doc.getString("avatarId")?.let { avatarId ->
-                    runCatching { resolveAvatar(remoteRoomId, avatarId) }.getOrNull()
+                    runCatching { avatars.resolve(remoteRoomId, avatarId) }.getOrNull()
                 }
                 val message = SyncMapping.fromMap(doc.id, doc.data ?: emptyMap(), localRoomId)
                     .copy(senderImagePath = avatarPath)
@@ -759,107 +760,4 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             }
         }
     }
-
-    // ── 프로필 이미지 동기화 ──────────────────────────────
-    // Storage 없이 Firestore 문서에 축소 이미지(base64)를 내장한다.
-    //   rooms/{roomId}/avatars/{contentHash}: { data: base64(JPEG ≤256px) }
-    // 메시지 문서의 avatarId가 이 해시를 가리키고, 수신 측은 파일로 복원해 캐시한다.
-
-    private val uploadedAvatars: MutableSet<String> =
-        java.util.concurrent.ConcurrentHashMap.newKeySet<String>().also { set ->
-            // 완료 기록을 영속화해 프로세스 재시작 후 첫 전송마다 방당 1회
-            // 대형 문서(50-300KB)를 다시 쓰던 것 방지 (F3)
-            runCatching {
-                context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
-                    .getStringSet("uploadedAvatars", emptySet())
-                    ?.let(set::addAll)
-            }
-        }
-
-    private fun persistUploadedAvatars() {
-        runCatching {
-            context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
-                .edit().putStringSet("uploadedAvatars", uploadedAvatars.toSet()).apply()
-        }
-    }
-
-    /** 경로→축소 JPEG 캐시 (lastModified 기준) — 메시지마다 디코딩·해시 재계산 방지 */
-    private val avatarBytesCache =
-        java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ByteArray>>()
-
-    private fun avatarBytes(path: String): ByteArray? {
-        val file = File(path)
-        if (!file.exists()) return null
-        avatarBytesCache[path]?.let { (modified, bytes) ->
-            if (modified == file.lastModified()) return bytes
-        }
-        val bytes = downscaleToJpeg(path) ?: return null
-        avatarBytesCache[path] = file.lastModified() to bytes
-        return bytes
-    }
-
-    private suspend fun ensureAvatarUploaded(remoteRoomId: String, imagePath: String): String? {
-        val bytes = avatarBytes(imagePath) ?: return null
-        val hash = md5(bytes)
-        val key = "$remoteRoomId/$hash"
-        if (key !in uploadedAvatars) {
-            firestore.collection("rooms").document(remoteRoomId)
-                .collection("avatars").document(hash)
-                .set(mapOf("data" to Base64.encodeToString(bytes, Base64.NO_WRAP)))
-                .await()
-            uploadedAvatars += key
-            persistUploadedAvatars() // 재시작 후 재업로드 방지 (F3)
-        }
-        return hash
-    }
-
-    private suspend fun resolveAvatar(remoteRoomId: String, avatarId: String): String? {
-        val file = File(context.filesDir, "avatars/remote-$avatarId.jpg")
-        if (file.exists()) return file.absolutePath
-        val doc = firestore.collection("rooms").document(remoteRoomId)
-            .collection("avatars").document(avatarId).get().await()
-        val data = doc.getString("data") ?: return null
-        file.parentFile?.mkdirs()
-        // 임시 파일에 쓴 뒤 교체 — 쓰다 중단되면 깨진 파일이 영구 캐시되는 것 방지
-        val tmp = File(file.parentFile, "remote-$avatarId.tmp")
-        tmp.writeBytes(Base64.decode(data, Base64.NO_WRAP))
-        if (!tmp.renameTo(file)) {
-            tmp.delete()
-            return null
-        }
-        return file.absolutePath
-    }
-
-    /**
-     * 긴 변 256px 이하로 축소 (Firestore 1MB 문서 제한을 넉넉히 하회).
-     * 투명 영역이 있으면 PNG, 아니면 JPEG — JPEG는 알파를 검정으로 채운다.
-     */
-    private fun downscaleToJpeg(path: String, maxSize: Int = com.pbp.app.data.ImageSizes.AVATAR_UPLOAD): ByteArray? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSize) sample *= 2
-        val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
-            ?: return null
-        val scale = maxSize.toFloat() / maxOf(decoded.width, decoded.height)
-        val bitmap = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                decoded,
-                (decoded.width * scale).toInt().coerceAtLeast(1),
-                (decoded.height * scale).toInt().coerceAtLeast(1),
-                true,
-            )
-        } else decoded
-        val out = ByteArrayOutputStream()
-        if (bitmap.hasAlpha()) {
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        } else {
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 82, out)
-        }
-        return out.toByteArray()
-    }
-
-    private fun md5(bytes: ByteArray): String =
-        MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
 }

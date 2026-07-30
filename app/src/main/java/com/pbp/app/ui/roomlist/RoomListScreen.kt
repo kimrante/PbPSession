@@ -237,7 +237,7 @@ fun RoomListScreen(nav: NavController) {
                             room = room,
                             preview = previews[room.id],
                             unreadCount = unread[room.id] ?: 0,
-                            onClick = { nav.navigate("chat/${room.id}") },
+                            onClick = { nav.navigate(com.pbp.app.Routes.chat(room.id)) },
                             onLongClick = { deleteTarget = room },
                         )
                     }
@@ -264,7 +264,7 @@ fun RoomListScreen(nav: NavController) {
                     onDone()
                     if (roomId != null) {
                         showJoin = false
-                        nav.navigate("chat/$roomId")
+                        nav.navigate(com.pbp.app.Routes.chat(roomId))
                     } else {
                         android.widget.Toast.makeText(
                             context, "방을 찾지 못했습니다. 코드와 네트워크를 확인해주세요.",
@@ -298,7 +298,7 @@ fun RoomListScreen(nav: NavController) {
             },
             onProfile = { id ->
                 showManager = false
-                nav.navigate("profile/$id")
+                nav.navigate(com.pbp.app.Routes.profile(id))
             },
             onAdd = {
                 showManager = false
@@ -312,7 +312,7 @@ fun RoomListScreen(nav: NavController) {
             onDismiss = { showAddProfile = false },
             onEmpty = {
                 showAddProfile = false
-                nav.navigate("profile/0")
+                nav.navigate(com.pbp.app.Routes.profile(0))
             },
             onClipboard = {
                 showAddProfile = false

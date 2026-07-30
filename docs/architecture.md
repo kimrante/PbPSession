@@ -8,9 +8,11 @@
   같은 프로젝트에 동기화 — 모바일과 실시간 대화 가능. 실행: `gradlew :desktop:run`,
   배포판: `gradlew :desktop:packageDistributionForCurrentOS`.
   로컬 설정: `~/.pbp-desktop/config.json` (기기 ID·프로필·참여한 방).
-  순수 로직(DiceBot/PbpMarkup/GmSpeech)은 복제본 — KMP `:shared` 추출이 장기 과제.
+  순수 로직은 **`:shared` 모듈(plain kotlin-jvm)로 통합 완료** — DiceBot/Rules/PbpMarkup/
+  GmSpeech/CharacterCodec/ProfileStats + Protocol(와이어 상수)/Palette(색)/LogExport(HTML 렌더).
+  양 모듈이 같은 코드를 쓰고 테스트도 여기 모여 있다.
 
-기준 문서: [PbP-design-spec.md](PbP-design-spec.md) · 목업 [다크](trpg-app-mockup.html) / [화이트](trpg-app-mockup-light.html)
+기준 문서: [PbP-design-spec.md](PbP-design-spec.md) · 목업 [다크](mockups/trpg-app-mockup.html) / [화이트](mockups/trpg-app-mockup-light.html)
 
 ## 패키지 구조
 
@@ -19,7 +21,7 @@ com.pbp.app
 ├── PbpApp.kt              앱 배선(DB·동기화·알림), 포그라운드 감지
 ├── MainActivity.kt        내비게이션(rooms / chat / profile / settings), 알림 권한
 ├── data/                  Room DB — 엔티티·DAO·마이그레이션·리포지토리
-├── dice/                  다이스봇 파서·굴림 (supportedSides = [6,10,100])
+├── dice/                  다이스봇 파서·굴림 (supportedSides = [6,10,20,100] + d66)
 ├── text/                  텍스트 엔진 (순수 Kotlin, JVM 테스트)
 │   ├── PbpMarkup.kt       **굵게**·*기울임*·~~취소선~~·|等臺《등대》 루비 파서
 │   └── GmSpeech.kt        GM 발화에서 " " 인용만 말풍선으로 분리
@@ -62,7 +64,7 @@ com.pbp.app
 - **프로필 교체 스트립**: 입력창 위 가로 아바타 열. 탭=교체(옐로 링), 길게=편집, ＋=새 캐릭터
 - **마크다운·루비**: `text/PbpMarkup` → `ui/common/markupToAnnotated()` (루비는 본문 뒤 작은 글자 근사 — 진짜 위첨자 루비는 커스텀 레이아웃 필요, 추후 과제)
 
-## 데이터 모델 (Room DB v3)
+## 데이터 모델 (Room DB v9)
 
 - `ChatRoom` + `themeColor`, `backgroundKey`(preset_* 또는 파일 경로), `isMaster`, `lastReadAt`
 - `CharacterProfile` + `nameColor`, `bubbleColor`
@@ -96,7 +98,7 @@ com.pbp.app
 - **FCM 토큰 변경 시에만 업로드**
 - **입력 상태 하향** — 타이핑이 화면 전체를 리컴포즈하지 않음. `MarkupText`도 remember 캐시
 - **markRead** — 입장 시 + 상대 메시지 수신 시에만 (내 발신마다 쓰기 제거)
-- **데스크톱 증분 폴링** — 최초 전체 1회 후 `createdAt >` 신규분만 read (과금 방지). 수정/삭제는 방 재진입 시 반영
+- **데스크톱 적응형 폴링** — 활성 2.5초 / 유휴 20초 / 창 미포커스 30초, 재수신 윈도는 주기×2 동적. 방별 파일 캐시로 재시작에도 증분 재개
 
 ## 남은 과제
 
@@ -104,7 +106,6 @@ com.pbp.app
 2. **화이트 모드 미세 대비 검수** — 토큰은 스펙대로, 실기기에서 화이트 목업과 대조 확인 권장
 3. **커스텀 컬러 피커** — HEX 입력만 제공. HSV 휠은 추후
 4. **Firestore 보안 규칙** — firestore.rules 준비됨, 배포 절차는 docs/firebase-security.md
-5. **KMP :shared 모듈 추출** — app/desktop 로직 중복 해소
 
 ## 알려진 한계 (설계 결정 — 3차 리뷰 L5·S7)
 
@@ -118,5 +119,36 @@ com.pbp.app
 
 ## 검증
 
-- 단위 테스트: DiceBot 8 · GmSpeech 4 · PbpMarkup 7 · LogExporter 9 · SyncMapping 4 = **32개**
+- 단위 테스트: **63개** — :shared 6스위트(DiceBot·Rules·PbpMarkup·GmSpeech·CharacterCodec·ProfileStats) + :app 3스위트(LogExporter·SyncMapping·Reconcile)
 - `gradlew assembleDebug testDebugUnitTest`
+
+## Firestore 스키마 — 3곳 동시 수정 필요 (리뷰 A2)
+
+와이어 스키마는 `shared/.../Protocol.kt`가 단일 출처지만, **JS와 보안 규칙은 그 상수를
+소비할 수 없다**. 필드·컬렉션명을 바꿀 때는 반드시 세 곳을 함께 고칠 것:
+
+| 위치 | 역할 |
+|---|---|
+| `shared/src/main/kotlin/com/pbp/shared/Protocol.kt` | 양 클라이언트가 참조하는 상수 |
+| `functions/index.js` | 푸시 트리거가 읽는 필드(`type`, `createdAt`, `authorUid`, `senderName`, `members/*.fcmToken`) |
+| `firestore.rules` | 접근 제어가 읽는 필드(`authorUid`, `members/{uid}`) |
+
+주요 문서 구조:
+
+```
+rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeColor, backgroundKey, rule
+rooms/{roomId}/messages/{msgId}   type, body, diceExpr, diceOutcome, sender*, isOoc,
+                                  createdAt, editedAt, authorUid, avatarId
+rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt
+rooms/{roomId}/avatars/{md5}      data (base64, 긴 변 256px)
+inviteCodes/{code}                roomId
+```
+
+## 파일 구조 (2026-07-30 클린 리뷰 반영)
+
+- `:shared` — 순수 로직·프로토콜·팔레트·HTML 내보내기 (테스트 44개 포함)
+- `:app` — `ui/chat`은 ChatScreen / MessageBlock / ChatInput / ChatDialogs로 분할,
+  프로필 다이얼로그는 `ui/profile`, 아바타 동기화는 `sync/AvatarStore`
+- `:desktop` — Main(앱 상태·라우터) / ChatPane / ProfileOverlays / Overlays /
+  RoomListPane / DesktopImages / RoomSync, 치수·타이밍 토큰은 `ui/Dimens.kt`
+- `docs/reviews/` 리뷰 보고서 · `docs/mockups/` 목업·아이콘 시안

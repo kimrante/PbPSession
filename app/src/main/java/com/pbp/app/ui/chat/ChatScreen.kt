@@ -297,7 +297,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         }) {
                             Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                         }
-                        IconButton(onClick = { nav.navigate("settings/$roomId") }) {
+                        IconButton(onClick = { nav.navigate(com.pbp.app.Routes.settings(roomId)) }) {
                             Text("⚙", fontSize = 17.sp, color = tokens.ink)
                         }
                     }
@@ -400,7 +400,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     activeId = active?.id,
                     themeColor = themeColor,
                     onSwitch = { vm.switchTo(it) },
-                    onEditProfile = { nav.navigate("profile/${it.id}") },
+                    onEditProfile = { nav.navigate(com.pbp.app.Routes.profile(it.id)) },
                     onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc ->
                         vm.send(text, ooc)
@@ -417,7 +417,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
             onDismiss = { showAddProfile = false },
             onEmpty = {
                 showAddProfile = false
-                nav.navigate("profile/0")
+                nav.navigate(com.pbp.app.Routes.profile(0))
             },
             onClipboard = {
                 showAddProfile = false

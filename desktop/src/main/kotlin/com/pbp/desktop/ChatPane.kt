@@ -113,7 +113,7 @@ internal fun ChatPane(
     messages: List<Message>,
     memberCount: Int?,
     profiles: List<Profile>,
-    deviceId: String,
+    myUid: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
     onSend: (String, Boolean, (Boolean, Boolean) -> Unit) -> Unit,
@@ -199,7 +199,7 @@ internal fun ChatPane(
                 prevLatestId = messages.last().docId
                 val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
                 val nearBottom = lastVisible >= messages.size - appended - 2
-                val myMessageArrived = messages.last().authorUid == deviceId
+                val myMessageArrived = messages.last().authorUid == myUid
                 if (!initialScrollDone || pendingScrollToLatest || nearBottom || myMessageArrived) {
                     listState.scrollToItem(messages.size - 1)
                     initialScrollDone = true
@@ -221,7 +221,7 @@ internal fun ChatPane(
                             Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
                         ) {
                             MessageBlock(
-                                message, deviceId, room, avatarCache, firestore, grouped,
+                                message, myUid, room, avatarCache, firestore, grouped,
                                 onLongPress = onMessageLongPress,
                             )
                         }
@@ -250,14 +250,14 @@ internal fun ChatPane(
 @Composable
 internal fun MessageBlock(
     message: Message,
-    deviceId: String,
+    myUid: String,
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
     grouped: Boolean = false,
     onLongPress: (Message) -> Unit = {},
 ) {
-    val mine = message.authorUid == deviceId
+    val mine = message.authorUid == myUid
     when {
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -331,7 +331,7 @@ internal fun MessageBlock(
                             onLongPress = { if (mine) onLongPress(message) },
                         )
                         is GmSpeech.Part.Quote -> BubbleRow(
-                            message = message, deviceId = deviceId, room = room,
+                            message = message, myUid = myUid, room = room,
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text, overrideName = "GM",
                             overrideBubbleColor = Tokens.gmQuoteBubble,
@@ -346,7 +346,7 @@ internal fun MessageBlock(
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             if (parts.size <= 1) {
                 BubbleRow(
-                    message, deviceId, room, avatarCache, firestore,
+                    message, myUid, room, avatarCache, firestore,
                     showHeader = !grouped,
                     onLongPress = onLongPress,
                 )
@@ -354,7 +354,7 @@ internal fun MessageBlock(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
-                            message = message, deviceId = deviceId, room = room,
+                            message = message, myUid = myUid, room = room,
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text(),
                             quoteBubble = part is GmSpeech.Part.Quote,
@@ -406,7 +406,7 @@ internal fun NarrationBlock(message: Message, text: String, onLongPress: () -> U
 @Composable
 internal fun BubbleRow(
     message: Message,
-    deviceId: String,
+    myUid: String,
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
     firestore: FirestoreRest,
@@ -419,9 +419,9 @@ internal fun BubbleRow(
     showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
     onLongPress: (Message) -> Unit = {},
 ) {
-    val mine = message.authorUid == deviceId && overrideName == null
+    val mine = message.authorUid == myUid && overrideName == null
     // 편집/삭제 대상 여부는 표시 방향(mine)과 무관하게 실제 작성자 기준 (앱과 동일)
-    val editable = message.authorUid == deviceId
+    val editable = message.authorUid == myUid
     val body = overrideBody ?: message.body
     // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 mockup-quote-bubble)
     val quoteInner = when {

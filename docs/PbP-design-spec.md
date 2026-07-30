@@ -1,21 +1,21 @@
 # PbP — 1:1 TRPG 채팅 앱 디자인/기능 스펙 (핸드오프)
 
 > 이 문서는 claude.ai에서 진행한 디자인 목업 작업을 구현 단계로 넘기기 위한 핸드오프 문서입니다.
-> 목업 원본: `trpg-app-mockup.html`(다크 모드), `trpg-app-mockup-light.html`(화이트 모드)
+> 목업 원본: `mockups/trpg-app-mockup.html`(다크 모드), `mockups/trpg-app-mockup-light.html`(화이트 모드)
 > 두 파일을 브라우저로 열면 7개 화면의 시각 사양을 그대로 확인할 수 있습니다.
 >
 > **개정(2026-07-29)**: 기능 추가로 화면 간 여백·타이포·반경이 어긋나, 통일 토큰(4dp 그리드)을 정의한
-> `trpg-app-mockup-v2.html`이 최신 기준입니다. 색·규칙은 본 문서를 유지하고, 여백·크기는 v2가 우선합니다.
+> `mockups/trpg-app-mockup-v2.html`이 최신 기준입니다. 색·규칙은 본 문서를 유지하고, 여백·크기는 v2가 우선합니다.
 
 ## 0. 기본 디자인 원칙 — 라이트 모드가 기준 (2026-07-29 확정)
 
-- PbP의 **기본 디자인은 항상 라이트(화이트) 모드**다. 기준 목업: `trpg-app-mockup-light.html`
+- PbP의 **기본 디자인은 항상 라이트(화이트) 모드**다. 기준 목업: `mockups/trpg-app-mockup-light.html`
 - 신규 화면·목업·컴포넌트는 **라이트 모드로 먼저 설계**하고, 다크 모드는 `Tokens.kt`의
   토큰 스왑(`PbpDarkColors`)으로 파생되는 변형으로만 취급한다.
 - 밝은 배경 위 옐로 사용 규칙: 면(버튼 배경)은 `#FFD05C`, 링·테두리는 `#E0B13E`,
   **텍스트는 반드시 `#A3781A`(`signatureInk` 토큰)** — 옐로 원색 텍스트 금지.
 - 밝은 이름색은 진한 색으로 치환한다(2장 매핑 참조). 파괴적 동작 색은 `danger` 토큰(`#C94F4F`).
-- PC(데스크톱) 기준 목업: `trpg-app-mockup-pc-light.html` — 사이드바 280dp,
+- PC(데스크톱) 기준 목업: `mockups/trpg-app-mockup-pc-light.html` — 사이드바 280dp,
   채팅 본문 최대 폭 720dp 중앙 정렬, 채팅 가장자리 24dp. 그 외 규격은 v2 토큰과 동일.
 
 ## 1. 제품 개요

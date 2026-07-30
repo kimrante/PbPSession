@@ -578,7 +578,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 profiles = profiles,
                 // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
                 // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
-                deviceId = authorUid(),
+                myUid = authorUid(),
                 avatarCache = avatarCache,
                 firestore = firestore,
                 onSend = ::sendMessage,

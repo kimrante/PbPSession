@@ -46,25 +46,25 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppNav() {
     val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "rooms") {
-        composable("rooms") { RoomListScreen(nav) }
+    NavHost(navController = nav, startDestination = Routes.ROOMS) {
+        composable(Routes.ROOMS) { RoomListScreen(nav) }
         composable(
-            "chat/{roomId}",
-            arguments = listOf(navArgument("roomId") { type = NavType.LongType }),
+            Routes.CHAT_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_ROOM_ID) { type = NavType.LongType }),
         ) { entry ->
-            ChatScreen(nav, entry.arguments!!.getLong("roomId"))
+            ChatScreen(nav, entry.arguments!!.getLong(Routes.ARG_ROOM_ID))
         }
         composable(
-            "profile/{profileId}",
-            arguments = listOf(navArgument("profileId") { type = NavType.LongType }),
+            Routes.PROFILE_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_PROFILE_ID) { type = NavType.LongType }),
         ) { entry ->
-            ProfileEditScreen(nav, entry.arguments!!.getLong("profileId"))
+            ProfileEditScreen(nav, entry.arguments!!.getLong(Routes.ARG_PROFILE_ID))
         }
         composable(
-            "settings/{roomId}",
-            arguments = listOf(navArgument("roomId") { type = NavType.LongType }),
+            Routes.SETTINGS_PATTERN,
+            arguments = listOf(navArgument(Routes.ARG_ROOM_ID) { type = NavType.LongType }),
         ) { entry ->
-            RoomSettingsScreen(nav, entry.arguments!!.getLong("roomId"))
+            RoomSettingsScreen(nav, entry.arguments!!.getLong(Routes.ARG_ROOM_ID))
         }
     }
 }

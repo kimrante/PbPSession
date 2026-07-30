@@ -202,6 +202,9 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     // 내 테마/배경 변경 직후 폴링이 옛 서버 값으로 되돌리는 것 방지 (P3-14)
     var metaFreezeUntil by remember { mutableStateOf(0L) }
 
+    // 상단 바 "N명 참여 중" — 메타 폴링과 같은 주기로 갱신, 실패 시 null이라 표기 생략
+    var memberCount by remember { mutableStateOf<Int?>(null) }
+
     // 메시지 작성자 신원 — 익명 UID가 있으면 그것을(규칙 정합), 없으면 기존 deviceId (C3)
     fun authorUid(): String = firestore.uid ?: config.deviceId
 
@@ -254,6 +257,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             }
         }
         messages = session.messages
+        memberCount = null // 방을 바꾸면 이전 방의 인원 수가 남지 않게
         var lastCreatedAt = session.lastCreatedAt
         var lastMetaPollAt = 0L
         var lastActivityAt = System.currentTimeMillis()
@@ -309,6 +313,8 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 }
                 if (now - lastMetaPollAt >= 60_000 && now > metaFreezeUntil) {
                     lastMetaPollAt = now
+                    // 참여 인원 — 메타 폴링에 얹어 같은 주기로만 읽는다 (상단 바 "N명 참여 중")
+                    memberCount = withContext(Dispatchers.IO) { firestore.countMembers(room.remoteId) }
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
@@ -585,6 +591,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ChatPane(
                 room = room,
                 messages = messages,
+                memberCount = memberCount,
                 profiles = profiles,
                 // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
                 // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
@@ -930,51 +937,73 @@ private fun LeftPane(
         Modifier.width(280.dp).fillMaxHeight()
             .background(Brush.verticalGradient(listOf(Color(0xFFFBF9F4), Color(0xFFF0EDE5)))),
     ) {
-        Row(
-            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
-            Box(
-                Modifier.size(36.dp).clip(RoundedCornerShape(10.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))),
-                contentAlignment = Alignment.Center,
-            ) { D10Mark(Modifier.size(width = 20.dp, height = 21.dp)) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                // 라이트 모드 "PbP" 강조색 = 잉크 블랙 (스펙 2장)
-                Text(
-                    "PbP", fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp, color = Tokens.Ink,
-                )
-                Text("진행 중인 세션 ${rooms.size} · PC", fontSize = 11.sp, color = Tokens.InkDim)
-            }
-            // 오너 프로필 — 탭하여 편집 (모바일 방 목록의 오너 칩과 동일)
-            Box(
-                Modifier.size(32.dp).clip(CircleShape)
-                    .background(Color(ownerColor))
-                    .clickable(onClick = onOwnerProfile),
-                contentAlignment = Alignment.Center,
+        // 헤더 — 로고+워드마크 1행, 부제 2행. 묶음 전체가 정중앙 (목업 mockup-home-header).
+        // 버튼은 우측 끝에 겹쳐 두므로 타이틀 중심은 버튼 개수와 무관하다.
+        Box(Modifier.fillMaxWidth().height(56.dp)) {
+            Row(
+                Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val ownerImage = rememberLocalBitmap(ownerImagePath)
-                if (ownerImage != null) {
-                    Image(ownerImage, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                } else {
-                    Text(
-                        ownerName.take(1).ifEmpty { "?" },
-                        fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10151C),
-                    )
+                Spacer(Modifier.weight(1f))
+                // 오너 프로필 — 탭하여 편집 (모바일 방 목록의 오너 칩과 동일)
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape)
+                        .background(Color(ownerColor))
+                        .clickable(onClick = onOwnerProfile),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val ownerImage = rememberLocalBitmap(ownerImagePath)
+                    if (ownerImage != null) {
+                        Image(ownerImage, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Text(
+                            ownerName.take(1).ifEmpty { "?" },
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10151C),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                // 앱 글꼴 설정 — 모바일 방 목록의 'Aa' 버튼과 동일 위계
+                Box(
+                    Modifier.size(32.dp).clip(CircleShape)
+                        .border(1.dp, Tokens.Line, CircleShape)
+                        .clickable(onClick = onFontSetting),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("Aa", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
                 }
             }
-            Spacer(Modifier.width(6.dp))
-            // 앱 글꼴 설정 — 모바일 방 목록의 'Aa' 버튼과 동일 위계
-            Box(
-                Modifier.size(32.dp).clip(CircleShape)
-                    .border(1.dp, Tokens.Line, CircleShape)
-                    .clickable(onClick = onFontSetting),
-                contentAlignment = Alignment.Center,
+            Column(
+                // 우측 버튼 묶음(32+6+32+여백)만큼 좌우를 같이 비워 정중앙을 보장
+                Modifier.align(Alignment.Center).padding(horizontal = 88.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Aa", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
+                    Box(
+                        Modifier.size(22.dp).clip(RoundedCornerShape(7.dp))
+                            .background(
+                                Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) { D10Mark(Modifier.size(width = 13.dp, height = 14.dp)) }
+                    // 라이트 모드 "PbP" 강조색 = 잉크 블랙 (스펙 2장)
+                    Text(
+                        "PbP", fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp, lineHeight = 18.sp, color = Tokens.Ink,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                // 모바일 방 목록과 같은 문구 — 좁은 사이드바에 맞춰 '· PC' 꼬리표는 뺀다
+                Text(
+                    "진행 중인 세션 ${rooms.size}",
+                    fontSize = 11.sp, lineHeight = 11.sp,
+                    fontWeight = FontWeight.Medium, color = Tokens.InkSub,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
         LazyColumn(
@@ -1121,6 +1150,7 @@ private fun EmptyPane() {
 private fun ChatPane(
     room: JoinedRoom,
     messages: List<Message>,
+    memberCount: Int?,
     profiles: List<Profile>,
     deviceId: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
@@ -1142,35 +1172,55 @@ private fun ChatPane(
                 .background(Brush.verticalGradient(listOf(Tokens.VeilTop, Tokens.VeilMid, Tokens.VeilTop)))
         )
         Column(Modifier.fillMaxSize()) {
-            // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션
-            Row(
+            // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션.
+            // 타이틀 묶음은 버튼 위에 겹쳐 정중앙 (모바일과 동일 규격, 목업 mockup-chat-header)
+            Box(
                 Modifier.fillMaxWidth().height(56.dp)
                     .background(
                         Brush.verticalGradient(listOf(Color(0xD9FFFFFF), Color(0x59FFFFFF)))
                     )
-                    .padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Spacer(Modifier.weight(1f))
+                    GhostButton("내보내기", Modifier, onExport)
+                    Spacer(Modifier.width(8.dp))
+                    GhostButton("초대 코드", Modifier, onShowCode)
+                    // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
+                    Spacer(Modifier.width(8.dp))
+                    GhostButton("방 설정", Modifier, onOpenSettings)
+                }
+                Column(
+                    Modifier.align(Alignment.Center).padding(horizontal = 280.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     Text(
                         room.name, fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp, color = Tokens.Ink, maxLines = 1,
+                        fontSize = 15.sp, lineHeight = 15.sp, color = Tokens.Ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
+                    Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).clip(RoundedCornerShape(3.dp)).background(theme))
-                        Spacer(Modifier.width(5.dp))
+                        // GM/PL · 참여 인원 — 방 테마 컬러 점을 둘 사이 구분점으로 쓴다
                         Text(
-                            if (room.isMaster) "마스터" else "참여자",
-                            fontSize = 10.sp, color = Tokens.InkDim,
+                            if (room.isMaster) "GM" else "PL",
+                            fontSize = 11.sp, lineHeight = 11.sp,
+                            fontWeight = FontWeight.Medium, color = Tokens.InkSub,
                         )
+                        if (memberCount != null) {
+                            Spacer(Modifier.width(4.dp))
+                            Box(Modifier.size(6.dp).clip(CircleShape).background(theme))
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                "${memberCount}명 참여 중",
+                                fontSize = 11.sp, lineHeight = 11.sp,
+                                fontWeight = FontWeight.Medium, color = Tokens.InkSub,
+                            )
+                        }
                     }
                 }
-                GhostButton("내보내기", Modifier, onExport)
-                Spacer(Modifier.width(8.dp))
-                GhostButton("초대 코드", Modifier, onShowCode)
-                // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
-                Spacer(Modifier.width(8.dp))
-                GhostButton("방 설정", Modifier, onOpenSettings)
             }
 
             // 메시지 목록 — 최신 메시지가 바뀔 때만, 바닥 근처를 보고 있을 때만 따라간다

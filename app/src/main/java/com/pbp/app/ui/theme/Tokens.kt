@@ -18,6 +18,7 @@ data class PbpColors(
     val line: Color,          // 구분선
     val ink: Color,           // 본문 잉크
     val inkDim: Color,        // 보조 텍스트
+    val inkSub: Color,        // 상단 바 부제 — inkDim보다 진해 배경 위에서도 또렷
     val signature: Color,     // 시그니처 옐로 (앱 타이틀 강조는 titleAccent)
     val signatureInk: Color,  // 밝은 배경 위 옐로 '텍스트'용 — 화이트 모드에선 진한 골드
     val danger: Color,        // 파괴적 동작 (삭제)
@@ -40,6 +41,7 @@ val PbpDarkColors = PbpColors(
     line = Color(0x14FFFFFF),
     ink = Color(0xFFE8ECF2),
     inkDim = Color(0xFF8B95A5),
+    inkSub = Color(0xB8E8ECF2),
     signature = Color(0xFFFFD972),
     signatureInk = Color(0xFFFFD972),
     danger = Color(0xFFFF6B6B),
@@ -62,6 +64,7 @@ val PbpLightColors = PbpColors(
     line = Color(0x1414191F),
     ink = Color(0xFF23272E),
     inkDim = Color(0xFF6E7683),
+    inkSub = Color(0xB814191F),
     signature = Color(0xFFFFD05C),
     signatureInk = Color(0xFFA3781A),
     danger = Color(0xFFC94F4F),
@@ -102,6 +105,15 @@ object PbpDimens {
     val touchTarget = 40.dp  // 아이콘·전송 버튼
     val avatarChat = 38.dp   // 채팅 말풍선 아바타
     val avatarStrip = 36.dp  // 프로필 교체 스트립 아바타
+    val logoTile = 22.dp     // 상단 바 로고 타일 (앱 아이콘과 같은 d10)
+
+    /**
+     * 상단 바 중앙 타이틀 묶음이 좌우 버튼과 겹치지 않게 비워 두는 폭.
+     * 좌우에 같은 값을 주므로 타이틀은 버튼 개수와 무관하게 화면 정중앙에 온다
+     * (docs/mockup-chat-header.html · mockup-home-header.html).
+     */
+    val titleInset = 96.dp      // 아이콘 버튼 2개 기준 — 채팅
+    val titleInsetWide = 112.dp // 텍스트 버튼 2개 + 오너 아바타 — 방 목록
 }
 
 /** 프리셋 팔레트 (목업 03·04 화면) */

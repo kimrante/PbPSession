@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -154,68 +155,89 @@ fun RoomListScreen(nav: NavController) {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            // 헤더: 미니 앱 아이콘 + PbP 타이틀 — 상단 바 규격(56dp), 좌우는 화면 가장자리와 동일
-            Row(
-                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.sp4),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
-                Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))),
-                    contentAlignment = Alignment.Center,
+            // 헤더 — 채팅 상단 바와 같은 규격(56dp): 로고+타이틀 묶음이 화면 정중앙,
+            // 버튼은 우측 끝 (목업 mockup-home-header)
+            Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = PbpDimens.sp4),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_logo_d10),
-                        contentDescription = null,
-                        modifier = Modifier.size(21.dp),
-                    )
+                    Spacer(Modifier.weight(1f))
+                    CompactBarButton("Aa") { showFont = true }
+                    CompactBarButton("참여") { showJoin = true }
+                    Spacer(Modifier.width(PbpDimens.sp1))
+                    // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
+                    Box(
+                        Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(Color(OwnerProfile.color))
+                            .combinedClickable(onClick = { showManager = true }),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val ownerImage = OwnerProfile.imagePath
+                        if (ownerImage != null) {
+                            coil3.compose.AsyncImage(
+                                model = java.io.File(ownerImage),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            )
+                        } else {
+                            Text(
+                                OwnerProfile.name.take(1).ifEmpty { "?" },
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10151C),
+                            )
+                        }
+                    }
                 }
-                Spacer(Modifier.width(PbpDimens.sp3))
-                Column {
-                    Text(
-                        "PbP",
-                        fontFamily = GowunBatang,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = tokens.titleAccent,
-                    )
-                    Text("진행 중인 세션 ${rooms.size}", fontSize = 11.sp, color = tokens.inkDim)
-                }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = { showFont = true }) {
-                    Text("Aa", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                TextButton(onClick = { showJoin = true }) {
-                    Text("참여", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.width(4.dp))
-                // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
-                Box(
+                // 로고+워드마크 1행, 부제 2행 — 묶음 전체가 화면 정중앙 (좌우 인셋 동일)
+                Column(
                     Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(Color(OwnerProfile.color))
-                        .combinedClickable(onClick = { showManager = true }),
-                    contentAlignment = Alignment.Center,
+                        .align(Alignment.TopCenter)
+                        .height(PbpDimens.appBarHeight)
+                        .padding(horizontal = PbpDimens.titleInsetWide),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    val ownerImage = OwnerProfile.imagePath
-                    if (ownerImage != null) {
-                        coil3.compose.AsyncImage(
-                            model = java.io.File(ownerImage),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        )
-                    } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2),
+                    ) {
+                        // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
+                        Box(
+                            Modifier
+                                .size(PbpDimens.logoTile)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(
+                                    Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.ic_logo_d10),
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                            )
+                        }
                         Text(
-                            OwnerProfile.name.take(1).ifEmpty { "?" },
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            color = Color(0xFF10151C),
+                            "PbP",
+                            fontFamily = GowunBatang,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            lineHeight = 18.sp,
+                            color = tokens.titleAccent,
                         )
                     }
+                    Spacer(Modifier.height(PbpDimens.sp1))
+                    Text(
+                        "진행 중인 세션 ${rooms.size}",
+                        fontSize = 11.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = tokens.inkSub,
+                    )
                 }
             }
 
@@ -353,6 +375,24 @@ fun RoomListScreen(nav: NavController) {
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소") } },
         )
+    }
+}
+
+/**
+ * 상단 바의 좁은 텍스트 버튼 — 기본 TextButton은 최소 폭이 넓어 중앙 타이틀 묶음의
+ * 자리를 잠식한다. 터치 높이(40dp)는 유지하면서 폭만 콘텐츠에 맞춘다.
+ */
+@Composable
+private fun CompactBarButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(PbpDimens.touchTarget)
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = PbpDimens.sp2),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Pbp.colors.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 

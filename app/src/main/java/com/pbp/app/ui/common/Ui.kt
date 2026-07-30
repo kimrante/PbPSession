@@ -2,6 +2,7 @@ package com.pbp.app.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.pbp.app.text.PbpMarkup
 import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
 import java.io.File
 import java.text.SimpleDateFormat
@@ -425,6 +428,49 @@ fun HexColorDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+}
+
+/** 캐릭터 추가 방식 선택 — 신규 작성이 위, 클립보드 코드가 아래 (프로필 관리 요구) */
+@Composable
+fun AddProfileDialog(
+    onDismiss: () -> Unit,
+    onEmpty: () -> Unit,
+    onClipboard: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("캐릭터 추가") },
+        text = {
+            Column {
+                AddOptionRow(
+                    title = "신규 캐릭터 작성",
+                    subtitle = "이름과 색만 정해 새로 만들기",
+                    onClick = onEmpty,
+                )
+                AddOptionRow(
+                    title = "클립보드 코드로 생성",
+                    subtitle = "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
+                    onClick = onClipboard,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
+}
+
+@Composable
+private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
+    val tokens = Pbp.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(PbpDimens.rCell))
+            .clickable(onClick = onClick)
+            .padding(PbpDimens.sp3),
+    ) {
+        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
+        Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
+    }
 }
 
 /** HSV(h 0–360, s/v 0–1) → 0xFFRRGGBB — 팔레트 드래그 선택용 순수 변환 */

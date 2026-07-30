@@ -22,6 +22,7 @@ class PbpRepository(private val db: AppDatabase) {
     suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
     fun observeGlobalProfiles() = db.profileDao().observeGlobal()
+    fun observeAllProfiles() = db.profileDao().observeAllProfiles()
 
     /**
      * 방을 만든다. 마스터면 방에 귀속된 GM 프로필을 함께 생성해 기본 발화 프로필로,

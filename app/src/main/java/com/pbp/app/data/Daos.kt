@@ -71,6 +71,10 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE roomId IS NULL ORDER BY name")
     fun observeGlobal(): Flow<List<CharacterProfile>>
 
+    /** 프로필 관리 목록 — 전역·방 귀속(GM 포함) 전부 */
+    @Query("SELECT * FROM profiles ORDER BY isGm DESC, name")
+    fun observeAllProfiles(): Flow<List<CharacterProfile>>
+
     @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId ORDER BY isGm DESC, name")
     fun observeForRoom(roomId: Long): Flow<List<CharacterProfile>>
 

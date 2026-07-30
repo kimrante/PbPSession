@@ -74,6 +74,7 @@ import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
 import com.pbp.app.text.GmSpeech
+import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.MarkupText
 import com.pbp.app.ui.common.RoomBackdrop
@@ -1138,48 +1139,7 @@ private fun MessageActionRow(
     }
 }
 
-/** 캐릭터 추가 방식 선택 — 클립보드의 ccfolia식 캐릭터 코드 또는 빈 캐릭터 */
-@Composable
-private fun AddProfileDialog(
-    onDismiss: () -> Unit,
-    onEmpty: () -> Unit,
-    onClipboard: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("캐릭터 추가") },
-        text = {
-            Column {
-                AddOptionRow(
-                    title = "클립보드 코드로 생성",
-                    subtitle = "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
-                    onClick = onClipboard,
-                )
-                AddOptionRow(
-                    title = "빈 캐릭터 생성",
-                    subtitle = "이름과 색만 정해 새로 만들기",
-                    onClick = onEmpty,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("취소") } },
-    )
-}
-
-@Composable
-private fun AddOptionRow(title: String, subtitle: String, onClick: () -> Unit) {
-    val tokens = Pbp.colors
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(PbpDimens.rCell))
-            .clickable(onClick = onClick)
-            .padding(PbpDimens.sp3),
-    ) {
-        Text(title, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.signature)
-        Text(subtitle, fontSize = 11.sp, color = tokens.inkDim)
-    }
-}
+// AddProfileDialog는 프로필 관리(방 목록)와 공용 — ui/common/Ui.kt로 이동
 
 @Composable
 private fun EditMessageDialog(

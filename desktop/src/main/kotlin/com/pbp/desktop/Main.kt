@@ -574,7 +574,8 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ownerName = ownerName,
             ownerColor = ownerColor,
             ownerImagePath = ownerImagePath,
-            onOwnerProfile = { overlay = OverlayKind.OwnerProfile },
+            // 오너 아이콘 = 프로필 관리 진입 (오너 편집은 관리 목록에서)
+            onOwnerProfile = { overlay = OverlayKind.ProfileManager },
         )
         Box(Modifier.width(1.dp).fillMaxHeight().background(Tokens.Line))
         val room = selected
@@ -721,6 +722,43 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 persist()
             },
         )
+        OverlayKind.ProfileManager -> ProfileManagerOverlay(
+            ownerName = ownerName,
+            ownerColor = ownerColor,
+            ownerImagePath = ownerImagePath,
+            profiles = profiles,
+            onDismiss = { overlay = null },
+            onOwner = { overlay = OverlayKind.OwnerProfile },
+            onProfile = { index ->
+                overlay = null
+                editProfileIndex = index
+            },
+            onAdd = { overlay = OverlayKind.AddProfileChoice },
+        )
+        OverlayKind.AddProfileChoice -> AddProfileChoiceOverlay(
+            onDismiss = { overlay = null },
+            onEmpty = { overlay = OverlayKind.NewProfile },
+            onClipboard = {
+                // 모바일과 동일: 클립보드 코드를 즉시 파싱해 캐릭터 생성 (전역)
+                val imported = runCatching {
+                    val clip = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                        .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+                    CharacterCodec.parse(clip ?: "")
+                }.getOrNull()
+                if (imported != null) {
+                    profiles = profiles + Profile(
+                        name = imported.name,
+                        stats = ProfileStats.sanitize(imported.stats.toMap())
+                            .takeIf { it.isNotEmpty() },
+                    )
+                    persist()
+                    overlay = OverlayKind.ProfileManager
+                    true
+                } else {
+                    false
+                }
+            },
+        )
         OverlayKind.OwnerProfile -> OwnerProfileOverlay(
             initialName = ownerName,
             initialColor = ownerColor,
@@ -835,6 +873,7 @@ private val avatarsInFlight: MutableSet<String> =
 
 private enum class OverlayKind {
     JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting, OwnerProfile,
+    ProfileManager, AddProfileChoice,
 }
 
 private fun inviteCode(): String {
@@ -2577,6 +2616,148 @@ private fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: (
             }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
+    }
+}
+
+/**
+ * 프로필 관리 — 오너·GM·캐릭터 전부를 이미지+이름 목록으로 (모바일과 동일).
+ * 항목 클릭 = 해당 설정, 하단 = 프로필 추가하기.
+ */
+@Composable
+private fun ProfileManagerOverlay(
+    ownerName: String,
+    ownerColor: Long,
+    ownerImagePath: String?,
+    profiles: List<Profile>,
+    onDismiss: () -> Unit,
+    onOwner: () -> Unit,
+    onProfile: (Int) -> Unit,
+    onAdd: () -> Unit,
+) {
+    OverlayScaffold("프로필 관리", onDismiss) {
+        // 오너 프로필 — 항상 맨 위
+        Row(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onOwner)
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(Color(ownerColor)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val ownerImage = rememberLocalBitmap(ownerImagePath)
+                if (ownerImage != null) {
+                    Image(ownerImage, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                } else {
+                    Text(
+                        ownerName.take(1).ifEmpty { "?" },
+                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF10151C),
+                    )
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text(
+                    ownerName.ifBlank { "오너 프로필" },
+                    fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                )
+                Text("오너 · 잡담과 참여 인사에 사용", fontSize = 11.sp, color = Tokens.InkDim)
+            }
+        }
+        profiles.forEachIndexed { index, profile ->
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onProfile(index) }
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier.size(36.dp).clip(CircleShape).background(Tokens.Panel2)
+                        .border(
+                            1.dp,
+                            if (profile.isGm) Color(0x99C89E34) else Tokens.Line,
+                            CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val chipImage = rememberLocalBitmap(profile.imagePath)
+                    if (chipImage != null) {
+                        Image(chipImage, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Text(
+                            profile.emoji, fontSize = 15.sp,
+                            fontFamily = if (profile.isGm) GowunBatang else null,
+                            color = if (profile.isGm) Tokens.SignatureInk else Tokens.Ink,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        profile.name.ifBlank { "이름 없음" },
+                        fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                    )
+                    Text(
+                        if (profile.isGm) "GM · 모든 방 공통" else "캐릭터 · 모든 방 공통",
+                        fontSize = 11.sp, color = Tokens.InkDim,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        // 프로필 추가하기 — 목록 맨 아래
+        GhostButton("＋ 프로필 추가하기", Modifier.fillMaxWidth(), onAdd)
+        Spacer(Modifier.height(10.dp))
+        GhostButton("닫기", Modifier.fillMaxWidth(), onDismiss)
+    }
+}
+
+/** 캐릭터 추가 방식 선택 — 신규 작성이 위, 클립보드 코드가 아래 (모바일과 동일 순서) */
+@Composable
+private fun AddProfileChoiceOverlay(
+    onDismiss: () -> Unit,
+    onEmpty: () -> Unit,
+    /** true = 생성 성공, false = 클립보드에서 코드를 찾지 못함 */
+    onClipboard: () -> Boolean,
+) {
+    var clipboardError by remember { mutableStateOf(false) }
+    OverlayScaffold("캐릭터 추가", onDismiss) {
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onEmpty)
+                .padding(10.dp),
+        ) {
+            Text(
+                "신규 캐릭터 작성",
+                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+            )
+            Text("이름과 색만 정해 새로 만들기", fontSize = 11.sp, color = Tokens.InkDim)
+        }
+        Column(
+            Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { clipboardError = !onClipboard() }
+                .padding(10.dp),
+        ) {
+            Text(
+                "클립보드 코드로 생성",
+                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+            )
+            Text(
+                "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
+                fontSize = 11.sp, color = Tokens.InkDim,
+            )
+        }
+        if (clipboardError) {
+            Spacer(Modifier.height(6.dp))
+            Text("클립보드에서 캐릭터 코드를 찾지 못했습니다", fontSize = 11.sp, color = Tokens.Danger)
+        }
+        Spacer(Modifier.height(12.dp))
+        GhostButton("취소", Modifier.fillMaxWidth(), onDismiss)
     }
 }
 

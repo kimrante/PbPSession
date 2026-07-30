@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -100,6 +103,20 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
     fun joinRoom(code: String, onResult: (Long?) -> Unit) = viewModelScope.launch {
         onResult(app.syncManager.joinRoom(code.trim().uppercase()))
     }
+
+    /** 프로필 관리 — 오너 외 모든 프로필 (GM·방 귀속 포함) */
+    val allProfiles = repo.observeAllProfiles()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** 클립보드의 ccfolia식 캐릭터 코드로 새 캐릭터 생성 (전역, 채팅 화면과 동일 규칙) */
+    fun createFromCode(imported: com.pbp.app.data.CharacterCodec.Imported) = viewModelScope.launch {
+        repo.saveProfile(
+            com.pbp.app.data.CharacterProfile(
+                name = imported.name,
+                stats = com.pbp.app.data.ProfileStats.encode(imported.stats),
+            )
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -120,6 +137,10 @@ fun RoomListScreen(nav: NavController) {
     var deleteTarget by remember { mutableStateOf<ChatRoom?>(null) }
     // 오너 프로필 미설정이면 먼저 설정하게 한다 (첫 실행 포함)
     var showOwner by remember { mutableStateOf(!OwnerProfile.isSet) }
+    // 프로필 관리 — 오너 아이콘을 누르면 전체 프로필 목록
+    var showManager by remember { mutableStateOf(false) }
+    var showAddProfile by remember { mutableStateOf(false) }
+    val allProfiles by vm.allProfiles.collectAsState()
 
     Scaffold(
         containerColor = tokens.bg,
@@ -164,13 +185,20 @@ fun RoomListScreen(nav: NavController) {
                     Text("진행 중인 세션 ${rooms.size}", fontSize = 11.sp, color = tokens.inkDim)
                 }
                 Spacer(Modifier.weight(1f))
-                // 오너 프로필 — 탭하여 편집 (미설정이면 진입 시 자동 팝업)
+                TextButton(onClick = { showFont = true }) {
+                    Text("Aa", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = { showJoin = true }) {
+                    Text("참여", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.width(4.dp))
+                // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                 Box(
                     Modifier
                         .size(30.dp)
                         .clip(CircleShape)
                         .background(Color(OwnerProfile.color))
-                        .combinedClickable(onClick = { showOwner = true }),
+                        .combinedClickable(onClick = { showManager = true }),
                     contentAlignment = Alignment.Center,
                 ) {
                     val ownerImage = OwnerProfile.imagePath
@@ -188,13 +216,6 @@ fun RoomListScreen(nav: NavController) {
                             color = Color(0xFF10151C),
                         )
                     }
-                }
-                Spacer(Modifier.width(4.dp))
-                TextButton(onClick = { showFont = true }) {
-                    Text("Aa", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                TextButton(onClick = { showJoin = true }) {
-                    Text("참여", color = tokens.inkDim, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -266,6 +287,56 @@ fun RoomListScreen(nav: NavController) {
         OwnerProfileDialog(
             forced = !OwnerProfile.isSet, // 미설정이면 저장 전에는 닫을 수 없다
             onClose = { showOwner = false },
+        )
+    }
+
+    if (showManager) {
+        ProfileManagerDialog(
+            profiles = allProfiles,
+            roomNames = rooms.associate { it.id to it.name },
+            onDismiss = { showManager = false },
+            onOwner = {
+                showManager = false
+                showOwner = true
+            },
+            onProfile = { id ->
+                showManager = false
+                nav.navigate("profile/$id")
+            },
+            onAdd = {
+                showManager = false
+                showAddProfile = true
+            },
+        )
+    }
+
+    if (showAddProfile) {
+        com.pbp.app.ui.common.AddProfileDialog(
+            onDismiss = { showAddProfile = false },
+            onEmpty = {
+                showAddProfile = false
+                nav.navigate("profile/0")
+            },
+            onClipboard = {
+                showAddProfile = false
+                val clip = (context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                        as android.content.ClipboardManager)
+                    .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString()
+                val imported = clip?.let { com.pbp.app.data.CharacterCodec.parse(it) }
+                if (imported != null) {
+                    vm.createFromCode(imported)
+                    android.widget.Toast.makeText(
+                        context,
+                        "'${imported.name}' 캐릭터를 만들었습니다 (값 ${imported.stats.size}개)",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    android.widget.Toast.makeText(
+                        context, "클립보드에서 캐릭터 코드를 찾지 못했습니다",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            },
         )
     }
 
@@ -385,6 +456,121 @@ private fun previewText(message: Message?): String = when {
     message.type == MessageType.SYSTEM -> message.body
     message.type == MessageType.DICE -> "🎲 ${message.diceExpr} → ${message.body}"
     else -> "${message.senderName} · ${message.body}"
+}
+
+/**
+ * 프로필 관리 — 오너·GM·캐릭터 전부를 이미지+이름 목록으로.
+ * 항목 클릭 = 해당 설정 화면, 하단 = 프로필 추가하기.
+ */
+@Composable
+private fun ProfileManagerDialog(
+    profiles: List<com.pbp.app.data.CharacterProfile>,
+    roomNames: Map<Long, String>,
+    onDismiss: () -> Unit,
+    onOwner: () -> Unit,
+    onProfile: (Long) -> Unit,
+    onAdd: () -> Unit,
+) {
+    val tokens = Pbp.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("프로필 관리") },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // 오너 프로필 — 항상 맨 위
+                ManagerRow(
+                    label = OwnerProfile.name.ifBlank { "오너 프로필" },
+                    sub = "오너 · 잡담과 참여 인사에 사용",
+                    onClick = onOwner,
+                ) {
+                    Box(
+                        Modifier.size(36.dp).clip(CircleShape).background(Color(OwnerProfile.color)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val ownerImage = OwnerProfile.imagePath
+                        if (ownerImage != null) {
+                            coil3.compose.AsyncImage(
+                                model = java.io.File(ownerImage),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            )
+                        } else {
+                            Text(
+                                OwnerProfile.name.take(1).ifEmpty { "?" },
+                                fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10151C),
+                            )
+                        }
+                    }
+                }
+                profiles.forEach { profile ->
+                    val sub = when {
+                        profile.isGm -> "GM" +
+                            (profile.roomId?.let { roomNames[it] }?.let { " · $it" } ?: "")
+                        profile.roomId != null ->
+                            roomNames[profile.roomId]?.let { "캐릭터 · $it" } ?: "캐릭터"
+                        else -> "캐릭터 · 모든 방 공통"
+                    }
+                    ManagerRow(
+                        label = profile.name.ifBlank { "이름 없음" },
+                        sub = sub,
+                        onClick = { onProfile(profile.id) },
+                    ) {
+                        com.pbp.app.ui.common.Avatar(
+                            emoji = profile.emoji,
+                            imagePath = profile.imagePath,
+                            size = 36.dp,
+                        )
+                    }
+                }
+                // 프로필 추가하기 — 목록 맨 아래
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(PbpDimens.rCell))
+                        .combinedClickable(onClick = onAdd)
+                        .padding(PbpDimens.sp3),
+                ) {
+                    Text(
+                        "＋ 프로필 추가하기",
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        color = tokens.signature,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+    )
+}
+
+@Composable
+private fun ManagerRow(
+    label: String,
+    sub: String,
+    onClick: () -> Unit,
+    avatar: @Composable () -> Unit,
+) {
+    val tokens = Pbp.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(PbpDimens.rCell))
+            .combinedClickable(onClick = onClick)
+            .padding(PbpDimens.sp2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        avatar()
+        Spacer(Modifier.width(PbpDimens.sp3))
+        Column {
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+            Text(sub, fontSize = 11.sp, color = tokens.inkDim)
+        }
+    }
 }
 
 /**

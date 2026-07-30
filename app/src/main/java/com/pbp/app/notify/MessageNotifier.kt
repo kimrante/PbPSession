@@ -26,6 +26,9 @@ class MessageNotifier(private val context: Context) {
 
     companion object {
         private const val CHANNEL_ID = "messages"
+
+        /** 알림 탭으로 열 방의 Firestore 문서 ID — MainActivity가 읽어 해당 방으로 이동 */
+        const val EXTRA_REMOTE_ROOM_ID = "com.pbp.app.extra.REMOTE_ROOM_ID"
     }
 
     init {
@@ -36,14 +39,30 @@ class MessageNotifier(private val context: Context) {
             .createNotificationChannel(channel)
     }
 
-    fun notify(senderName: String, notificationId: Int, imagePath: String?) {
+    /**
+     * @param remoteRoomId 알림을 탭했을 때 열 방. null이면 방 목록으로 연다
+     */
+    fun notify(
+        senderName: String,
+        notificationId: Int,
+        imagePath: String?,
+        remoteRoomId: String? = null,
+    ) {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) return
 
-        val intent = Intent(context, MainActivity::class.java)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            // 이미 떠 있는 화면 위에 새 인스턴스를 쌓지 않는다 — onNewIntent로 전달된다
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            if (remoteRoomId != null) putExtra(EXTRA_REMOTE_ROOM_ID, remoteRoomId)
+        }
         val pending = PendingIntent.getActivity(
-            context, 0, intent,
+            context,
+            // 방마다 다른 requestCode — FLAG_UPDATE_CURRENT가 다른 방의 엑스트라를
+            // 덮어써 엉뚱한 방이 열리는 것을 막는다
+            notificationId,
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)

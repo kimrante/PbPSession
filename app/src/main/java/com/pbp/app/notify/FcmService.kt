@@ -29,6 +29,6 @@ class FcmService : FirebaseMessagingService() {
         // 겹쳐도 알림 ID가 같아(방 해시) 하나로 교체될 뿐 중복 표시는 없다.
         val remoteRoomId = message.data["roomId"]
         val senderName = message.data["senderName"] ?: "상대"
-        notifier.notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null)
+        notifier.notify(senderName, remoteRoomId?.hashCode() ?: 0, imagePath = null, remoteRoomId = remoteRoomId)
     }
 }

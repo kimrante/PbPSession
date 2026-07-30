@@ -72,6 +72,7 @@ class PbpApp : Application() {
                     message.senderName ?: "상대",
                     remoteRoomId.hashCode(),
                     message.senderImagePath,
+                    remoteRoomId = remoteRoomId,
                 )
             }
         }

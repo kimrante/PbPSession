@@ -135,7 +135,8 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             SectionTitle("테마 컬러")
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
-                modifier = Modifier.padding(horizontal = PbpDimens.gap4).height(150.dp),
+                // 프리셋 3종 + 커스텀 = 4셀이라 정확히 1행 (목업 01-B)
+                modifier = Modifier.padding(horizontal = PbpDimens.gap4).height(76.dp),
                 horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
                 verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
                 userScrollEnabled = false,

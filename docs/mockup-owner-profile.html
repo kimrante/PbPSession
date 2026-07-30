@@ -127,7 +127,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
 <header class="page">
   <h1>PbP <em>오너 프로필 설정 + 최근 사용한 색</em></h1>
   <p>두 가지 변경의 구현 지시서입니다. ① 오너 프로필을 기존 '프로필 편집' 화면과 같은 규격의 <b>전체 화면</b>으로 통일(개별 값은 미지원),
-  ② <b>모든 색 선택 줄</b>(오너 컬러 · 이름 색 · 말풍선 색 · 방 테마 컬러)의 커스텀 버튼 뒤에 <b>최근 사용한 색 5개를 스와치로 이어 붙임</b>. 예시 프리셋은 3종으로 축소.</p>
+  ② <b>모든 색 선택 줄</b>(오너 컬러 · 이름 색 · 말풍선 색 · 방 테마 컬러)의 커스텀 버튼 뒤에 <b>최근 사용한 색 5개를 스와치로 이어 붙임</b>. 예시 프리셋은 이름·말풍선·테마 <b>모두 3종</b>으로 축소.</p>
   <span class="principle">규격 원칙 — 센터 정렬 기본 · 상하 여백 동일 · 동류 항목은 같은 여백값</span>
 </header>
 
@@ -197,7 +197,7 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       </div>
 
       <div class="pcol">
-        <div class="tag">01-B · 방 설정 (테마 컬러) · 최근 색 2/5개 상태</div>
+        <div class="tag">01-B · 방 설정 (테마 3종 + 커스텀) · 최근 색 2/5개</div>
         <div class="phone"><div class="screen">
           <div class="statusbar"><span>22:02</span><span>▲ ● ▮</span></div>
           <div class="appbar">
@@ -210,10 +210,6 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
               <div class="tcell sel"><div class="tsw" style="background:#5f9ec7"></div><span>새벽 하늘</span></div>
               <div class="tcell"><div class="tsw" style="background:#c9a7e8"></div><span>라일락</span></div>
               <div class="tcell"><div class="tsw" style="background:#e8b48e"></div><span>호박등</span></div>
-              <div class="tcell"><div class="tsw" style="background:#9fe0b8"></div><span>이끼</span></div>
-              <div class="tcell"><div class="tsw" style="background:#f2a1a8"></div><span>동백</span></div>
-              <div class="tcell"><div class="tsw" style="background:#e8d48e"></div><span>사금</span></div>
-              <div class="tcell"><div class="tsw" style="background:#a8b4c8"></div><span>잿빛</span></div>
               <div class="tcell"><div class="tsw" style="background:conic-gradient(#ff6666,#ffcc66,#66dd66,#66ccff,#cc66ff,#ff6666)"></div><span>커스텀</span></div>
             </div>
             <!-- 그리드는 라벨 있는 셀 체계라, 최근 색은 그리드 아래 같은 스와치 줄로 -->
@@ -259,10 +255,11 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       <div class="note r"><h4>배경은 제외</h4>
         <p>방 설정의 <b>배경</b>은 프리셋 그라데이션 또는 갤러리 이미지라 '색 하나'로 지정하는 값이 아닙니다.
         따라서 최근 색은 <b>테마 컬러에만</b> 붙였습니다. 배경까지 단색 지정을 원하시면 별도 기능(단색 배경)이 필요합니다.</p></div>
-      <div class="note"><h4>테마 컬러 그리드는 왜 줄로?</h4>
-        <p>테마 컬러는 라벨("새벽 하늘")이 붙은 <b>4열 그리드</b>라, 최근 색 셀을 그리드에 끼우면 라벨이 빈 셀이 생기고
-        그리드가 2행 → 3행으로 늘어납니다. 그래서 그리드는 그대로 두고 <b>바로 아래 같은 스와치 줄</b>을 붙였습니다
-        — 다른 화면과 같은 부품·같은 규격입니다.</p></div>
+      <div class="note"><h4>테마 컬러도 3종 — 그리드는 1행으로</h4>
+        <p>테마 프리셋도 <b>7종 → 3종</b>(새벽 하늘·라일락·호박등)으로 줄입니다. 커스텀을 포함해 4칸이라
+        4열 그리드가 <b>정확히 1행</b>이 되고, 고정 높이는 <code>150dp → 76dp</code>가 됩니다.
+        라벨("새벽 하늘")은 유지 — 방 테마는 이름으로 부르는 브랜드 요소입니다.
+        최근 색은 그리드 <b>바로 아래</b> 같은 스와치 줄로 붙입니다(라벨 있는 셀에 라벨 없는 색을 섞지 않기 위해).</p></div>
     </div>
   </div>
 </section>
@@ -423,9 +420,10 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
     </tr>
     <tr>
       <td>방 설정 테마 컬러</td>
-      <td><code>LazyVerticalGrid</code> 4열 + <code>ThemeCell</code>(라벨 있음)</td>
-      <td>그리드는 그대로(2행 유지). <b>그리드 바로 아래</b>에 <code>ColorSwatchRow</code>의 최근 색 부분만 재사용한
-        줄을 배치하고, 탭 시 <code>vm.setThemeColor()</code> 호출. 그리드 고정 높이(<code>150.dp</code>)는 변경 없음</td>
+      <td><code>LazyVerticalGrid</code> 4열 + <code>ThemeCell</code>(라벨 있음) · <code>themePresets</code> 7종</td>
+      <td><code>themePresets</code> <b>7 → 3종</b>이라 커스텀 포함 4칸 = <b>1행</b>. 고정 높이 <code>150.dp → 76.dp</code>로 수정
+        (셀 높이 + 상하 패딩 기준, 실측 후 조정). <b>그리드 바로 아래</b>에 <code>ColorSwatchRow</code>의 최근 색 부분만 재사용한
+        줄을 배치하고 탭 시 <code>vm.setThemeColor()</code> 호출</td>
     </tr>
     <tr>
       <td>방 설정 배경</td>
@@ -452,11 +450,11 @@ footer{color:var(--ink-dim);font-size:12px;border-top:1px solid var(--line);marg
       <p>오너 프로필의 의미(잡담·참여 인사에만 사용, 프로필 스트립 미노출, 이 프로필로 발화 불가)와
       저장 키(<code>ownerName</code>/<code>ownerColor</code>/<code>ownerImagePath</code>)는 변경하지 않습니다.
       오너의 저장 키도 그대로입니다.</p></div>
-    <div class="note y"><h4>프리셋 축소 — 이름 색 · 말풍선 색만</h4>
-      <p><code>PbpPalette.namePresets</code> · <code>bubblePresets</code>를 <b>5종 → 앞 3종</b>으로 줄입니다(<code>take(3)</code> 아님, 목록 자체를 3개로).
-      오너 컬러는 <code>bubblePresets</code>를 그대로 쓰므로 함께 3종이 됩니다.
-      <b>테마 컬러 7종은 유지</b> — 이름이 붙은 큐레이션 프리셋(새벽 하늘·라일락…)이라 '예시 색'과 성격이 다릅니다.
-      테마도 줄이길 원하시면 말씀해 주세요.</p></div>
+    <div class="note y"><h4>프리셋 축소 — 네 곳 모두 3종</h4>
+      <p><code>PbpPalette</code>의 세 목록을 모두 <b>앞 3종</b>으로 줄입니다(목록 자체를 3개로).
+      <code>namePresets</code> 5→3 · <code>bubblePresets</code> 5→3 · <code>themePresets</code> 7→3(새벽 하늘·라일락·호박등).
+      오너 컬러는 <code>bubblePresets</code>를 공유하므로 함께 3종이 됩니다.
+      기본값(<code>DEFAULT_THEME_COLOR</code> = 새벽 하늘)이 목록 첫 항목이라 그대로 유지됩니다.</p></div>
   </div>
 </section>
 

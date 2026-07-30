@@ -59,9 +59,9 @@ object Tokens {
     val VeilTop = Color(0x8CF4F2EC)
     val VeilMid = Color(0x40F4F2EC)
 
+    // 테마 컬러 3종 — 이름·말풍선과 같은 개수로 (모바일 PbpPalette와 동일 목록)
     val themePresets = listOf(
         0xFF8EC5E8 to "새벽 하늘", 0xFFC9A7E8 to "라일락", 0xFFE8B48E to "호박등",
-        0xFF9FE0B8 to "이끼", 0xFFF2A1A8 to "동백", 0xFFE8D48E to "사금", 0xFFA8B4C8 to "잿빛",
     )
     // 팔레트 값·변환은 :shared Palette가 단일 출처 (리뷰 A3)
     val namePresets = com.pbp.shared.Palette.namePresets

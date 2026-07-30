@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import androidx.room.withTransaction
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.firestore.DocumentChange
@@ -108,14 +109,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             if (isDemo) {
                 // demo- 프로젝트는 로컬 에뮬레이터로 (10.0.2.2 = 에뮬레이터에서 본 호스트 PC)
                 useEmulator("10.0.2.2", 8080)
-            } else {
-                // 로컬 Room DB가 이미 소스이므로 Firestore 디스크 캐시는 이중 저장 — 메모리 캐시만 사용
-                firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-                    .setLocalCacheSettings(
-                        com.google.firebase.firestore.MemoryCacheSettings.newBuilder().build()
-                    )
-                    .build()
             }
+            // 기본 PersistentCacheSettings 유지 (P1): 디스크 캐시가 있어야 SDK가 스냅샷을
+            // 이어받아, 프로세스 재시작 때 initial snapshot 전량 재다운로드·재과금이 사라진다.
+            // (과거 "Room이 소스라 이중 저장" 이유로 메모리 캐시를 강제했으나, 그 비용은
+            // 수 MB 디스크일 뿐이고 read 과금이 콜드 스타트마다 방 전체 크기로 발생했다.
+            // reconcile 기준선은 캐시 사용 시에도 첫 스냅샷의 전체 집합이라 그대로 동작.)
         }
     }
 
@@ -314,17 +313,23 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * REMOVED 리스너로 전파되어 상대의 로컬 로그도 함께 지워진다.
      * Firestore 쓰기는 자체 타임아웃이 없어 오프라인이면 무한 대기하므로 60초 상한 (L1).
      */
-    suspend fun wipeMessages(remoteRoomId: String): Boolean =
-        kotlinx.coroutines.withTimeoutOrNull(60_000) { wipeMessagesInternal(remoteRoomId) }
-            ?: false
+    suspend fun wipeMessages(remoteRoomId: String, knownRemoteIds: List<String>): Boolean =
+        kotlinx.coroutines.withTimeoutOrNull(60_000) {
+            wipeMessagesInternal(remoteRoomId, knownRemoteIds)
+        } ?: false
 
-    private suspend fun wipeMessagesInternal(remoteRoomId: String): Boolean = runCatching {
+    private suspend fun wipeMessagesInternal(
+        remoteRoomId: String,
+        knownRemoteIds: List<String>,
+    ): Boolean = runCatching {
         ensureAuth()
-        val docs = firestore.collection("rooms").document(remoteRoomId)
-            .collection("messages").get().await().documents
-        docs.chunked(450).forEach { chunk ->
+        // 사전 전체 get() 없이 로컬이 아는 remoteId로 직접 삭제 (P7) — 초기화 비용 절반.
+        // 로컬이 모르는 극소수 잔여 문서(detach~wipe 사이 도착분)는 reattach 후 다시 내려온다.
+        val collection = firestore.collection("rooms").document(remoteRoomId)
+            .collection("messages")
+        knownRemoteIds.chunked(450).forEach { chunk ->
             val batch = firestore.batch()
-            chunk.forEach { batch.delete(it.reference) }
+            chunk.forEach { batch.delete(collection.document(it)) }
             batch.commit().await()
         }
         true
@@ -432,6 +437,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             // 그 밀리초 틈에 업로드 완료된 메시지가 기준선에 들어가 잘못 지워질 수 있다.
             val baseline = runCatching { db.messageDao().listRemoteIdsForRoom(localRoomId) }
                 .getOrDefault(emptyList()).toSet()
+            // 전체 ID 집합은 삭제 대조(reconcile) 한 번에만 쓰인다 — 그 뒤에는
+            // 이벤트마다 수천 개짜리 집합을 재구성하지 않는다 (M1)
+            val reconcilePending = java.util.concurrent.atomic.AtomicBoolean(true)
             val registration = firestore.collection("rooms").document(remoteRoomId)
                 .collection("messages").orderBy("createdAt")
                 .addSnapshotListener { snapshot, error ->
@@ -447,7 +455,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     channel.trySend(
                         SnapshotEvent(
                             changes = snapshot.documentChanges.toList(),
-                            allIds = snapshot.documents.mapTo(mutableSetOf()) { it.id },
+                            allIds = if (reconcilePending.get()) {
+                                snapshot.documents.mapTo(mutableSetOf()) { it.id }
+                            } else emptySet(),
                             fromCache = snapshot.metadata.isFromCache,
                         )
                     )
@@ -471,7 +481,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     )
                 }.isSuccess
                 // 실패한 스냅샷에서 reconcile 기회를 소진하지 않는다 (S6)
-                if (doReconcile && ok) needReconcile = false
+                if (doReconcile && ok) {
+                    needReconcile = false
+                    reconcilePending.set(false) // 이후 이벤트는 allIds 구성 생략 (M1)
+                }
                 // 정상 수신 중이면 권한 복구 백오프 카운터 리셋
                 if (ok) recoverAttempts.remove(localRoomId)
             }
@@ -494,20 +507,25 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 // 내 신원(auth UID)과 구버전 신원(deviceId) 모두 내 발신으로 취급
                 !it.metadata.hasPendingWrites() && author != myUid && author != deviceId
             }
-        // ADDED dedup은 일괄 조회로 — IN 절은 SQLite 변수 한도(999) 아래로 청크 (P1-3)
-        val known = addedDocs.map { it.id }.chunked(900)
-            .flatMap { db.messageDao().existingRemoteIds(it) }.toSet()
+        // ADDED dedup은 일괄 조회로 — IN 절은 SQLite 변수 한도(999) 아래로 청크 (P1-3).
+        // 본문·편집시각도 함께 가져와 실제로 달라진 것만 갱신한다 (P4)
+        val knownRows = addedDocs.map { it.id }.chunked(900)
+            .flatMap { db.messageDao().listByRemoteIds(it) }.associateBy { it.remoteId }
+        val pendingUpdates = mutableListOf<Triple<String, String, Long?>>()
 
         for (doc in addedDocs) {
             // 문서 1건의 예외가 같은 스냅샷의 나머지 문서를 삼키지 않게 격리 (S6)
             runCatching {
-                if (doc.id in known) {
-                    // 이미 있는 문서가 ADDED로 재도착 = 리스너가 없던 사이의 편집 — 업서트 (P1-1)
-                    db.messageDao().updateBodyByRemoteId(
-                        remoteId = doc.id,
-                        body = doc.getString("body") ?: "",
-                        editedAt = doc.getLong("editedAt"),
-                    )
+                val knownRow = knownRows[doc.id]
+                if (knownRow != null) {
+                    // 이미 있는 문서가 ADDED로 재도착 = 리스너가 없던 사이의 편집 가능성 (P1-1).
+                    // 콜드 스타트의 initial snapshot은 전부 여길 지나므로, 변경 없으면
+                    // UPDATE를 건너뛰어 Flow 무효화 홍수를 막는다 (P4)
+                    val newBody = doc.getString("body") ?: ""
+                    val newEditedAt = doc.getLong("editedAt")
+                    if (knownRow.body != newBody || knownRow.editedAt != newEditedAt) {
+                        pendingUpdates += Triple(doc.id, newBody, newEditedAt)
+                    }
                     return@runCatching
                 }
                 // 발신자 프로필 이미지가 함께 온 경우 내려받아 로컬 경로로 연결
@@ -522,6 +540,16 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
             }.onFailure {
                 android.util.Log.w("PbpSync", "수신 메시지 처리 실패 doc=${doc.id}", it)
+            }
+        }
+
+        // 실제 변경분만 한 트랜잭션으로 일괄 갱신 (P4) — 건별 UPDATE가 messages 테이블을
+        // 수천 번 무효화해 시작 직후 채팅 화면이 버벅이던 원인 제거
+        if (pendingUpdates.isNotEmpty()) {
+            db.withTransaction {
+                pendingUpdates.forEach { (remoteId, body, editedAt) ->
+                    db.messageDao().updateBodyByRemoteId(remoteId, body, editedAt)
+                }
             }
         }
 

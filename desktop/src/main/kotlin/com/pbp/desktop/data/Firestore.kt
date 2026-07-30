@@ -436,9 +436,10 @@ class FirestoreRest(
      * 중복은 호출부의 docId dedup이 걸러낸다.
      * @return null이면 오류 — 호출부는 커서를 전진시키면 안 된다
      */
-    fun listMessagesSince(remoteRoomId: String, since: Long): List<Message>? {
+    fun listMessagesSince(remoteRoomId: String, since: Long, windowMs: Long = 30_000): List<Message>? {
         if (since <= 0) return listMessages(remoteRoomId)
-        val from = (since - 30_000).coerceAtLeast(0)
+        // 윈도는 폴 주기×2로 동적 (P5) — 고정 30초는 활성 채팅에서 건당 ~12배 재과금
+        val from = (since - windowMs).coerceAtLeast(0)
         val query = """
             {"structuredQuery":{"from":[{"collectionId":"messages"}],
              "where":{"fieldFilter":{"field":{"fieldPath":"createdAt"},"op":"GREATER_THAN_OR_EQUAL",

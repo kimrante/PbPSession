@@ -19,6 +19,10 @@ object DesktopNotifier {
             TrayIcon(appIcon(), "PbP").apply {
                 isImageAutoSize = true
                 SystemTray.getSystemTray().add(this)
+                // 일부 리눅스 트레이는 프로세스 종료 후 아이콘 잔상이 남는다 — 명시 해제 (M3)
+                Runtime.getRuntime().addShutdownHook(Thread {
+                    runCatching { SystemTray.getSystemTray().remove(this) }
+                })
             }
         }.getOrNull()
     }

@@ -539,8 +539,10 @@ private fun MessageBlock(
         }
         // 서술자(GM) 발화: 명조 서술 문단 + " " 인용만 말풍선 분리 (스펙 4장)
         message.senderIsGm && !message.isOoc -> {
+            // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                GmSpeech.split(message.body).forEach { part ->
+                parts.forEach { part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
@@ -557,8 +559,8 @@ private fun MessageBlock(
         }
         else -> {
             // 캐릭터 발화도 GM과 같은 규칙: 문장 중간의 " " 대사만 인용 말풍선으로 분리한다.
-            // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다.
-            val parts = GmSpeech.split(message.body)
+            // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다. (F2: remember)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
             if (parts.size <= 1) {
                 BubbleRow(
                     message = message, showHeader = !grouped,

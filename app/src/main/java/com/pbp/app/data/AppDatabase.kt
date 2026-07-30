@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -92,11 +92,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** 페이징 쿼리용 복합 인덱스 — 삽입·무효화마다 방 전체 정렬하던 것 제거 (F1) */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_messages_roomId_createdAt_id` " +
+                        "ON `messages` (`roomId`, `createdAt`, `id`)"
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, "pbp.db")
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                    MIGRATION_6_7, MIGRATION_7_8,
+                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                 )
                 .build()
     }

@@ -24,6 +24,9 @@ exports.notifyNewMessage = onDocumentCreated(
     if (!data) return;
     // 프로필 전환 등 SYSTEM 안내는 대화가 아니다 — 푸시 제외 (L2-1)
     if (data.type === "SYSTEM") return;
+    // 아웃박스 드레인·백필로 쏟아지는 오래된 메시지는 푸시하지 않는다 (P8) —
+    // 상대 기기의 연쇄 웨이크업과 members read 폭주 방지
+    if ((data.createdAt || 0) < Date.now() - 2 * 60 * 1000) return;
 
     const senderName = data.senderName || "상대";
     const authorUid = data.authorUid || "";

@@ -75,7 +75,12 @@ data class CharacterProfile(
         childColumns = ["roomId"],
         onDelete = ForeignKey.CASCADE,
     )],
-    indices = [Index("roomId"), Index(value = ["remoteId"], unique = true)],
+    indices = [
+        Index("roomId"),
+        Index(value = ["remoteId"], unique = true),
+        // 페이징 쿼리(WHERE roomId ORDER BY createdAt DESC, id DESC LIMIT)용 (F1)
+        Index(value = ["roomId", "createdAt", "id"]),
+    ],
 )
 data class Message(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

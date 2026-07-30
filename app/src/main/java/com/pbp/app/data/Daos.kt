@@ -64,6 +64,8 @@ interface RoomDao {
 
 data class UnreadCount(val roomId: Long, val count: Int)
 
+data class RemoteMessageRow(val remoteId: String, val body: String, val editedAt: Long?)
+
 @Dao
 interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE roomId IS NULL ORDER BY name")
@@ -138,6 +140,10 @@ interface MessageDao {
     /** 삭제 동기화 대조용 — 서버에 존재해야 하는(업로드 확인된) remoteId 전체 */
     @Query("SELECT remoteId FROM messages WHERE roomId = :roomId AND remoteId IS NOT NULL AND uploaded = 1")
     suspend fun listRemoteIdsForRoom(roomId: Long): List<String>
+
+    /** 수신 dedup + 변경 감지용 — remoteId와 현재 본문·편집시각만 (P4) */
+    @Query("SELECT remoteId, body, editedAt FROM messages WHERE remoteId IN (:remoteIds)")
+    suspend fun listByRemoteIds(remoteIds: List<String>): List<RemoteMessageRow>
 
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun get(id: Long): Message?

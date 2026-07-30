@@ -101,6 +101,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** 방별 세션 캐시 (P3) — 메시지 목록·증분 커서·삭제 억제 목록. 프로세스 수명 동안 유지 */
+private class RoomSession {
+    var messages: List<Message> = emptyList()
+    var lastCreatedAt: Long = 0L
+    val deletedDocIds: MutableSet<String> = mutableSetOf()
+}
+
 // 모바일 앱과 같은 Firebase 프로젝트 (app/src/main/res/values/firebase.xml)
 private const val PROJECT_ID = "pbp-session-1195c"
 private const val API_KEY = "AIzaSyCTgWzPb62iJ5rASCZ6WEiKi7kwNPVC2m4"
@@ -207,45 +214,68 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
     }
 
-    // 내가 방금 지운 메시지의 docId — 30초 재수신 윈도가 삭제를 '신규'로 되살리지 않게 (편집/삭제 이식)
-    val deletedDocIds = remember { mutableSetOf<String>() }
+    // 방별 세션 캐시 (P3) — 방 전환 때마다 전체 히스토리를 재다운로드하지 않고,
+    // 마지막 커서에서 증분으로 재개한다. 삭제 억제 목록도 방별로 유지.
+    val roomSessions = remember { mutableMapOf<String, RoomSession>() }
+    fun sessionFor(remoteId: String): RoomSession =
+        roomSessions.getOrPut(remoteId) { RoomSession() }
+
+    // 마지막 내 전송 시각 — 활동 기반 폴 주기의 즉시 복귀 신호 (P2)
+    val lastLocalSendAt = remember { java.util.concurrent.atomic.AtomicLong(0L) }
 
     // 선택된 방 폴링: 최초 전체 1회 + 이후 증분(createdAt 기준)만 — read 과금 최소화.
-    // 방 메타(테마/배경)는 10초 주기.
+    // 주기는 활동 기반(P2): 최근 2분 내 송수신 2.5초 / 유휴 20초 / 창 미포커스 30초
+    // (정지는 금지 — 트레이 알림이 폴링에 의존). 방 메타는 60초 (P6).
     LaunchedEffect(selected?.remoteId) {
         val room = selected ?: return@LaunchedEffect
-        messages = emptyList()
-        deletedDocIds.clear()
-        var lastCreatedAt = 0L
-        var tick = 0
+        val session = sessionFor(room.remoteId)
+        messages = session.messages
+        var lastCreatedAt = session.lastCreatedAt
+        var lastMetaPollAt = 0L
+        var lastActivityAt = System.currentTimeMillis()
         while (isActive) {
+            val now = System.currentTimeMillis()
+            val focusedNow = windowFocused.get()
+            val active = now - maxOf(lastActivityAt, lastLocalSendAt.get()) < 120_000
+            val interval = when {
+                !focusedNow -> 30_000L
+                active -> 2_500L
+                else -> 20_000L
+            }
             // 반복 1회 전체를 격리 — 예기치 못한 예외 1건이 폴링을 영구 정지시키지 않게 (C2)
             runCatching {
                 val fetched = withContext(Dispatchers.IO) {
-                    firestore.listMessagesSince(room.remoteId, lastCreatedAt)
+                    // 중복 윈도는 주기×2 (P5) — 시계 오차·커밋 재정렬 흡수에 충분
+                    firestore.listMessagesSince(room.remoteId, lastCreatedAt, windowMs = interval * 2)
                 }
                 // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
                 if (fetched != null && fetched.isNotEmpty()) {
                     val byId = messages.associateBy { it.docId }
-                    val fresh = fetched.filter { it.docId !in byId && it.docId !in deletedDocIds }
+                    val fresh = fetched.filter {
+                        it.docId !in byId && it.docId !in session.deletedDocIds
+                    }
                     // 창이 포커스를 잃었을 때 새 수신 알림 — 모바일과 동일 규칙
                     // (본문 비노출, SYSTEM 제외). 최초 전체 로드(lastCreatedAt=0)는 제외
-                    if (lastCreatedAt > 0 && !windowFocused.get()) {
+                    if (lastCreatedAt > 0 && !focusedNow) {
                         fresh.lastOrNull { it.authorUid != authorUid() && it.type != "SYSTEM" }
                             ?.let { DesktopNotifier.notifyMessage(it.senderName ?: "상대") }
                     }
-                    // 30초 윈도우로 다시 받은 문서 중 편집된 것은 갱신 (C10).
+                    // 재수신 윈도로 다시 받은 문서 중 편집된 것은 갱신 (C10).
                     // 더 새로운 editedAt만 수용 — 내가 방금 편집한 걸 윈도의 구버전이 되돌리지 않게
                     val edited = fetched.filter { incoming ->
                         byId[incoming.docId]?.let { (incoming.editedAt ?: 0) > (it.editedAt ?: 0) } == true
                     }.associateBy { it.docId }
+                    if (fresh.isNotEmpty()) lastActivityAt = now // 수신 = 활동 (P2)
                     if (fresh.isNotEmpty() || edited.isNotEmpty()) {
                         messages = (messages.map { edited[it.docId] ?: it } + fresh)
                             .sortedBy { it.createdAt }
+                        session.messages = messages
                     }
                     lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
+                    session.lastCreatedAt = lastCreatedAt
                 }
-                if (tick % 4 == 0 && System.currentTimeMillis() > metaFreezeUntil) {
+                if (now - lastMetaPollAt >= 60_000 && now > metaFreezeUntil) {
+                    lastMetaPollAt = now
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
@@ -266,8 +296,14 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     }
                 }
             }.onFailure { System.err.println("폴링 오류(다음 주기에 재시도): $it") }
-            tick++
-            delay(2500)
+            // 긴 주기 대기 중에도 전송·포커스 복귀를 1초 단위로 감지해 즉시 깨어난다 (P2)
+            var waited = 0L
+            while (waited < interval) {
+                val step = minOf(1_000L, interval - waited)
+                delay(step)
+                waited += step
+                if (lastLocalSendAt.get() > now || windowFocused.get() != focusedNow) break
+            }
         }
     }
 
@@ -286,12 +322,12 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ?: return onResult(false, true)
         // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
         val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
+        lastLocalSendAt.set(System.currentTimeMillis()) // 폴 주기 즉시 복귀 신호 (P2)
         scope.launch(Dispatchers.IO) {
             // 프로필 이미지가 있으면 축소본을 방 avatars 문서로 업로드 (모바일과 동일 스키마)
             val avatarId = sender.imagePath?.let { path ->
                 runCatching {
-                    val bytes = encodeAvatarBytes(path) ?: return@runCatching null
-                    val hash = md5Hex(bytes)
+                    val (bytes, hash) = encodedAvatarFor(path) ?: return@runCatching null
                     val key = "${room.remoteId}/$hash"
                     if (key in uploadedAvatarKeys ||
                         firestore.uploadAvatar(
@@ -343,8 +379,10 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             val ids = firestore.listMessages(room.remoteId)?.map { it.docId }
             val ok = ids != null && ids.all { firestore.deleteMessage(room.remoteId, it) }
             if (ok) {
-                deletedDocIds.addAll(ids.orEmpty())
+                val session = sessionFor(room.remoteId)
+                session.deletedDocIds.addAll(ids.orEmpty())
                 messages = emptyList()
+                session.messages = emptyList()
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
                     room.remoteId,
@@ -386,7 +424,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     messages = snapshot,
                     myUid = authorUid(),
                     avatarDataUri = { id ->
-                        firestore.fetchAvatar(room.remoteId, id)
+                        fetchAvatarCached(firestore, room.remoteId, id)
                             ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
                     },
                 )
@@ -422,6 +460,7 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         messages = messages.map {
             if (it.docId == target.docId) it.copy(body = body, editedAt = editedAt) else it
         }
+        sessionFor(room.remoteId).messages = messages
         scope.launch(Dispatchers.IO) {
             if (!firestore.updateMessage(room.remoteId, target.docId, body, editedAt)) {
                 System.err.println("편집 전파 실패 — 상대 화면에는 반영되지 않을 수 있습니다")
@@ -432,8 +471,10 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     /** 메시지 삭제 — 로컬 즉시 제거 후 전파 */
     fun deleteMessage(target: Message) {
         val room = selected ?: return
-        deletedDocIds += target.docId
+        val session = sessionFor(room.remoteId)
+        session.deletedDocIds += target.docId
         messages = messages.filterNot { it.docId == target.docId }
+        session.messages = messages
         scope.launch(Dispatchers.IO) {
             if (!firestore.deleteMessage(room.remoteId, target.docId)) {
                 System.err.println("삭제 전파 실패 — 상대 화면에는 반영되지 않을 수 있습니다")
@@ -696,7 +737,11 @@ private fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     } // CompositionLocalProvider — 앱 전체 글꼴
 }
 
-/** 컴포지션 진입 전 1회성 파일 IO를 UI 스레드 밖에서 수행 (C8) */
+/**
+ * 시작 시 1회성 config 로드. runBlocking이라 호출 스레드는 여전히 블록된다 —
+ * 수 ms짜리 로드라 실해가 없어 유지 (F3에서 주석 정정). 진짜 비동기화가 필요해지면
+ * produceState로 전환할 것.
+ */
 private fun <T> runBlockingIo(block: () -> T): T =
     kotlinx.coroutines.runBlocking(Dispatchers.IO) { block() }
 
@@ -855,11 +900,13 @@ private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier
     val preset = Tokens.backgroundPresets[backgroundKey]
     if (preset == null) {
         val bitmap by produceState<ImageBitmap?>(null, backgroundKey) {
-            value = withContext(Dispatchers.IO) {
+            // 경로 공용 캐시 (M2) — 채팅 배경과 방 목록 썸네일이 같은 이미지를
+            // 각각 디코드해 이중 상주(~10-20MB)하던 것 제거
+            value = backgroundBitmapCache[backgroundKey] ?: withContext(Dispatchers.IO) {
                 runCatching {
                     org.jetbrains.skia.Image.makeFromEncoded(java.io.File(backgroundKey).readBytes())
                         .toComposeImageBitmap()
-                }.getOrNull()
+                }.getOrNull()?.also { backgroundBitmapCache[backgroundKey] = it }
             }
         }
         bitmap?.let {
@@ -1119,8 +1166,10 @@ private fun MessageBlock(
             }
         }
         message.senderIsGm -> {
+            // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                GmSpeech.split(message.body).forEach { part ->
+                parts.forEach { part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
                             message, part.text,
@@ -1138,8 +1187,8 @@ private fun MessageBlock(
             }
         }
         else -> {
-            // 캐릭터 발화도 GM과 같은 규칙 — 문장 중간의 " " 대사만 인용 말풍선으로 분리
-            val parts = GmSpeech.split(message.body)
+            // 캐릭터 발화도 GM과 같은 규칙 — 문장 중간의 " " 대사만 인용 말풍선으로 분리 (F2: remember)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
             if (parts.size <= 1) {
                 BubbleRow(
                     message, deviceId, room, avatarCache, firestore,
@@ -1393,7 +1442,7 @@ private fun MessageAvatar(
         if (!avatarsInFlight.add(avatarId)) return@LaunchedEffect
         try {
             val bitmap = withContext(Dispatchers.IO) {
-                firestore.fetchAvatar(room.remoteId, avatarId)?.let { bytes ->
+                fetchAvatarCached(firestore, room.remoteId, avatarId)?.let { bytes ->
                     runCatching {
                         org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
                     }.getOrNull()
@@ -2328,9 +2377,52 @@ private fun md5Hex(bytes: ByteArray): String =
     java.security.MessageDigest.getInstance("MD5").digest(bytes)
         .joinToString("") { "%02x".format(it) }
 
+/**
+ * 아바타 다운로드 디스크 캐시 (P9) — Android의 filesDir/avatars와 동일하게
+ * 해시 키 파일로 저장해 실행마다 재다운로드(문서 크기만큼 read 대역폭 과금)를 없앤다.
+ */
+private fun fetchAvatarCached(
+    firestore: FirestoreRest,
+    remoteRoomId: String,
+    avatarId: String,
+): ByteArray? {
+    val dir = java.io.File(System.getProperty("user.home"), ".pbp-desktop/avatars-remote")
+    val cached = java.io.File(dir, avatarId)
+    runCatching { if (cached.exists()) return cached.readBytes() }
+    val bytes = firestore.fetchAvatar(remoteRoomId, avatarId) ?: return null
+    runCatching {
+        dir.mkdirs()
+        // 임시 파일 + 교체 — 쓰다 중단된 깨진 캐시 방지 (모바일 R7-2와 동일)
+        val tmp = java.io.File(dir, "$avatarId.tmp")
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(cached)) tmp.delete()
+    }
+    return bytes
+}
+
 /** 방별 업로드 완료 표시 — 같은 이미지의 중복 업로드 방지 (모바일 uploadedAvatars와 동일) */
 private val uploadedAvatarKeys: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+/** 커스텀 배경 디코드 공용 캐시 (M2) — 경로가 타임스탬프 파일명이라 무효화 불필요 */
+private val backgroundBitmapCache =
+    java.util.concurrent.ConcurrentHashMap<String, ImageBitmap>()
+
+/** 전송마다 아바타 재인코딩·재해시하지 않는다 (F3) — lastModified 기준 캐시 */
+private val avatarEncodeCache =
+    java.util.concurrent.ConcurrentHashMap<String, Triple<Long, ByteArray, String>>()
+
+private fun encodedAvatarFor(path: String): Pair<ByteArray, String>? {
+    val file = java.io.File(path)
+    if (!file.exists()) return null
+    avatarEncodeCache[path]?.let { (modified, bytes, hash) ->
+        if (modified == file.lastModified()) return bytes to hash
+    }
+    val bytes = encodeAvatarBytes(path) ?: return null
+    val hash = md5Hex(bytes)
+    avatarEncodeCache[path] = Triple(file.lastModified(), bytes, hash)
+    return bytes to hash
+}
 
 /** 로컬 이미지 파일 로더 — 실패는 캐시하지 않고 null (호출부는 이모지 폴백) */
 @Composable

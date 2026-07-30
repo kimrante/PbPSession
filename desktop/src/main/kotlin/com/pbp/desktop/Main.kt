@@ -1173,29 +1173,17 @@ private fun ChatPane(
         )
         Column(Modifier.fillMaxSize()) {
             // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션.
-            // 타이틀 묶음은 버튼 위에 겹쳐 정중앙 (모바일과 동일 규격, 목업 mockup-chat-header)
-            Box(
+            // PC는 좌측 정렬 유지 (trpg-app-mockup-pc-light.html) — 넓은 창에서 제목이
+            // 사이드바 쪽 시선 흐름과 이어지고, 부제 규격만 모바일과 공유한다.
+            Row(
                 Modifier.fillMaxWidth().height(56.dp)
                     .background(
                         Brush.verticalGradient(listOf(Color(0xD9FFFFFF), Color(0x59FFFFFF)))
                     )
+                    .padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    Modifier.fillMaxSize().padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Spacer(Modifier.weight(1f))
-                    GhostButton("내보내기", Modifier, onExport)
-                    Spacer(Modifier.width(8.dp))
-                    GhostButton("초대 코드", Modifier, onShowCode)
-                    // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
-                    Spacer(Modifier.width(8.dp))
-                    GhostButton("방 설정", Modifier, onOpenSettings)
-                }
-                Column(
-                    Modifier.align(Alignment.Center).padding(horizontal = 280.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+                Column(Modifier.weight(1f)) {
                     Text(
                         room.name, fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
                         fontSize = 15.sp, lineHeight = 15.sp, color = Tokens.Ink,
@@ -1221,6 +1209,12 @@ private fun ChatPane(
                         }
                     }
                 }
+                GhostButton("내보내기", Modifier, onExport)
+                Spacer(Modifier.width(8.dp))
+                GhostButton("초대 코드", Modifier, onShowCode)
+                // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
+                Spacer(Modifier.width(8.dp))
+                GhostButton("방 설정", Modifier, onOpenSettings)
             }
 
             // 메시지 목록 — 최신 메시지가 바뀔 때만, 바닥 근처를 보고 있을 때만 따라간다

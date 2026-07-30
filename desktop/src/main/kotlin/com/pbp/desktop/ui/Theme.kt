@@ -39,6 +39,12 @@ object Tokens {
     val SignatureRing = Color(0xFFE0B13E) // 링·테두리용 진한 골드
     val SignatureInk = Color(0xFFA3781A)  // 밝은 배경 위 옐로 '텍스트'용
     val Danger = Color(0xFFC94F4F)
+    /** 입력 필드·토글 배경 — 과거 0x0A/0x0D 두 값으로 갈라져 있던 것 통일 (리뷰 D3) */
+    val FieldBg = Color(0x0D14191F)
+    /** GM 표식 금색 링 */
+    val GmRing = Color(0x99C89E34)
+    /** 다이스 카드 텍스트의 진한 골드 */
+    val DiceInk = Color(0xFF7A5B12)
     val ChatterBubble = Color(0x0F141920)
     val ChatterInk = Color(0x9923272E)
     val BubbleInk = Color(0xFF10151C)

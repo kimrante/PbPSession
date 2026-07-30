@@ -12,7 +12,7 @@ import java.io.File
  */
 object RoomCacheStore {
     private val gson = Gson()
-    private val dir = File(System.getProperty("user.home"), ".pbp-desktop/cache")
+    private val dir = AppPaths.dir(AppPaths.CACHE)
 
     private data class Saved(val lastCreatedAt: Long, val messages: List<Message>?)
 

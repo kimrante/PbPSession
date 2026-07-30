@@ -18,15 +18,20 @@ data class Profile(
     val imagePath: String? = null,
 )
 
+/**
+ * 참여 중인 방. **전 필드 val** — 코드베이스가 copy()로만 갱신하는데 var면
+ * "같은 인스턴스를 고쳐 Compose가 변화를 놓치는" 함정이 열린다 (리뷰 D6).
+ */
 data class JoinedRoom(
     val remoteId: String,
-    var name: String,
-    var icon: String,
-    var inviteCode: String?,
-    var themeColor: Long,
-    var backgroundKey: String,
+    val name: String,
+    /** 미사용(구 config 호환) — 방은 배경 이미지로만 구분한다 */
+    val icon: String,
+    val inviteCode: String?,
+    val themeColor: Long,
+    val backgroundKey: String,
     val isMaster: Boolean,
-    var activeProfileIndex: Int = 0,
+    val activeProfileIndex: Int = 0,
     /** 방의 TRPG 룰 — 판정 매크로·판정 등급 기준. 구 config에는 없어 null 허용 */
     val rule: String? = null,
 )
@@ -46,7 +51,7 @@ class AppConfig private constructor(
     @Volatile var ownerImagePath: String? = null,
 ) {
     companion object {
-        private val file = File(System.getProperty("user.home"), ".pbp-desktop/config.json")
+        private val file = AppPaths.file("config.json")
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
         fun load(): AppConfig {

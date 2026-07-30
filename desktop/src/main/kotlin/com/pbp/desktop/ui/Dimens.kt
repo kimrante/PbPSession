@@ -7,12 +7,30 @@ import androidx.compose.ui.unit.dp
  * 일회성 패딩까지 옮기지는 않는다; 의미 있고 반복되는 것만.
  */
 object DesktopDimens {
+    // ── 여백·반경 — Android PbpDimens와 같은 4dp 그리드. 오프그리드 리터럴이
+    //    증식하지 않도록 데스크톱에도 같은 이름으로 둔다 (디자인 감사 P4)
+    val gap1 = 4.dp
+    val gap2 = 8.dp
+    val gap3 = 12.dp
+    val gap4 = 16.dp
+    val gap5 = 24.dp
+    val gap6 = 32.dp
+
+    val rCell = 12.dp
+    val rCard = 16.dp
+    val rSheet = 20.dp
+
+    /** 아이콘·전송 버튼 최소 크기 */
+    val touchTarget = 40.dp
+
     /** 상단 바 높이 (모바일과 동일 규격) */
     val appBar = 56.dp
 
     /** 채팅 아바타 / 프로필 스트립 아바타 */
     val avatarChat = 38.dp
     val avatarStrip = 36.dp
+    /** 상단 바의 오너 아바타 */
+    val avatarBar = 32.dp
 
     // ── PC 전용 (trpg-app-mockup-pc-light.html) ──
     /** 좌측 사이드바 고정 폭 */

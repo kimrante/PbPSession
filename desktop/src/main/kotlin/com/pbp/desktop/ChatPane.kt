@@ -208,7 +208,13 @@ internal fun ChatPane(
                         // 목록은 오름차순이라 "다음" 메시지는 index + 1 (모바일과 동일 규칙)
                         val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
                         Box(
-                            Modifier.padding(top = if (index == 0) 0.dp else if (grouped) 2.dp else 12.dp)
+                            Modifier.padding(
+                                top = when {
+                                    index == 0 -> 0.dp
+                                    grouped -> DesktopDimens.gap1 // 모바일과 같은 연속 간격
+                                    else -> DesktopDimens.gap3
+                                }
+                            )
                         ) {
                             MessageBlock(
                                 message, myUid, room, avatarCache, firestore, grouped,
@@ -258,7 +264,7 @@ internal fun MessageBlock(
                 Box(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0xBFFFFFFF))
                         .border(1.dp, Color(0x1214191F), RoundedCornerShape(999.dp))
-                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
                     Text(message.body, fontSize = 10.sp, color = Color(0x8C23272E))
                 }
@@ -269,14 +275,14 @@ internal fun MessageBlock(
                 Row(
                     Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD9FFFFFF))
                         .border(1.dp, Color(0x80C89E34), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
                     Spacer(Modifier.width(8.dp))
                     Text(
                         "${message.diceExpr} → ${message.body}",
-                        fontSize = 11.sp, color = Color(0xFF7A5B12), fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp, color = Tokens.DiceInk, fontWeight = FontWeight.Bold,
                     )
                     // 판정 등급 — 성공 계열 파랑, 실패 빨강 (모바일과 동일 표기)
                     Rules.outcomeLabel(message.diceOutcome)?.let { label ->
@@ -285,8 +291,9 @@ internal fun MessageBlock(
                             label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (Rules.isSuccess(message.diceOutcome)) Color(0xFF5E9EFF)
-                            else Color(0xFFFF6B6B),
+                            // 성공 파랑은 모바일 statBlue와 같은 값 (플랫폼 드리프트 해소)
+                            color = if (Rules.isSuccess(message.diceOutcome)) Tokens.StatBlue
+                            else Tokens.Danger,
                         )
                     }
                 }
@@ -304,7 +311,7 @@ internal fun MessageBlock(
                             onClick = {},
                             onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                         )
-                        .padding(horizontal = 12.dp, vertical = 3.dp)
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
                     Text(
                         "${message.senderName ?: ""} : ${message.body}",
@@ -700,7 +707,7 @@ internal fun InputZone(
         Column(
             Modifier.align(Alignment.CenterHorizontally)
                 .widthIn(max = DesktopDimens.contentMax).fillMaxWidth()
-                .padding(start = DesktopDimens.edge, end = DesktopDimens.edge, top = 8.dp, bottom = 12.dp),
+                .padding(horizontal = DesktopDimens.edge, vertical = DesktopDimens.gap3),
         ) {
             // 참여자에게는 GM 프로필을 숨긴다 — 서술 권한은 마스터 전용 (모바일과 동일)
             val visible = profiles.withIndex().filter { room.isMaster || !it.value.isGm }
@@ -717,12 +724,12 @@ internal fun InputZone(
                         ),
                     ) {
                         Box(
-                            Modifier.size(36.dp)
+                            Modifier.size(DesktopDimens.avatarStrip)
                                 .border(
                                     2.dp,
                                     when {
                                         on -> Tokens.SignatureRing
-                                        profile.isGm -> Color(0x99C89E34) // GM 금테
+                                        profile.isGm -> Tokens.GmRing // GM 금테
                                         else -> Color(0x2614191F)
                                     },
                                     CircleShape,
@@ -756,7 +763,7 @@ internal fun InputZone(
                 item {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            Modifier.size(36.dp)
+                            Modifier.size(DesktopDimens.avatarStrip)
                                 .border(1.dp, Color(0x4714191F), CircleShape)
                                 .clip(CircleShape)
                                 .clickable(onClick = onAddProfile),
@@ -807,12 +814,12 @@ internal fun InputZone(
                             RoundedCornerShape(999.dp),
                         )
                         .clickable { oocOn = !oocOn }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         "잡담", fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                        color = if (oocOn) Color(0xFF7A5B12) else Tokens.InkDim,
+                        color = if (oocOn) Tokens.DiceInk else Tokens.InkDim,
                     )
                 }
                 BasicTextField(
@@ -831,7 +838,7 @@ internal fun InputZone(
                         .clip(RoundedCornerShape(12.dp))
                         .background(Tokens.FieldBg)
                         .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                        .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
                     textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
                     cursorBrush = SolidColor(Tokens.SignatureRing),
                     maxLines = 4,
@@ -873,7 +880,7 @@ internal fun InputZone(
                         .background(if (input.isNotBlank()) theme else theme.copy(alpha = .35f))
                         .clickable(enabled = input.isNotBlank()) { doSend() },
                     contentAlignment = Alignment.Center,
-                ) { Text("➤", fontSize = 15.sp, color = Color.White) }
+                ) { Text("➤", fontSize = 15.sp, color = Tokens.BubbleInk) }
             }
             errorMessage?.let { message ->
                 Text(

@@ -6,6 +6,13 @@ package com.pbp.shared
  */
 object Palette {
 
+    /** 방 테마 컬러 프리셋 (색 → 이름) — 이름·말풍선과 같은 3종 */
+    val themePresets = listOf(
+        0xFF8EC5E8L to "새벽 하늘",
+        0xFFC9A7E8L to "라일락",
+        0xFFE8B48EL to "호박등",
+    )
+
     /** 이름 색 프리셋 — 최근 색 5칸이 같은 줄에 들어가도록 3종 (목업 01장) */
     val namePresets = listOf(0xFFFFC46B, 0xFF8EC5E8, 0xFFC9A7E8)
 

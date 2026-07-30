@@ -359,7 +359,7 @@ private fun DesktopSwatch(
             .then(if (outlined) Modifier.border(1.dp, Tokens.Line, CircleShape) else Modifier)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
+    ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Tokens.BubbleInk) }
 }
 
 /** 커스텀 컬러 진입용 무지개 스와치 — on이면 프리셋 밖의 색이 선택된 상태 */
@@ -432,6 +432,8 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     )
                 }
                     .size(16.dp)
+                    // 흰 링만 두면 밝은 영역에서 사라진다 — 안쪽에 잉크 링을 겹친다
+                    .border(3.dp, Tokens.Ink.copy(alpha = .45f), CircleShape)
                     .border(2.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Color(current))
@@ -470,6 +472,7 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     IntOffset((hue / 360f * hueSize.width).toInt() - 8.dp.roundToPx(), 0)
                 }
                     .size(16.dp)
+                    .border(3.dp, Tokens.Ink.copy(alpha = .45f), CircleShape)
                     .border(2.dp, Color.White, CircleShape)
                     .clip(CircleShape)
                     .background(Color(hsvToArgb(hue, 1f, 1f)))
@@ -579,10 +582,10 @@ internal fun ProfileManagerOverlay(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape).background(Tokens.Panel2)
+                    Modifier.size(DesktopDimens.avatarStrip).clip(CircleShape).background(Tokens.Panel2)
                         .border(
                             1.dp,
-                            if (profile.isGm) Color(0x99C89E34) else Tokens.Line,
+                            if (profile.isGm) Tokens.GmRing else Tokens.Line,
                             CircleShape,
                         ),
                     contentAlignment = Alignment.Center,

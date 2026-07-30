@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -125,8 +126,8 @@ internal fun InputZone(
     Column(
         Modifier
             .fillMaxWidth()
-            .background(if (tokens.isDark) Color(0xE0090C11) else tokens.panel.copy(alpha = .93f))
-            .padding(start = PbpDimens.gap4, end = PbpDimens.gap4, top = PbpDimens.gap2, bottom = PbpDimens.gap3),
+            .background(tokens.chatBarBg)
+            .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
     ) {
         // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
         LazyRow(
@@ -175,11 +176,17 @@ internal fun InputZone(
         if (suggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 items(suggestions, key = { it }) { name ->
+                    // 칩 크기는 그대로 두고 히트박스만 터치 규격으로 (접근성)
+                    Box(
+                        Modifier.heightIn(min = PbpDimens.touchTarget),
+                        contentAlignment = Alignment.Center,
+                    ) {
                     Text(
                         "$name 판정",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = tokens.signature,
+                        // 밝은 입력 바 위 옐로 '텍스트'는 signatureInk (스펙 0장)
+                        color = tokens.signatureInk,
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(tokens.signature.copy(alpha = .14f))
@@ -190,32 +197,37 @@ internal fun InputZone(
                                 onSend("$command $name 판정", false)
                                 input = ""
                             }
-                            .padding(horizontal = PbpDimens.gap3, vertical = 5.dp),
+                            .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     )
+                    }
                 }
             }
             Spacer(Modifier.height(PbpDimens.gap2))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
-            // 잡담 토글
+            // 잡담 토글 — 알약은 그대로 두고 히트박스만 터치 규격으로 (접근성)
+            Box(
+                Modifier.heightIn(min = PbpDimens.touchTarget),
+                contentAlignment = Alignment.Center,
+            ) {
             Row(
                 Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(if (oocOn) tokens.signature.copy(alpha = .16f) else Color.White.copy(alpha = .07f))
+                    .background(if (oocOn) tokens.signature.copy(alpha = .16f) else tokens.chatterBubble)
                     .border(
                         1.dp,
                         if (oocOn) tokens.signature.copy(alpha = .4f) else tokens.line,
                         RoundedCornerShape(999.dp),
                     )
                     .clickable(onClick = onOocToggle)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
                         .size(width = 22.dp, height = 12.dp)
                         .clip(RoundedCornerShape(999.dp))
-                        .background(if (oocOn) tokens.signature else Color.White.copy(alpha = .2f)),
+                        .background(if (oocOn) tokens.signature else tokens.line),
                     contentAlignment = if (oocOn) Alignment.CenterEnd else Alignment.CenterStart,
                 ) {
                     Box(
@@ -223,7 +235,7 @@ internal fun InputZone(
                             .padding(2.dp)
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(if (oocOn) Color(0xFF1A1A1A) else Color.White)
+                            .background(if (oocOn) tokens.onSignature else tokens.panel)
                     )
                 }
                 Spacer(Modifier.width(5.dp))
@@ -233,6 +245,7 @@ internal fun InputZone(
                     fontWeight = FontWeight.Bold,
                     color = if (oocOn) tokens.signature else tokens.inkDim,
                 )
+            }
             }
             val canSend = input.isNotBlank() && activeId != null
             val doSend = {
@@ -270,7 +283,7 @@ internal fun InputZone(
                         Modifier
                             .size(24.dp)
                             .clip(CircleShape)
-                            .background(Color.White.copy(alpha = .12f))
+                            .background(tokens.chatterBubble)
                             .clickable { helpOpen = true },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -278,8 +291,9 @@ internal fun InputZone(
                     }
                 },
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = .08f),
-                    unfocusedContainerColor = Color.White.copy(alpha = .08f),
+                    // 라이트 입력바 배경이 거의 흰색이라 흰 반투명 컨테이너는 구분되지 않는다
+                    focusedContainerColor = tokens.panel2,
+                    unfocusedContainerColor = tokens.panel2,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                 ),
@@ -294,7 +308,7 @@ internal fun InputZone(
                     .background(if (canSend) themeColor else themeColor.copy(alpha = .35f))
                     .clickable(enabled = canSend, onClick = doSend),
                 contentAlignment = Alignment.Center,
-            ) { Text("➤", fontSize = 15.sp, color = Color(0xFF0D1420)) }
+            ) { Text("➤", fontSize = 15.sp, color = tokens.bubbleInk) }
         }
     }
     if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })

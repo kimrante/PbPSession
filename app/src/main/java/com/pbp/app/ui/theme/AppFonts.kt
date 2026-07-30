@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 
 /**
  * 앱 전체 본문 글꼴 설정. 방 목록의 'Aa' 버튼에서 바꾸고 즉시 반영된다.
@@ -43,14 +44,21 @@ object AppFonts {
 /** Typography의 모든 스타일에 기본 글꼴을 입힌다 */
 fun typographyWith(fontFamily: FontFamily?): Typography {
     val base = Typography()
-    if (fontFamily == null) return base
+    // AlertDialog 타이틀(headlineSmall)의 기본 24sp는 타입 스케일 밖 —
+    // 커스텀 다이얼로그 타이틀과 같은 18sp로 맞춘다 (디자인 감사 P3-2)
+    val dialogTitle = base.headlineSmall.copy(
+        fontFamily = fontFamily ?: base.headlineSmall.fontFamily,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+    )
+    if (fontFamily == null) return base.copy(headlineSmall = dialogTitle)
     return Typography(
         displayLarge = base.displayLarge.copy(fontFamily = fontFamily),
         displayMedium = base.displayMedium.copy(fontFamily = fontFamily),
         displaySmall = base.displaySmall.copy(fontFamily = fontFamily),
         headlineLarge = base.headlineLarge.copy(fontFamily = fontFamily),
         headlineMedium = base.headlineMedium.copy(fontFamily = fontFamily),
-        headlineSmall = base.headlineSmall.copy(fontFamily = fontFamily),
+        headlineSmall = dialogTitle,
         titleLarge = base.titleLarge.copy(fontFamily = fontFamily),
         titleMedium = base.titleMedium.copy(fontFamily = fontFamily),
         titleSmall = base.titleSmall.copy(fontFamily = fontFamily),

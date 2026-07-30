@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -153,7 +154,10 @@ internal fun MessageBlock(
                         message.body,
                         fontSize = 10.sp,
                         color = Color.White.copy(alpha = .6f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(
+                            horizontal = PbpDimens.gap3,
+                            vertical = PbpDimens.gap1,
+                        ),
                     )
                 }
             }
@@ -177,7 +181,10 @@ internal fun MessageBlock(
                         "${message.senderName ?: ""} : ${message.body}",
                         fontSize = 10.sp,
                         color = tokens.bubbleInk.copy(alpha = .85f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(
+                            horizontal = PbpDimens.gap3,
+                            vertical = PbpDimens.gap1,
+                        ),
                     )
                 }
             }
@@ -189,7 +196,7 @@ internal fun MessageBlock(
                         .clip(RoundedCornerShape(PbpDimens.rCell))
                         .background(Color.Black.copy(alpha = .5f))
                         .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(PbpDimens.rCell))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🎲", fontSize = 13.sp)
@@ -209,7 +216,7 @@ internal fun MessageBlock(
                             label,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (success) Color(0xFF5E9EFF) else Color(0xFFFF6B6B),
+                            color = if (success) tokens.statBlue else tokens.danger,
                         )
                     }
                 }
@@ -221,7 +228,7 @@ internal fun MessageBlock(
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             // 배지·시간은 마지막 인용 말풍선에만 — 인용이 여럿이면 중복으로 붙는다 (R4)
             val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 parts.forEachIndexed { index, part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
@@ -249,7 +256,7 @@ internal fun MessageBlock(
                     showRead = showRead, themeColor = themeColor, onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap1)) {
+                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message,
@@ -287,10 +294,10 @@ internal fun NarrationBlock(
                 .fillMaxWidth()
                 .clip(
                     RoundedCornerShape(
-                        topStart = 4.dp,
+                        topStart = PbpDimens.rTail,
                         topEnd = PbpDimens.rCard,
                         bottomEnd = PbpDimens.rCard,
-                        bottomStart = 4.dp,
+                        bottomStart = PbpDimens.rTail,
                     )
                 )
                 .background(tokens.narrBg)
@@ -399,9 +406,9 @@ internal fun BubbleRow(
                 }
                 val r = PbpDimens.rCard
                 val shape = if (mine) {
-                    RoundedCornerShape(topStart = r, topEnd = 4.dp, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = r, topEnd = PbpDimens.rTail, bottomEnd = r, bottomStart = r)
                 } else {
-                    RoundedCornerShape(topStart = 4.dp, topEnd = r, bottomEnd = r, bottomStart = r)
+                    RoundedCornerShape(topStart = PbpDimens.rTail, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
                 val bubbleBase = Modifier
                     .widthIn(max = 240.dp)
@@ -417,8 +424,9 @@ internal fun BubbleRow(
                         onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                     )
                 if (quoteInner != null) {
-                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
-                    // 닫는 따옴표는 글리프 잉크가 글자 상자 위쪽에 몰려 있어 offset으로 보정한다.
+                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 좌우 여백은 9dp로 같다.
+                    // 위아래 값(5dp / +6dp)이 다른 것은 글리프 잉크가 글자 상자 위쪽에
+                    // 몰려 있어서다 — 눈으로 보이는 여백을 맞추기 위한 보정.
                     Box(bubbleBase) {
                         QuoteMark(
                             "“", inkColor,
@@ -524,15 +532,21 @@ internal fun TimeStamp(
     showRead: Boolean = false,
 ) {
     val tokens = Pbp.colors
+    // 라이트 모드에선 밝은 테마색이 밝은 베일 위에서 읽히지 않는다 —
+    // 이름색과 같은 보정 경로를 태워 진하게 (스펙 2장)
+    val timeColor = if (tokens.isDark) themeColor else {
+        val argb = themeColor.toArgb().toLong() and 0xFFFFFFFFL
+        Color(PbpPalette.nameColorForLight(argb))
+    }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         if (showRead) {
-            Text("읽음", fontSize = 9.sp, color = tokens.inkDim)
+            Text("읽음", fontSize = 10.sp, color = tokens.inkDim)
         }
         if (showTime) {
             if (message.editedAt != null) {
-                Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+                Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
             }
-            Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
+            Text(formatTime(message.createdAt), fontSize = 10.sp, color = timeColor)
         }
     }
 }

@@ -298,7 +298,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
-                }) { Text("전부 삭제", color = Color(0xFFFF6B6B)) }
+                }) { Text("전부 삭제", color = Pbp.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("취소") } },
         )
@@ -379,7 +379,7 @@ private fun ThemeCell(
                 RoundedCornerShape(PbpDimens.rCell),
             )
             .clickable(onClick = onClick)
-            .padding(PbpDimens.gap2),
+            .padding(PbpDimens.gap3),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         swatch(
@@ -400,13 +400,19 @@ private fun ThemeCell(
 
 @Composable
 private fun SectionTitle(text: String) {
+    // 섹션 사이 간격은 제목 앞 여백으로 분리 — 제목의 상하 패딩은 대칭 (CLAUDE.md §0)
+    Spacer(Modifier.height(PbpDimens.gap5))
     Text(
         text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 1.5.sp,
         color = Pbp.colors.inkDim,
-        modifier = Modifier.padding(start = PbpDimens.gap4, top = PbpDimens.gap5, bottom = PbpDimens.gap2),
+        modifier = Modifier.padding(
+            start = PbpDimens.gap4,
+            top = PbpDimens.gap2,
+            bottom = PbpDimens.gap2,
+        ),
     )
 }
 

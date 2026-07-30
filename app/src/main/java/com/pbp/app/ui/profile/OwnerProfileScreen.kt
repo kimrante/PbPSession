@@ -145,9 +145,15 @@ fun OwnerProfileScreen(nav: NavController) {
                     Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Box(Modifier.border(3.dp, tokens.signature, CircleShape).padding(3.dp)) {
+                    // 링을 이미지에 직접 — 캐릭터 편집 화면과 같은 규격 (파일 주석대로)
+                    Box {
                         if (imagePath != null) {
-                            Box(Modifier.size(72.dp).clip(CircleShape)) {
+                            Box(
+                                Modifier
+                                    .size(PbpDimens.avatarProfile)
+                                    .border(3.dp, tokens.signature, CircleShape)
+                                    .clip(CircleShape)
+                            ) {
                                 AsyncImage(
                                     model = File(imagePath!!),
                                     contentDescription = null,
@@ -156,7 +162,10 @@ fun OwnerProfileScreen(nav: NavController) {
                                 )
                             }
                         } else {
-                            OwnerAvatar(name, color, null, 72.dp)
+                            OwnerAvatar(
+                                name, color, null, PbpDimens.avatarProfile,
+                                ringColor = tokens.signature,
+                            )
                         }
                     }
                     Spacer(Modifier.height(PbpDimens.gap2))
@@ -233,7 +242,7 @@ fun OwnerProfileScreen(nav: NavController) {
                 // 미리보기 — 오너는 잡담으로만 발화하므로 점선 잡담 말풍선
                 FieldLabel("미리보기 — 잡담 말풍선")
                 Row(
-                    Modifier.fillMaxWidth().padding(bottom = PbpDimens.gap6),
+                    Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
@@ -260,6 +269,8 @@ fun OwnerProfileScreen(nav: NavController) {
                     Spacer(Modifier.width(PbpDimens.gap2))
                     OwnerAvatar(name, color, imagePath, PbpDimens.avatarChat)
                 }
+                // 화면 하단 여유 — 캐릭터 편집 화면과 같은 방식 (Spacer로 통일)
+                Spacer(Modifier.height(PbpDimens.gap6))
             }
         }
     }

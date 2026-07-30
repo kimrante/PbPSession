@@ -352,6 +352,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         // reverseLayout이라 revIdx-1이 더 나중(아래) 메시지 —
                         // 같은 사람이 같은 분에 이어 보냈으면 이 줄의 시간은 감춘다
                         val showTime = !sharesTimeLabel(message, reversed.getOrNull(revIdx - 1))
+                        // 말풍선 사이 간격은 위쪽에만 준다 — 아래에도 주면 이중으로 벌어진다.
+                        // 상하 대칭 규칙(CLAUDE.md §0)의 의도적 예외
                         Box(Modifier.padding(top = if (grouped) PbpDimens.gap1 else PbpDimens.gap3)) {
                             MessageBlock(
                                 message = message,
@@ -367,7 +369,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     if (messages.size < totalCount) {
                         item(key = "load-older") {
                             Box(
-                                Modifier.fillMaxWidth().padding(top = PbpDimens.gap3),
+                                Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -378,7 +380,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                         .clip(RoundedCornerShape(999.dp))
                                         .background(Color.Black.copy(alpha = .35f))
                                         .clickable { vm.loadOlder() }
-                                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                                 )
                             }
                         }
@@ -465,7 +467,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 TextButton(onClick = {
                     vm.delete(target)
                     deleteTargetId = null
-                }) { Text("삭제", color = Pbp.colors.signature) }
+                }) { Text("삭제", color = Pbp.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { deleteTargetId = null }) { Text("취소") } },
         )

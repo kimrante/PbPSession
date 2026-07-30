@@ -165,7 +165,7 @@ fun RoomListScreen(nav: NavController) {
                     Spacer(Modifier.width(PbpDimens.gap1))
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                     com.pbp.app.ui.common.OwnerAvatar(
-                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 30.dp,
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, PbpDimens.avatarBar,
                         Modifier.combinedClickable(onClick = { showManager = true }),
                     )
                 }
@@ -222,15 +222,19 @@ fun RoomListScreen(nav: NavController) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("🎲", fontSize = 40.sp)
-                        Spacer(Modifier.size(8.dp))
-                        Text("첫 세션을 만들어보세요", color = tokens.inkDim)
+                        Spacer(Modifier.height(PbpDimens.gap2))
+                        Text("첫 세션을 만들어보세요", color = tokens.inkDim, fontSize = 13.sp)
                     }
                 }
             } else {
                 LazyColumn(
                     Modifier.fillMaxSize(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = PbpDimens.gap4, end = PbpDimens.gap4, bottom = 88.dp, // FAB 높이 + 여백×2
+                        start = PbpDimens.gap4,
+                        end = PbpDimens.gap4,
+                        top = PbpDimens.gap3, // 첫 카드가 앱바에 밀착하지 않게
+                        // FAB(touchTarget 기준 56) + 화면 가장자리 여백 ×2
+                        bottom = 88.dp,
                     ),
                     verticalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
                 ) {
@@ -327,7 +331,7 @@ fun RoomListScreen(nav: NavController) {
                 TextButton(onClick = {
                     vm.deleteRoom(room)
                     deleteTarget = null
-                }) { Text("삭제", color = Pbp.colors.signature) }
+                }) { Text("삭제", color = Pbp.colors.danger) }
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소") } },
         )
@@ -366,7 +370,7 @@ private fun RoomCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(PbpDimens.rCard))
-            .background(if (tokens.isDark) Color(0x09FFFFFF) else tokens.panel)
+            .background(tokens.cardBg)
             .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),

@@ -33,8 +33,8 @@ import com.pbp.shared.PbpMarkup
 object Tokens {
     /*
      * 글자 크기는 모바일과 같은 18/15/13/11/10sp 5단계를 리터럴로 쓴다 (리뷰 E).
-     * 본문 스케일 밖의 글리프는 아이콘·장식뿐: 인용 따옴표 24 · 초대 코드 34 ·
-     * 빈 상태 '🎲' 44. 이 목록 밖의 새 크기는 금지.
+     * 본문 스케일 밖의 글리프는 아이콘·장식뿐: 인용 따옴표 24 · 초대 코드 32 ·
+     * 빈 상태 '🎲' 40. 모바일 PbpDimens의 예외 목록과 같은 값이어야 한다.
      */
 
     val Bg = Color(0xFFF4F2EC)
@@ -47,7 +47,10 @@ object Tokens {
     val Signature = Color(0xFFFFD05C)     // 면(버튼 배경)용 — 옐로 텍스트 금지
     val SignatureRing = Color(0xFFE0B13E) // 링·테두리용 진한 골드
     val SignatureInk = Color(0xFFA3781A)  // 밝은 배경 위 옐로 '텍스트'용
+    val OnSignature = Color(0xFF1A1A1A)   // 시그니처 옐로 면 위의 잉크
     val Danger = Color(0xFFC94F4F)
+    /** 캐릭터 값 치환·성공 판정 파랑 (모바일 statBlue와 같은 값) */
+    val StatBlue = Color(0xFF3B82F6)
     /** 입력 필드·토글 배경 — 과거 0x0A/0x0D 두 값으로 갈라져 있던 것 통일 (리뷰 D3) */
     val FieldBg = Color(0x0D14191F)
     /** GM 표식 금색 링 */
@@ -62,11 +65,8 @@ object Tokens {
     val VeilTop = Color(0x8CF4F2EC)
     val VeilMid = Color(0x40F4F2EC)
 
-    // 테마 컬러 3종 — 이름·말풍선과 같은 개수로 (모바일 PbpPalette와 동일 목록)
-    val themePresets = listOf(
-        0xFF8EC5E8 to "새벽 하늘", 0xFFC9A7E8 to "라일락", 0xFFE8B48E to "호박등",
-    )
     // 팔레트 값·변환은 :shared Palette가 단일 출처 (리뷰 A3)
+    val themePresets = com.pbp.shared.Palette.themePresets
     val namePresets = com.pbp.shared.Palette.namePresets
     val bubblePresets = com.pbp.shared.Palette.bubblePresets
     val backgroundPresets = com.pbp.shared.Palette.backgroundPresets

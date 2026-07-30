@@ -33,7 +33,7 @@
 | S3 | 하단 캡처 바 | S | 신규 `CaptureBar` |
 | S4 | 이미지 렌더러 (오프스크린) | **L — 가장 위험** | 신규 `export/CaptureRenderer.kt` |
 | S5 | 미리보기 화면 | M | 신규 `ui/chat/CapturePreviewScreen.kt` |
-| S6 | 저장·공유 | S | 미리보기 화면 + `AndroidManifest` |
+| S6 | 갤러리 저장(MediaStore) · 공유 | M | 신규 `export/CaptureSaver.kt` + `AndroidManifest` + `res/xml/file_paths.xml` |
 | S7 | 데스크톱 이식 | M | `ChatPane.kt`, `Overlays.kt`, `Main.kt` |
 
 ---
@@ -64,8 +64,7 @@
 - **호출부**: `ChatScreen.kt:422-444`의 `MessageActionDialog(...)`에 `onCapture`를 추가하고
   `{ captureStart = target.id; captureEnd = null; actionTargetId = null }`을 넘긴다.
   `onCopy`가 이미 같은 형태(동작 후 `actionTargetId = null`)라 패턴을 따라가면 된다.
-- **주의**: 목업 A컷은 복사 기능이 들어오기 전에 그려서 편집·삭제·캡처 3줄로 보인다.
-  **실제 구현은 복사가 맨 위에 있는 4줄**이 맞다.
+- 목업 A컷이 이 구성(복사·편집·삭제·캡처 4줄)으로 그려져 있으니 그대로 맞추면 된다.
 
 ### S1-3. 모드 상태
 
@@ -309,27 +308,95 @@ suspend fun render(
 
 ## S6. 저장·공유
 
-- **공유** (주 경로라고 보는 것이 맞다 — 캡처의 목적은 대개 밖으로 보내는 것):
-  `cacheDir/capture/*.png`에 쓰고 `FileProvider`로 `ACTION_SEND`(`image/png`). 여러 장이면 `ACTION_SEND_MULTIPLE`.
-  - `AndroidManifest.xml`에 `provider` 추가 + `res/xml/file_paths.xml` 신규 (현재 둘 다 없다).
-  - `Intent.FLAG_GRANT_READ_URI_PERMISSION` 필수.
-- **저장**: 기존 HTML 내보내기와 같은 **SAF** — `ActivityResultContracts.CreateDocument("image/png")`.
-  권한이 필요 없고 패턴이 이미 있다(`ChatScreen.kt:256-266`).
-  여러 장이면 런처를 여러 번 띄우지 말고 `OpenDocumentTree`로 폴더를 받아 한 번에 쓴다.
-- **실패 처리**: 문서 프로바이더가 없는 기기를 위해 `runCatching { launcher.launch(...) }` +
-  실패 토스트 — `ChatScreen.kt:295-301`과 같은 형태로.
+> **결정됨: 저장하면 갤러리에 있어야 한다.** SAF(`CreateDocument`)는 쓰지 않는다 —
+> 사용자가 파일 위치를 고르는 방식은 "저장했는데 어디 갔지"가 되기 때문이다.
+> `MediaStore.Images`에 넣어 **갤러리 앱에 바로 뜨게** 한다. `minSdk = 26`이라 API 28 이하 권한 분기가
+> 따라오는데, 이 단계 작업량의 절반이 그 분기다.
 
-### 열린 결정 — 갤러리에 바로 보이게 할지
+### S6-1. 갤러리 저장 (`MediaStore.Images`)
 
-목업의 토스트는 "이미지를 저장했습니다"로 중립적으로 써 두었다. **갤러리 앱에 바로 뜨게** 하려면
-`MediaStore.Images`에 넣어야 하는데, 이 프로젝트는 `minSdk = 26`이라 비용이 붙는다:
+`export/CaptureRenderer.kt` 옆에 두거나 `export/CaptureSaver.kt`로 분리한다.
 
-- API 29+ : `RELATIVE_PATH = "Pictures/PbP"`로 넣으면 끝, 권한 불필요.
-- API 26–28 : `WRITE_EXTERNAL_STORAGE`(`maxSdkVersion="28"`) **런타임 권한 요청**이 필요하다.
+```kotlin
+/** 갤러리(Pictures/PbP)에 PNG로 저장. 실패하면 null */
+suspend fun saveToGallery(
+    context: Context,
+    bitmap: Bitmap,
+    fileName: String,          // "PbP_등대에서 만나요_20260730_2144.png"
+): Uri? = withContext(Dispatchers.IO) {
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Q 이상: 앱 전용 폴더 지정 가능 + 쓰는 동안 갤러리에서 감춘다
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/PbP")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+    }
+    val resolver = context.contentResolver
+    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        ?: return@withContext null
+    runCatching {
+        resolver.openOutputStream(uri)!!.use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            resolver.update(uri, ContentValues().apply {
+                put(MediaStore.Images.Media.IS_PENDING, 0)
+            }, null, null)
+        }
+        uri
+    }.getOrElse {
+        // 절반만 쓰인 항목이 갤러리에 남지 않게 되돌린다
+        resolver.delete(uri, null, null)
+        null
+    }
+}
+```
 
-즉 권한 요청 UI와 거부 상태 처리가 이 기능 하나 때문에 새로 들어온다. **권장: 우선 SAF로 내고,
-갤러리 노출이 실제로 아쉬우면 그때 `MediaStore`를 얹는다.** 반대로 "저장하면 갤러리에 있어야 한다"가
-전제라면 S6 시작 전에 알려 주면 그쪽으로 쓴다.
+- **`IS_PENDING`을 반드시 쓸 것** (Q+). 없으면 큰 이미지를 쓰는 동안 갤러리에 깨진 썸네일이 잠깐 뜬다.
+- **API 26–28**: `RELATIVE_PATH`가 없으므로 `Pictures/` 루트에 저장된다. 하위 폴더까지 원하면
+  `MediaStore.Images.Media.DATA`에 절대 경로
+  (`Environment.getExternalStoragePublicDirectory(DIRECTORY_PICTURES)/PbP/파일명`)를 넣고
+  그 디렉터리를 `mkdirs()`해 준다. **`DATA`는 Q 이상에서 쓰면 안 된다** — 분기를 섞지 말 것.
+- **실패 시 `delete`로 되돌리는 것**을 빼먹지 말 것. 안 그러면 0바이트 항목이 갤러리에 남는다.
+- 파일명은 `PbP_{방이름}_{yyyyMMdd_HHmm}.png`. 방 이름에 `/ \ : * ? " < > |`가 들어갈 수 있으므로
+  **치환**한다. 여러 장이면 뒤에 `_1of3`을 붙인다.
+- `MediaScannerConnection`은 필요 없다 — `resolver.insert`로 넣으면 이미 MediaStore 항목이다.
+
+### S6-2. API 28 이하 권한
+
+- **`AndroidManifest.xml`**: 현재 권한은 `INTERNET`, `POST_NOTIFICATIONS` 둘뿐이다. 추가한다.
+
+  ```xml
+  <!-- 갤러리 저장 — Q부터는 MediaStore가 권한 없이 쓰게 해 준다 -->
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+      android:maxSdkVersion="28" />
+  ```
+
+  `maxSdkVersion="28"`을 **꼭 붙일 것.** 없으면 Q 이상 기기에서도 권한이 목록에 뜨고 스토어 심사에서
+  민감 권한으로 잡힌다.
+- **런타임 요청**: 미리보기 화면에서 `저장`을 누를 때만, `Build.VERSION.SDK_INT <= 28`이고
+  아직 허용되지 않은 경우에만 요청한다. 앱 시작 시점에 미리 묻지 말 것.
+
+  ```kotlin
+  val permLauncher = rememberLauncherForActivityResult(
+      ActivityResultContracts.RequestPermission()
+  ) { granted -> if (granted) doSave() else /* 아래 거부 처리 */ }
+  ```
+
+- **거부 처리**: 대체 저장 경로를 새로 만들지 않는다. 토스트로
+  `"저장 권한이 없어 갤러리에 넣을 수 없습니다. 공유로 보내 보세요."`를 띄우고 끝낸다 —
+  **공유는 권한이 필요 없으므로** 사용자에게 실제로 통하는 길이 남는다.
+  `shouldShowRequestPermissionRationale`이 false인 영구 거부 상태까지 분기하지 말 것(과하다).
+
+### S6-3. 공유
+
+- `cacheDir/capture/*.png`에 쓰고 `FileProvider`로 `ACTION_SEND`(`image/png`).
+  여러 장이면 `ACTION_SEND_MULTIPLE`. **권한 불필요.**
+- `AndroidManifest.xml`에 `provider` 추가 + `res/xml/file_paths.xml` 신규 (현재 둘 다 없다).
+  `authorities`는 `${applicationId}.fileprovider`.
+- `Intent.FLAG_GRANT_READ_URI_PERMISSION` 필수. 없으면 받는 앱에서 `SecurityException`이 난다.
+- 갤러리 저장분(`MediaStore` URI)을 공유에 재사용하지 말 것 — 저장을 안 한 채 공유만 하는 경우가 있고,
+  캐시 파일은 정리가 쉽다. `cacheDir/capture`는 화면을 벗어날 때 비운다.
 
 ---
 
@@ -372,11 +439,18 @@ suspend fun render(
 - [ ] 200개 초과 선택 → CTA 잠금 + 안내. 8,000px 초과 → 여러 장, 낙관에 `n/N`, **말풍선이 잘리지 않는다**
 - [ ] 배경 토글 끄면 종이 톤으로 다시 렌더된다. 앱 재시작 후 마지막 선택이 유지된다
 - [ ] 회전해도 미리보기의 이미지가 유지된다(재렌더로 깜빡이지 않는다)
-- [ ] 공유 → 카카오톡/디스코드에 이미지가 실제로 붙는다. 저장 → 파일이 열린다
+- [ ] **저장 → 갤러리 앱에 바로 보인다** (Q 이상: `Pictures/PbP` 폴더 안)
+- [ ] 저장 중 갤러리에 **깨진 썸네일이 뜨지 않는다**(`IS_PENDING`)
+- [ ] 저장 실패·중단 시 **0바이트 항목이 갤러리에 남지 않는다**
+- [ ] 방 이름에 `/`나 `:`가 들어간 방에서도 저장된다 (파일명 치환)
+- [ ] **API 28 이하 기기**: 저장 탭 → 권한 요청 → 허용 시 저장. 거부 시 안내 토스트만 뜨고 앱이 멈추지 않는다
+- [ ] **API 29 이상 기기**: 권한 요청이 **뜨지 않는다**. 앱 정보의 권한 목록에 저장 권한이 없다
+- [ ] 공유 → 카카오톡/디스코드에 이미지가 실제로 붙는다 (권한 없이)
 - [ ] 데스크톱 결과 이미지가 모바일과 같다
 - [ ] 기존 `↓` HTML 로그 내보내기가 그대로 동작한다 (회귀 없음)
 
 ## 규모 감각
 
 S1~S3(범위 고르는 UI)은 기존 부품 재사용이라 한 세션 분량이다. **S4가 이 기능의 실체이자 위험**이고,
-특히 아바타 로딩 타이밍과 분할 처리에서 시간이 든다. S5~S6은 배선, S7은 S4가 끝나면 기계적이다.
+특히 아바타 로딩 타이밍과 분할 처리에서 시간이 든다. S5는 배선이고, **S6은 갤러리 저장으로 정해져 권한 분기가 붙어 배선보다는 조금 더 든다**
+(API 28 이하 요청·거부 처리, 파일명 치환, 실패 롤백). S7은 S4가 끝나면 기계적이다.

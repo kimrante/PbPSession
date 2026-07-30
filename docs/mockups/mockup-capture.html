@@ -450,10 +450,10 @@ td b{color:var(--ink)}
             <div class="btn fill">저장</div>
           </div>
         </div>
-        <div class="toast">이미지를 저장했습니다</div>
+        <div class="toast">갤러리에 저장했습니다</div>
       </div></div>
       <div class="cap"><b>D · 미리보기 — 저장 전에 결과를 그대로 확인</b>
-        <span>합쳐진 이미지를 실제 비율로 보여줍니다. <b>방 배경 포함</b> 토글 하나만 두고(끄면 종이 톤), 오른쪽에 공유·저장. 저장 후 토스트.</span></div>
+        <span>합쳐진 이미지를 실제 비율로 보여줍니다. <b>방 배경 포함</b> 토글 하나만 두고(끄면 종이 톤), 오른쪽에 공유·저장. 저장하면 <b>갤러리에</b> 들어갑니다.</span></div>
     </div>
 
   </div>
@@ -603,10 +603,11 @@ td b{color:var(--ink)}
     <tr>
       <td>저장·공유</td>
       <td>HTML은 <code>CreateDocument("text/html")</code></td>
-      <td>저장은 기존 ↓ 내보내기와 같은 <code>CreateDocument("image/png")</code>(SAF — <b>권한 0</b>),
-        공유는 <code>FileProvider</code> + <code>ACTION_SEND</code>. 갤러리에 바로 띄우려면 <code>MediaStore</code>가 필요한데
-        <code>minSdk 26</code>이라 API 28 이하 권한 분기가 붙습니다 — 지시서의 열린 결정 참조.
-        문서 프로바이더가 없을 때의 <code>runCatching</code> 처리는 기존 내보내기와 동일하게</td>
+      <td>저장은 <b>갤러리에 바로 보이도록</b> <code>MediaStore.Images</code>(<code>Pictures/PbP</code>) —
+        쓰는 동안 깨진 썸네일이 뜨지 않게 <code>IS_PENDING</code>, 실패 시 <code>delete</code>로 롤백.
+        <code>minSdk 26</code>이라 <b>API 28 이하</b>는 <code>WRITE_EXTERNAL_STORAGE</code>
+        (<code>maxSdkVersion="28"</code>) 런타임 요청이 붙고, 거부 시 공유를 안내합니다.
+        공유는 <code>FileProvider</code> + <code>ACTION_SEND</code>(권한 불필요)</td>
     </tr>
     <tr>
       <td>배경 포함 토글</td>

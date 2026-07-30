@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -447,19 +448,23 @@ internal fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Fl
             if (mark == CaptureMark.END || mark == CaptureMark.ONLY) size.height else size.height + over
         val inset = stroke / 2
         val corner = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
-        drawRoundRect(
-            color = accent.copy(alpha = .26f),
-            topLeft = androidx.compose.ui.geometry.Offset(0f, top),
-            size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
-            cornerRadius = corner,
-        )
-        drawRoundRect(
-            color = accent,
-            topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
-            size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
-            cornerRadius = corner,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
-        )
+        // drawBehind는 노드 경계로 잘라 주지 않는다 — 늘린 부분이 이웃 항목 위에
+        // 그대로 그려지면 메시지마다 알약이 따로 있는 것처럼 보인다
+        clipRect {
+            drawRoundRect(
+                color = accent.copy(alpha = .26f),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, top),
+                size = androidx.compose.ui.geometry.Size(size.width, bottom - top),
+                cornerRadius = corner,
+            )
+            drawRoundRect(
+                color = accent,
+                topLeft = androidx.compose.ui.geometry.Offset(inset, top + inset),
+                size = androidx.compose.ui.geometry.Size(size.width - stroke, bottom - top - stroke),
+                cornerRadius = corner,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+            )
+        }
     }
 
 /** 밴드 양 끝의 '시작'·'끝' 배지 */

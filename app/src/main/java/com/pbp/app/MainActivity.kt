@@ -114,14 +114,8 @@ private fun AppNav(
         ) { entry ->
             ProfileEditScreen(nav, entry.arguments!!.getLong(Routes.ARG_PROFILE_ID))
         }
-        composable(
-            Routes.CAPTURE_PATTERN,
-            arguments = listOf(navArgument(Routes.ARG_ROOM_ID) { type = NavType.LongType }),
-        ) { entry ->
-            com.pbp.app.ui.chat.CapturePreviewScreen(
-                nav,
-                entry.arguments!!.getLong(Routes.ARG_ROOM_ID),
-            )
+        composable(Routes.CAPTURE) {
+            com.pbp.app.ui.chat.CapturePreviewScreen(nav)
         }
         composable(
             Routes.SETTINGS_PATTERN,

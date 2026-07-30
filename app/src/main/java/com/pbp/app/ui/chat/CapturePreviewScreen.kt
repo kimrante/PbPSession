@@ -27,7 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,13 +41,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
-import com.pbp.app.PbpApp
 import com.pbp.app.data.CaptureSettings
+import com.pbp.app.export.CaptureHolder
+import com.pbp.app.export.CaptureRenderer
 import com.pbp.app.export.CaptureSaver
+import com.pbp.app.export.findActivity
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import kotlinx.coroutines.launch
@@ -59,16 +57,13 @@ import kotlinx.coroutines.launch
  * 비트맵은 같은 방의 [ChatViewModel]이 들고 있다(회전해도 다시 그리지 않는다).
  */
 @Composable
-fun CapturePreviewScreen(nav: NavController, roomId: Long) {
+fun CapturePreviewScreen(nav: NavController) {
     val context = LocalContext.current
-    val app = context.applicationContext as PbpApp
-    // 채팅 화면과 **같은 키**여야 그 화면이 만든 비트맵을 볼 수 있다
-    val vm: ChatViewModel = viewModel(key = "chat-$roomId", factory = viewModelFactory {
-        initializer { ChatViewModel(app, roomId) }
-    })
     val tokens = Pbp.colors
-    val room by vm.room.collectAsState()
-    val bitmaps = vm.captureResult
+    // 결과는 CaptureHolder에 있다 — viewModel()은 화면마다 저장소가 달라
+    // 채팅 화면의 VM을 여기서 볼 수 없다 (v0.7.0에서 미리보기가 비어 있던 원인)
+    val bitmaps = CaptureHolder.pages
+    val roomName = CaptureHolder.request?.roomName ?: "PbP"
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
 
@@ -79,12 +74,11 @@ fun CapturePreviewScreen(nav: NavController, roomId: Long) {
         if (!busy && bitmaps.isNotEmpty()) {
             busy = true
             scope.launch {
-                val name = room?.name ?: "PbP"
                 val ok = bitmaps.mapIndexed { index, bitmap ->
                     CaptureSaver.saveToGallery(
                         context,
                         bitmap,
-                        CaptureSaver.fileName(name, index, bitmaps.size),
+                        CaptureSaver.fileName(roomName, index, bitmaps.size),
                     ) != null
                 }.all { it }
                 busy = false
@@ -188,12 +182,28 @@ fun CapturePreviewScreen(nav: NavController, roomId: Long) {
                         .clip(RoundedCornerShape(999.dp))
                         .clickable(enabled = !busy) {
                             CaptureSettings.set(context, !CaptureSettings.withBackground)
-                            busy = true
-                            vm.rerenderCapture(context) { ok ->
-                                busy = false
-                                if (!ok) {
-                                    Toast.makeText(context, "다시 그리지 못했습니다", Toast.LENGTH_SHORT)
-                                        .show()
+                            val request = CaptureHolder.request
+                            val activity = context.findActivity()
+                            if (request != null && activity != null) {
+                                busy = true
+                                scope.launch {
+                                    // 배경은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
+                                    val pages = runCatching {
+                                        CaptureRenderer.render(
+                                            activity = activity,
+                                            roomName = request.roomName,
+                                            backgroundKey = request.backgroundKey,
+                                            messages = request.messages,
+                                            withBackground = CaptureSettings.withBackground,
+                                        )
+                                    }.getOrDefault(emptyList())
+                                    busy = false
+                                    if (pages.isEmpty()) {
+                                        Toast.makeText(context, "다시 그리지 못했습니다", Toast.LENGTH_SHORT)
+                                            .show()
+                                    } else {
+                                        CaptureHolder.set(request, pages)
+                                    }
                                 }
                             }
                         }
@@ -233,9 +243,7 @@ fun CapturePreviewScreen(nav: NavController, roomId: Long) {
                         .clip(RoundedCornerShape(999.dp))
                         .clickable(enabled = !busy && bitmaps.isNotEmpty()) {
                             scope.launch {
-                                val intent = CaptureSaver.shareIntent(
-                                    context, bitmaps, room?.name ?: "PbP",
-                                )
+                                val intent = CaptureSaver.shareIntent(context, bitmaps, roomName)
                                 if (intent == null) {
                                     Toast.makeText(context, "공유할 이미지가 없습니다", Toast.LENGTH_SHORT)
                                         .show()

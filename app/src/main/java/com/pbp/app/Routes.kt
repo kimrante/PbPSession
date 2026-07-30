@@ -8,10 +8,12 @@ object Routes {
     const val ROOMS = "rooms"
     const val OWNER = "owner"
 
+    /** 캡처 미리보기 — 결과 비트맵은 CaptureHolder가 들고 있어 인자가 없다 */
+    const val CAPTURE = "capture"
+
     const val CHAT_PATTERN = "chat/{roomId}"
     const val PROFILE_PATTERN = "profile/{profileId}"
     const val SETTINGS_PATTERN = "settings/{roomId}"
-    const val CAPTURE_PATTERN = "capture/{roomId}"
 
     const val ARG_ROOM_ID = "roomId"
     const val ARG_PROFILE_ID = "profileId"
@@ -22,7 +24,4 @@ object Routes {
     fun profile(profileId: Long) = "profile/$profileId"
 
     fun settings(roomId: Long) = "settings/$roomId"
-
-    /** 캡처 미리보기 — 결과 비트맵은 같은 방의 ChatViewModel이 들고 있다 */
-    fun capturePreview(roomId: Long) = "capture/$roomId"
 }

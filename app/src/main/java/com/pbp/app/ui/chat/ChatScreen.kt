@@ -74,6 +74,7 @@ import com.pbp.app.data.CaptureSettings
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
+import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
 import com.pbp.app.export.findActivity
 import com.pbp.shared.GmSpeech
@@ -144,13 +145,8 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
 
     // ── 캡처 ──────────────────────────────────────────────
-    // 비트맵은 내비게이션 인자로 넘길 수 없어 VM이 들고 있는다. 회전으로 컴포저블이
-    // 재생성돼도 다시 그리지 않으려면 여기 있어야 한다 — recycle은 onCleared에서만.
-    var captureResult by mutableStateOf<List<android.graphics.Bitmap>>(emptyList())
-        private set
-
-    /** 마지막으로 캡처한 메시지 — 배경 토글을 바꿀 때 다시 그리려면 필요하다 */
-    private var captureSource: List<Message> = emptyList()
+    // 결과 비트맵은 CaptureHolder에 둔다 — viewModel()은 화면마다 저장소가 달라
+    // 여기 두면 미리보기 화면이 볼 수 없다.
 
     fun renderCapture(
         context: android.content.Context,
@@ -162,38 +158,28 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
             onDone(false)
             return@launch
         }
-        captureSource = picked
+        val request = CaptureHolder.Request(
+            roomName = room.value?.name ?: "PbP",
+            backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
+            messages = picked,
+        )
         val bitmaps = runCatching {
             CaptureRenderer.render(
                 activity = activity,
-                roomName = room.value?.name ?: "PbP",
-                backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
-                messages = picked,
+                roomName = request.roomName,
+                backgroundKey = request.backgroundKey,
+                messages = request.messages,
                 withBackground = CaptureSettings.withBackground,
             )
+        }.onFailure {
+            android.util.Log.w("PbpCapture", "캡처 렌더 실패", it)
         }.getOrDefault(emptyList())
-        recycleCapture()
-        captureResult = bitmaps
-        onDone(bitmaps.isNotEmpty())
-    }
-
-    /** 배경 포함 토글이 바뀌면 다시 그린다 — 배경은 이미지에 구워져 있어 재렌더 말고는 방법이 없다 */
-    fun rerenderCapture(context: android.content.Context, onDone: (Boolean) -> Unit) {
-        if (captureSource.isEmpty()) {
+        if (bitmaps.isEmpty()) {
             onDone(false)
-            return
+            return@launch
         }
-        renderCapture(context, captureSource, onDone)
-    }
-
-    private fun recycleCapture() {
-        captureResult.forEach { if (!it.isRecycled) it.recycle() }
-        captureResult = emptyList()
-    }
-
-    override fun onCleared() {
-        recycleCapture()
-        super.onCleared()
+        CaptureHolder.set(request, bitmaps)
+        onDone(true)
     }
 
     fun send(text: String, isOoc: Boolean) = viewModelScope.launch {
@@ -220,6 +206,12 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
         viewModelScope.launch { repo.createFromCode(imported) }
+
+    /** 방을 떠나면 캡처 결과도 정리한다 — 화면 밖에 있어도 메모리는 이 방의 것이다 */
+    override fun onCleared() {
+        CaptureHolder.clear()
+        super.onCleared()
+    }
 
     fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
         val ok = withContext(Dispatchers.IO) {
@@ -460,9 +452,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         // messages(오래된 순) 기준 인덱스 — 캡처 범위 판정에 쓴다
                         val idx = messages.size - 1 - revIdx
                         val mark = captureMarkOf(captureIdx, idx)
-                        // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다 (목업 실측 틈 0px)
+                        // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다 (목업 실측 틈 0px).
+                        // reverseLayout이라 화면에서 '위'는 더 오래된 메시지 = idx - 1
                         val joinsAbove = captureIdx?.contains(idx) == true &&
-                            captureIdx.contains(idx + 1)
+                            captureIdx.contains(idx - 1)
                         val topPad = when {
                             joinsAbove -> 0.dp
                             grouped -> PbpDimens.gap1
@@ -526,7 +519,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                 captureRendering = false
                                 if (ok) {
                                     exitCapture()
-                                    nav.navigate(com.pbp.app.Routes.capturePreview(roomId))
+                                    nav.navigate(com.pbp.app.Routes.CAPTURE)
                                 } else {
                                     Toast.makeText(context, "이미지를 만들지 못했습니다", Toast.LENGTH_SHORT)
                                         .show()

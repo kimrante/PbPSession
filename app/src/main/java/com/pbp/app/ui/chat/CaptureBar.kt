@@ -153,7 +153,7 @@ internal fun CaptureBar(
     }
 }
 
-/** 선택 구간의 표시 상태 — 밴드·배지·흐리기 판정 */
+/** 선택 구간의 표시 상태 — 밴드 모서리와 흐리기 판정 */
 internal fun captureMarkOf(range: IntRange?, index: Int): CaptureMark = when {
     range == null -> CaptureMark.NONE
     index !in range -> CaptureMark.OUT

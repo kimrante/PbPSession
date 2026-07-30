@@ -140,6 +140,8 @@ private fun rendersBubble(message: Message): Boolean {
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
 /**
  * 캡처 범위 선택 표시 (목업 mockup-capture 03장).
+ * 양 끝 '시작'·'끝' 배지는 마지막 메시지 본문을 가려 v0.7.3에서 뺐다 —
+ * 밴드의 둥근 모서리만으로 시작·끝이 충분히 읽힌다.
  * 말풍선 내부는 건드리지 않고 **감싸는 상자에만** 얹으므로, [CaptureMark.NONE]으로
  * 부르면 화면과 캡처 이미지가 완전히 같아진다.
  */
@@ -331,28 +333,7 @@ internal fun MessageBlock(
             }
         }
     }
-    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
-    when (mark) {
-        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
-        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
-        else -> Unit
     }
-    }
-}
-
-/** 밴드 양 끝의 '시작'·'끝' 배지 — 9sp는 배지 한정 예외 (토큰 문서) */
-@Composable
-private fun EdgeBadge(label: String, modifier: Modifier) {
-    Text(
-        label,
-        fontSize = 9.sp,
-        fontWeight = FontWeight.Black,
-        color = Color.White,
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(Pbp.colors.signatureInk)
-            .padding(horizontal = 10.dp, vertical = 2.dp),
-    )
 }
 
 /** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만). 본인은 길게 눌러 편집·삭제 */

@@ -422,12 +422,6 @@ internal fun MessageBlock(
             }
         }
     }
-    // 양 끝 배지 — 밴드 위 중앙에 얹는다 (목업 03장)
-    when (mark) {
-        CaptureMark.START, CaptureMark.ONLY -> EdgeBadge("시작", Modifier.align(Alignment.TopCenter))
-        CaptureMark.END -> EdgeBadge("끝", Modifier.align(Alignment.BottomCenter))
-        else -> Unit
-    }
     }
 }
 
@@ -466,21 +460,6 @@ internal fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Fl
             )
         }
     }
-
-/** 밴드 양 끝의 '시작'·'끝' 배지 */
-@Composable
-private fun EdgeBadge(label: String, modifier: Modifier) {
-    Text(
-        label,
-        fontSize = 9.sp,
-        fontWeight = FontWeight.Black,
-        color = Color.White,
-        modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(Tokens.SignatureInk)
-            .padding(horizontal = 10.dp, vertical = 2.dp),
-    )
-}
 
 /** 선택 구간의 표시 상태 — 모바일 captureMarkOf와 같은 판정 */
 internal fun captureMarkOf(range: IntRange?, index: Int): CaptureMark = when {

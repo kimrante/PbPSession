@@ -202,7 +202,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                         }
                         .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp2),
                 ) {
-                    Text("저장", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1A1A1A))
+                    Text("저장", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Pbp.colors.onSignature)
                 }
             }
 
@@ -300,7 +300,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 statName,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF3B82F6),
+                                color = Pbp.colors.statBlue,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(statValue, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
@@ -499,12 +499,7 @@ private fun SwatchRow(
                 .size(32.dp)
                 .clip(CircleShape)
                 .background(
-                    Brush.sweepGradient(
-                        listOf(
-                            Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
-                            Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
-                        )
-                    )
+                    com.pbp.app.ui.common.customColorBrush
                 )
                 .clickable(onClick = onCustom),
             contentAlignment = Alignment.Center,

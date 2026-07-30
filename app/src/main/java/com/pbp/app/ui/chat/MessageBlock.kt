@@ -1,0 +1,479 @@
+package com.pbp.app.ui.chat
+
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavController
+import com.pbp.app.PbpApp
+import com.pbp.app.data.CharacterProfile
+import com.pbp.app.data.Message
+import com.pbp.app.data.MessageType
+import com.pbp.app.export.LogExporter
+import com.pbp.shared.GmSpeech
+import com.pbp.app.ui.common.AddProfileDialog
+import com.pbp.app.ui.common.Avatar
+import com.pbp.app.ui.common.importCharacterFromClipboard
+import com.pbp.app.ui.common.MarkupText
+import com.pbp.app.ui.common.RoomBackdrop
+import com.pbp.app.ui.common.dashedBorder
+import com.pbp.app.ui.common.formatTime
+import com.pbp.app.ui.theme.GowunBatang
+import com.pbp.app.ui.theme.Pbp
+import com.pbp.app.ui.theme.PbpDimens
+import com.pbp.app.ui.theme.PbpPalette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** 메시지 렌더링 — 시스템·다이스·잡담·GM 서술·말풍선 (ChatScreen에서 분리, 리뷰 B3) */
+
+/** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 */
+internal fun isContinuation(prev: Message?, current: Message): Boolean {
+    if (prev == null) return false
+    // 잡담은 말풍선이 아니라 중앙 안내로 렌더링되므로 그룹 대상이 아니다
+    fun isBubble(m: Message) = m.type == MessageType.TEXT && !m.senderIsGm && !m.isOoc
+    if (!isBubble(prev) || !isBubble(current)) return false
+    return prev.senderName == current.senderName && prev.incoming == current.incoming
+}
+
+/** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
+@Composable
+internal fun MessageBlock(
+    message: Message,
+    grouped: Boolean = false,
+    themeColor: Color,
+    onLongPress: (Message) -> Unit,
+) {
+    val tokens = Pbp.colors
+    when {
+        message.type == MessageType.SYSTEM -> {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(color = Color.Black.copy(alpha = .35f), shape = RoundedCornerShape(999.dp)) {
+                    Text(
+                        message.body,
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = .6f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 작게 '이름 : 내용'.
+        // 배경은 그 캐릭터의 말풍선 색을 반투명으로 깔아 누가 말했는지 색으로도 구분한다
+        message.isOoc -> {
+            val chatterColor = Color(
+                message.senderBubbleColor ?: PbpPalette.bubblePresets.first()
+            ).copy(alpha = .55f)
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(
+                    color = chatterColor,
+                    shape = RoundedCornerShape(999.dp),
+                    modifier = Modifier.combinedClickable(
+                        onClick = {},
+                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                    ),
+                ) {
+                    Text(
+                        "${message.senderName ?: ""} : ${message.body}",
+                        fontSize = 10.sp,
+                        color = tokens.bubbleInk.copy(alpha = .85f),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+                    )
+                }
+            }
+        }
+        message.type == MessageType.DICE -> {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(PbpDimens.rCell))
+                        .background(Color.Black.copy(alpha = .5f))
+                        .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(PbpDimens.rCell))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("🎲", fontSize = 13.sp)
+                    Spacer(Modifier.width(PbpDimens.sp2))
+                    Text(
+                        "${message.diceExpr} → ${message.body}",
+                        fontSize = 11.sp,
+                        color = Color(0xFFFFE9AE),
+                        fontWeight = FontWeight.Bold,
+                    )
+                    // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
+                    // (CoC7 하향 판정은 대성공·대단한 성공·어려운 성공 단계까지)
+                    com.pbp.shared.Rules.outcomeLabel(message.diceOutcome)?.let { label ->
+                        val success = com.pbp.shared.Rules.isSuccess(message.diceOutcome)
+                        Spacer(Modifier.width(PbpDimens.sp2))
+                        Text(
+                            label,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (success) Color(0xFF5E9EFF) else Color(0xFFFF6B6B),
+                        )
+                    }
+                }
+            }
+        }
+        // 서술자(GM) 발화: 명조 서술 문단 + " " 인용만 말풍선 분리 (스펙 4장)
+        message.senderIsGm && !message.isOoc -> {
+            // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                parts.forEach { part ->
+                    when (part) {
+                        is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
+                        is GmSpeech.Part.Quote -> BubbleRow(
+                            message = message,
+                            overrideBody = part.text,
+                            overrideName = "GM",
+                            overrideBubbleColor = PbpPalette.gmQuoteBubble,
+                            themeColor = themeColor,
+                            onLongPress = onLongPress,
+                        )
+                    }
+                }
+            }
+        }
+        else -> {
+            // 캐릭터 발화도 GM과 같은 규칙: 문장 중간의 " " 대사만 인용 말풍선으로 분리한다.
+            // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다. (F2: remember)
+            val parts = remember(message.body) { GmSpeech.split(message.body) }
+            if (parts.size <= 1) {
+                BubbleRow(
+                    message = message, showHeader = !grouped,
+                    themeColor = themeColor, onLongPress = onLongPress,
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.sp1)) {
+                    parts.forEachIndexed { index, part ->
+                        BubbleRow(
+                            message = message,
+                            overrideBody = when (part) {
+                                is GmSpeech.Part.Narration -> part.text
+                                is GmSpeech.Part.Quote -> part.text
+                            },
+                            quoteBubble = part is GmSpeech.Part.Quote,
+                            showHeader = !grouped && index == 0,
+                            showTime = index == parts.lastIndex,
+                            themeColor = themeColor,
+                            onLongPress = onLongPress,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** GM 서술 문단 — 명조체 블록 (아바타·낙관 없이 문단만). 본인은 길게 눌러 편집·삭제 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun NarrationBlock(
+    message: Message,
+    text: String,
+    onLongPress: (Message) -> Unit,
+) {
+    val tokens = Pbp.colors
+    // 좌우 여백은 메시지 목록의 contentPadding(16dp)에 맡긴다 — 별도 들여쓰기 없음
+    Box {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 4.dp,
+                        topEnd = PbpDimens.rCard,
+                        bottomEnd = PbpDimens.rCard,
+                        bottomStart = 4.dp,
+                    )
+                )
+                .background(tokens.narrBg)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { if (!message.incoming) onLongPress(message) },
+                )
+                .padding(horizontal = PbpDimens.sp4, vertical = PbpDimens.sp3),
+        ) {
+            // 서술은 문단 자체가 화면이 되도록 — 서술자·시간 등 메타 표기는 두지 않는다
+            MarkupText(
+                text = text,
+                fontSize = 13.sp,
+                color = tokens.narrInk,
+                rubyColor = tokens.signature,
+                fontFamily = GowunBatang,
+                lineHeight = 24.sp,
+            )
+        }
+    }
+}
+
+/** 카카오톡형 좌/우 말풍선. 내 발신(incoming=false)은 오른쪽 정렬, 길게 눌러 편집·삭제 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun BubbleRow(
+    message: Message,
+    overrideBody: String? = null,
+    overrideName: String? = null,
+    overrideBubbleColor: Long? = null,
+    /** 이 조각이 대사(인용)임을 호출부가 이미 판정한 경우 */
+    quoteBubble: Boolean = false,
+    showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
+    showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
+    themeColor: Color,
+    onLongPress: (Message) -> Unit,
+) {
+    val tokens = Pbp.colors
+    // GM 인용은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
+    val mine = !message.incoming && overrideName == null
+    val body = overrideBody ?: message.body
+    // 대사는 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게 (목업 mockup-quote-bubble).
+    // 조각으로 나뉜 경우는 호출부가 알려주고, 통짜 메시지는 본문 전체가 " "인지 본다.
+    val quoteInner = when {
+        message.isOoc -> null
+        quoteBubble -> body
+        overrideName == null -> quoteContent(body)
+        else -> null
+    }
+    val bubbleColor = when {
+        message.isOoc -> tokens.chatterBubble
+        else -> Color(overrideBubbleColor ?: message.senderBubbleColor ?: PbpPalette.bubblePresets.first())
+    }
+    val nameColor = when {
+        message.isOoc -> tokens.inkDim
+        overrideName != null -> tokens.signature
+        message.senderNameColor != null -> Color(message.senderNameColor)
+        else -> tokens.ink
+    }
+    val inkColor = if (message.isOoc) tokens.chatterInk else tokens.bubbleInk
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.sp2)) {
+            if (mine) {
+                // 내 메시지: 시간은 말풍선 왼쪽
+                if (showTime) {
+                    TimeStamp(message, themeColor, alignEnd = true, Modifier.align(Alignment.Bottom))
+                }
+            }
+            if (!mine) {
+                if (showHeader) {
+                    Avatar(
+                        emoji = message.senderEmoji,
+                        imagePath = message.senderImagePath,
+                        size = PbpDimens.avatarChat,
+                        dimmed = message.isOoc,
+                    )
+                } else {
+                    Box(Modifier.size(PbpDimens.avatarChat)) // 연속 메시지 — 자리만 유지
+                }
+            }
+            Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                if (showHeader) {
+                    Text(
+                        overrideName ?: message.senderName ?: "",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = nameColor,
+                    )
+                    Spacer(Modifier.height(PbpDimens.sp1))
+                }
+                val r = PbpDimens.rCard
+                val shape = if (mine) {
+                    RoundedCornerShape(topStart = r, topEnd = 4.dp, bottomEnd = r, bottomStart = r)
+                } else {
+                    RoundedCornerShape(topStart = 4.dp, topEnd = r, bottomEnd = r, bottomStart = r)
+                }
+                val bubbleBase = Modifier
+                    .widthIn(max = 240.dp)
+                    .clip(shape)
+                    .background(bubbleColor)
+                    .then(
+                        if (message.isOoc) {
+                            Modifier.dashedBorder(Color.White.copy(alpha = .18f), PbpDimens.rCard)
+                        } else Modifier
+                    )
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { if (!message.incoming) onLongPress(message) },
+                    )
+                if (quoteInner != null) {
+                    // 여는 “ 좌상단 · 닫는 ” 우하단 — 오프셋은 상하좌우 대칭(7·9dp).
+                    // 닫는 따옴표는 글리프 잉크가 글자 상자 위쪽에 몰려 있어 offset으로 보정한다.
+                    Box(bubbleBase) {
+                        QuoteMark(
+                            "“", inkColor,
+                            Modifier.align(Alignment.TopStart).padding(start = 9.dp, top = 5.dp),
+                        )
+                        QuoteMark(
+                            "”", inkColor,
+                            Modifier.align(Alignment.BottomEnd).padding(end = 9.dp).offset(y = 6.dp),
+                        )
+                        MarkupText(
+                            text = quoteInner,
+                            fontSize = 13.sp,
+                            color = inkColor,
+                            rubyColor = inkColor.copy(alpha = .65f),
+                            lineHeight = 20.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 26.dp, vertical = 14.dp),
+                        )
+                    }
+                } else {
+                    Box(bubbleBase.padding(horizontal = PbpDimens.sp3, vertical = PbpDimens.sp2)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (message.isOoc) {
+                                Text(
+                                    "잡담",
+                                    fontSize = 9.sp,
+                                    color = inkColor,
+                                    modifier = Modifier
+                                        .padding(end = 5.dp)
+                                        .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
+                                        .padding(horizontal = 5.dp),
+                                )
+                            }
+                            MarkupText(
+                                text = body,
+                                fontSize = 13.sp,
+                                color = inkColor,
+                                rubyColor = inkColor.copy(alpha = .65f),
+                                lineHeight = 20.sp,
+                                fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
+                            )
+                        }
+                    }
+                }
+            }
+            if (!mine) {
+                // 남(또는 GM 인용) 메시지: 시간은 말풍선 오른쪽
+                if (showTime) {
+                    TimeStamp(message, themeColor, alignEnd = false, Modifier.align(Alignment.Bottom))
+                }
+            }
+            if (mine) {
+                if (showHeader) {
+                    Avatar(
+                        emoji = message.senderEmoji,
+                        imagePath = message.senderImagePath,
+                        size = PbpDimens.avatarChat,
+                        dimmed = message.isOoc,
+                    )
+                } else {
+                    Box(Modifier.size(PbpDimens.avatarChat)) // 연속 메시지 — 자리만 유지
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 본문 전체가 쌍따옴표(" 또는 “ ”)로 감싸인 대사인지 — 감싸였으면 안쪽 내용을 돌려준다.
+ * 인용 말풍선 판정에 사용한다. 따옴표는 장식으로 다시 그려지므로 본문에서 벗긴다.
+ */
+internal fun quoteContent(body: String): String? {
+    val trimmed = body.trim()
+    if (trimmed.length < 2) return null
+    if (trimmed.first() !in "\"“" || trimmed.last() !in "\"”") return null
+    return trimmed.substring(1, trimmed.length - 1).trim().ifEmpty { null }
+}
+
+/** 인용 말풍선의 장식 따옴표 — 명조 볼드, 말풍선 잉크의 옅은 톤 */
+@Composable
+internal fun QuoteMark(mark: String, inkColor: Color, modifier: Modifier) {
+    Text(
+        mark,
+        fontFamily = GowunBatang,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+        lineHeight = 24.sp,
+        color = inkColor.copy(alpha = .32f),
+        modifier = modifier,
+    )
+}
+
+/** 말풍선 곁 시간 + (수정됨) — 내 메시지는 왼쪽, 남의 메시지는 오른쪽. 시간 색 = 방 테마 컬러 */
+@Composable
+internal fun TimeStamp(
+    message: Message,
+    themeColor: Color,
+    alignEnd: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = Pbp.colors
+    Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        if (message.editedAt != null) {
+            Text("(수정됨)", fontSize = 9.sp, color = tokens.inkDim)
+        }
+        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
+    }
+}

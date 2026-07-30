@@ -27,6 +27,8 @@ data class PbpColors(
     val chatterBubble: Color, // 잡담 말풍선
     val chatterInk: Color,
     val bubbleInk: Color,     // 말풍선 안 글자색
+    val onSignature: Color,   // 시그니처 옐로 면 위의 잉크 (리뷰 D3)
+    val statBlue: Color,      // 캐릭터 값 치환 표시(파랑)
     val narrInk: Color,       // GM 서술 문단 글자색
     val narrBg: Color,        // GM 서술 문단 배경
     val veilTop: Color,       // 배경 이미지 가독성 베일
@@ -50,6 +52,8 @@ val PbpDarkColors = PbpColors(
     chatterBubble = Color(0x24FFFFFF),
     chatterInk = Color(0x9EFFFFFF),
     bubbleInk = Color(0xFF10151C),
+    onSignature = Color(0xFF1A1A1A),
+    statBlue = Color(0xFF3B82F6),
     narrInk = Color(0xFFF0EAD8),
     narrBg = Color(0x73060A0E),
     veilTop = Color(0x9E0A0E14),
@@ -73,6 +77,8 @@ val PbpLightColors = PbpColors(
     chatterBubble = Color(0x0F141920),
     chatterInk = Color(0x9923272E),
     bubbleInk = Color(0xFF10151C),
+    onSignature = Color(0xFF1A1A1A),
+    statBlue = Color(0xFF3B82F6),
     narrInk = Color(0xFF3D3628),
     narrBg = Color(0xB3FFFFFF),
     veilTop = Color(0x8CF4F2EC),

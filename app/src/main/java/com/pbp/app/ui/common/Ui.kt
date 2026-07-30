@@ -431,6 +431,44 @@ fun HexColorDialog(
 }
 
 /**
+ * 커스텀 컬러 진입 스와치의 6색 sweep 그라데이션 — 3곳에 복제돼 있던 것 (리뷰 C4).
+ */
+val customColorBrush: Brush = Brush.sweepGradient(
+    listOf(
+        Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
+        Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
+    )
+)
+
+/**
+ * 오너 아바타 원 — 이미지가 있으면 이미지, 없으면 이름 첫 글자 (리뷰 C4).
+ * 방 목록 헤더·프로필 관리 목록·오너 설정 3곳이 손으로 조립하던 것을 하나로.
+ */
+@Composable
+fun OwnerAvatar(name: String, color: Long, imagePath: String?, size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(size).clip(CircleShape).background(Color(color)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (imagePath != null) {
+            AsyncImage(
+                model = File(imagePath),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Text(
+                name.take(1).ifEmpty { "?" },
+                fontSize = (size.value * 0.42f).sp,
+                fontWeight = FontWeight.Bold,
+                color = Pbp.colors.bubbleInk,
+            )
+        }
+    }
+}
+
+/**
  * 클립보드의 ccfolia식 캐릭터 코드를 읽어 생성하고 결과를 토스트로 알린다 (리뷰 C1).
  * 채팅 화면·프로필 관리 두 진입점이 같은 문구·같은 동작을 쓰도록 한 곳에 둔다.
  */

@@ -146,7 +146,7 @@ fun RoomListScreen(nav: NavController) {
                 containerColor = tokens.signature,
                 shape = RoundedCornerShape(18.dp),
                 modifier = Modifier.rotate(-4f),
-            ) { Text("＋", fontSize = 24.sp, color = Color(0xFF1A1A1A)) }
+            ) { Text("＋", fontSize = 24.sp, color = Pbp.colors.onSignature) }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -162,30 +162,10 @@ fun RoomListScreen(nav: NavController) {
                     CompactBarButton("참여") { showJoin = true }
                     Spacer(Modifier.width(PbpDimens.sp1))
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
-                    Box(
-                        Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .background(Color(OwnerProfile.color))
-                            .combinedClickable(onClick = { showManager = true }),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val ownerImage = OwnerProfile.imagePath
-                        if (ownerImage != null) {
-                            coil3.compose.AsyncImage(
-                                model = java.io.File(ownerImage),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            )
-                        } else {
-                            Text(
-                                OwnerProfile.name.take(1).ifEmpty { "?" },
-                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10151C),
-                            )
-                        }
-                    }
+                    com.pbp.app.ui.common.OwnerAvatar(
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 30.dp,
+                        Modifier.combinedClickable(onClick = { showManager = true }),
+                    )
                 }
                 // 로고+워드마크 1행, 부제 2행 — 묶음 전체가 화면 정중앙 (좌우 인셋 동일)
                 Column(
@@ -463,7 +443,7 @@ private fun RoomCard(
                         "$unreadCount",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1A1A1A),
+                        color = Pbp.colors.onSignature,
                     )
                 }
             }

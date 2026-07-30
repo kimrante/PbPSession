@@ -158,12 +158,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         swatch = { modifier ->
                             Box(
                                 modifier.background(
-                                    Brush.sweepGradient(
-                                        listOf(
-                                            Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
-                                            Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
-                                        )
-                                    )
+                                    com.pbp.app.ui.common.customColorBrush
                                 )
                             )
                         },
@@ -347,7 +342,7 @@ private fun UsingBadge(label: String = "사용 중") {
         label,
         fontSize = 9.sp,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF1A1A1A),
+        color = Pbp.colors.onSignature,
         modifier = Modifier
             .padding(6.dp)
             .clip(RoundedCornerShape(5.dp))

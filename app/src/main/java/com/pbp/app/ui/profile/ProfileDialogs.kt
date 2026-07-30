@@ -76,26 +76,9 @@ fun ProfileManagerDialog(
                     sub = "오너 · 잡담과 참여 인사에 사용",
                     onClick = onOwner,
                 ) {
-                    Box(
-                        Modifier.size(36.dp).clip(CircleShape).background(Color(OwnerProfile.color)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val ownerImage = OwnerProfile.imagePath
-                        if (ownerImage != null) {
-                            coil3.compose.AsyncImage(
-                                model = java.io.File(ownerImage),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            )
-                        } else {
-                            Text(
-                                OwnerProfile.name.take(1).ifEmpty { "?" },
-                                fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10151C),
-                            )
-                        }
-                    }
+                    com.pbp.app.ui.common.OwnerAvatar(
+                        OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, 36.dp,
+                    )
                 }
                 profiles.forEach { profile ->
                     val sub = when {
@@ -197,29 +180,7 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                 )
                 Spacer(Modifier.height(PbpDimens.sp3))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(Color(color)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        val preview = imagePath
-                        if (preview != null) {
-                            coil3.compose.AsyncImage(
-                                model = java.io.File(preview),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            )
-                        } else {
-                            Text(
-                                name.take(1).ifEmpty { "?" },
-                                fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                                color = Color(0xFF10151C),
-                            )
-                        }
-                    }
+                    com.pbp.app.ui.common.OwnerAvatar(name, color, imagePath, 56.dp)
                     Spacer(Modifier.width(PbpDimens.sp3))
                     TextButton(onClick = {
                         imagePicker.launch(
@@ -267,12 +228,7 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                             )
                             .clip(CircleShape)
                             .background(
-                                Brush.sweepGradient(
-                                    listOf(
-                                        Color(0xFFFF6666), Color(0xFFFFCC66), Color(0xFF66DD66),
-                                        Color(0xFF66CCFF), Color(0xFFCC66FF), Color(0xFFFF6666),
-                                    )
-                                )
+                                com.pbp.app.ui.common.customColorBrush
                             )
                             .combinedClickable(onClick = { showCustomColor = true }),
                     )

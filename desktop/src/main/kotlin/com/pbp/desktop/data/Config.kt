@@ -49,8 +49,24 @@ class AppConfig private constructor(
     @Volatile var ownerName: String = "",
     @Volatile var ownerColor: Long = 0xFFFFD9A8,
     @Volatile var ownerImagePath: String? = null,
+    /**
+     * 최근 사용한 커스텀 색 (최신순, 최대 [RECENT_COLORS_MAX]개).
+     * 넘치면 가장 오래된 것부터 밀려난다 — 모바일 RecentColors와 같은 규칙.
+     */
+    val recentColors: MutableList<Long> = mutableListOf(),
 ) {
+    /** 커스텀 색 기록 — 중복은 앞으로 끌어올리고, 상한을 넘으면 오래된 것부터 버린다 */
+    @Synchronized
+    fun addRecentColor(argb: Long) {
+        recentColors.remove(argb)
+        recentColors.add(0, argb)
+        while (recentColors.size > RECENT_COLORS_MAX) recentColors.removeAt(recentColors.lastIndex)
+    }
+
     companion object {
+        /** 저장 상한 — 모바일 RecentColors.MAX와 같아야 한다 */
+        const val RECENT_COLORS_MAX = 5
+
         private val file = AppPaths.file("config.json")
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
@@ -77,6 +93,8 @@ class AppConfig private constructor(
                 ownerName = loaded?.ownerName ?: "",
                 ownerColor = loaded?.ownerColor ?: 0xFFFFD9A8,
                 ownerImagePath = loaded?.ownerImagePath,
+                recentColors = loaded?.recentColors.orEmpty()
+                    .take(RECENT_COLORS_MAX).toMutableList(),
             ).also { it.save() }
         }
 
@@ -95,6 +113,7 @@ class AppConfig private constructor(
         val ownerName: String? = null,
         val ownerColor: Long? = null,
         val ownerImagePath: String? = null,
+        val recentColors: List<Long>? = null,
     )
 
     /**
@@ -106,7 +125,7 @@ class AppConfig private constructor(
     fun snapshot(): String = gson.toJson(
         Saved(
             deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont,
-            ownerName, ownerColor, ownerImagePath,
+            ownerName, ownerColor, ownerImagePath, recentColors.toList(),
         )
     )
 

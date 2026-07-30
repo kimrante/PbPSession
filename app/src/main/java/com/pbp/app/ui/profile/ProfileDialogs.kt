@@ -201,38 +201,12 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
                 Spacer(Modifier.height(PbpDimens.gap3))
                 Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkDim)
                 Spacer(Modifier.height(PbpDimens.gap2))
-                Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
-                    PbpPalette.bubblePresets.forEach { preset ->
-                        Box(
-                            Modifier
-                                .size(32.dp)
-                                .border(
-                                    2.dp,
-                                    if (color == preset) tokens.ink else Color.Transparent,
-                                    CircleShape,
-                                )
-                                .clip(CircleShape)
-                                .background(Color(preset))
-                                .combinedClickable(onClick = { color = preset }),
-                        )
-                    }
-                    // 커스텀 — 드래그 팔레트로
-                    Box(
-                        Modifier
-                            .size(32.dp)
-                            .border(
-                                2.dp,
-                                if (PbpPalette.bubblePresets.none { it == color }) tokens.ink
-                                else Color.Transparent,
-                                CircleShape,
-                            )
-                            .clip(CircleShape)
-                            .background(
-                                com.pbp.app.ui.common.customColorBrush
-                            )
-                            .combinedClickable(onClick = { showCustomColor = true }),
-                    )
-                }
+                com.pbp.app.ui.common.ColorSwatchRow(
+                    presets = PbpPalette.bubblePresets,
+                    selected = color,
+                    onSelect = { color = it },
+                    onCustom = { showCustomColor = true },
+                )
             }
         },
         confirmButton = {
@@ -252,6 +226,7 @@ fun OwnerProfileDialog(forced: Boolean, onClose: () -> Unit) {
             onDismiss = { showCustomColor = false },
             onPick = { picked ->
                 color = picked
+                com.pbp.app.data.RecentColors.add(context, picked)
                 showCustomColor = false
             },
             initial = color,

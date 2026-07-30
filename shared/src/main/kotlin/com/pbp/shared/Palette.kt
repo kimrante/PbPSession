@@ -6,11 +6,11 @@ package com.pbp.shared
  */
 object Palette {
 
-    /** 이름 색 프리셋 5종 */
-    val namePresets = listOf(0xFFFFC46B, 0xFF8EC5E8, 0xFFC9A7E8, 0xFF9FE0B8, 0xFFF2A1A8)
+    /** 이름 색 프리셋 — 최근 색 5칸이 같은 줄에 들어가도록 3종 (목업 01장) */
+    val namePresets = listOf(0xFFFFC46B, 0xFF8EC5E8, 0xFFC9A7E8)
 
-    /** 말풍선 색 프리셋 5종 */
-    val bubblePresets = listOf(0xFFFFD9A8, 0xFFBFE3F6, 0xFFE3D2F2, 0xFFCDEED9, 0xFFF6D3D6)
+    /** 말풍선 색 프리셋 — 오너 컬러도 이 목록을 쓴다 */
+    val bubblePresets = listOf(0xFFFFD9A8, 0xFFBFE3F6, 0xFFE3D2F2)
 
     /** GM 발화 중 " " 대사 말풍선 색 */
     const val gmQuoteBubble = 0xFFE7E2D4

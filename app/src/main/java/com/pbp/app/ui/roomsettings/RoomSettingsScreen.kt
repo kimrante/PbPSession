@@ -166,6 +166,12 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     )
                 }
             }
+            // 테마 그리드는 라벨 있는 셀 체계라, 최근 색은 그리드 아래 별도 줄로 (목업 01-B)
+            com.pbp.app.ui.common.RecentColorRow(
+                selected = room?.themeColor,
+                onSelect = { vm.setThemeColor(it) },
+                modifier = Modifier.padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
+            )
 
             SectionTitle("배경 이미지")
             // 갤러리에서 고른 커스텀 배경이면 프리셋 뒤에 썸네일 셀이 추가된다 (3열 → 3행)
@@ -302,6 +308,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             onDismiss = { showCustomTheme = false },
             onPick = { color ->
                 vm.setThemeColor(color)
+                com.pbp.app.data.RecentColors.add(context, color)
                 showCustomTheme = false
             },
             initial = room?.themeColor,

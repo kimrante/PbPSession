@@ -263,7 +263,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("이름 색")
-                SwatchRow(
+                com.pbp.app.ui.common.ColorSwatchRow(
                     presets = PbpPalette.namePresets,
                     selected = nameColor,
                     onSelect = { nameColor = it },
@@ -272,7 +272,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("말풍선 색")
-                SwatchRow(
+                com.pbp.app.ui.common.ColorSwatchRow(
                     presets = PbpPalette.bubblePresets,
                     selected = bubbleColor,
                     onSelect = { bubbleColor = it },
@@ -449,6 +449,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
             onDismiss = { customTarget = null },
             onPick = { color ->
                 if (target == "name") nameColor = color else bubbleColor = color
+                // 커스텀 적용만 기록 — 프리셋은 이미 줄에 있어 중복 (목업 01장)
+                com.pbp.app.data.RecentColors.add(app, color)
                 customTarget = null
             },
             initial = if (target == "name") nameColor else bubbleColor,
@@ -468,41 +470,3 @@ private fun FieldLabel(text: String) {
     )
 }
 
-@Composable
-private fun SwatchRow(
-    presets: List<Long>,
-    selected: Long?,
-    onSelect: (Long) -> Unit,
-    onCustom: () -> Unit,
-) {
-    Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
-        presets.forEach { color ->
-            val sel = selected == color
-            Box(
-                Modifier
-                    .size(32.dp)
-                    .then(
-                        if (sel) Modifier.border(2.dp, Color.White, CircleShape)
-                        else Modifier
-                    )
-                    .clip(CircleShape)
-                    .background(Color(color))
-                    .clickable { onSelect(color) },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (sel) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C))
-            }
-        }
-        // 커스텀 컬러
-        Box(
-            Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(
-                    com.pbp.app.ui.common.customColorBrush
-                )
-                .clickable(onClick = onCustom),
-            contentAlignment = Alignment.Center,
-        ) { Text("＋", color = Color.White, fontWeight = FontWeight.Black, fontSize = 15.sp) }
-    }
-}

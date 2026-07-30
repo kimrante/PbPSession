@@ -168,6 +168,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var profiles by remember { mutableStateOf(config.profiles.toList()) }
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
+    // 최근 사용한 커스텀 색 — 네 색 선택 줄이 공유 (목업 01장)
+    var recentColors by remember { mutableStateOf(config.recentColors.toList()) }
+
     // 오너 프로필 — 미설정이면 먼저 설정하게 한다 (첫 실행 포함, 모바일과 동일)
     var ownerName by remember { mutableStateOf(config.ownerName) }
     var ownerColor by remember { mutableStateOf(config.ownerColor) }
@@ -207,6 +210,13 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 파일 쓰기만 IO에서 (N8·P3-16)
         val json = config.replaceAndSnapshot(rooms, profiles)
         scope.launch(Dispatchers.IO) { config.writeSnapshot(json) }
+    }
+
+    /** 커스텀 색 적용 기록 — 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
+    fun rememberColor(argb: Long) {
+        config.addRecentColor(argb)
+        recentColors = config.recentColors.toList()
+        persist()
     }
 
     // 과거 빌드는 참여 방에서도 GM이 기본 발화 프로필이었다 — 일회성 교정
@@ -656,6 +666,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             },
         )
         OverlayKind.NewProfile -> ProfileOverlay(
+            recentColors = recentColors,
+            onColorUsed = ::rememberColor,
             onDismiss = { overlay = null },
             onSave = { profile ->
                 profiles = profiles + profile
@@ -669,6 +681,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         )
         OverlayKind.RoomSettings -> SettingsOverlay(
             room = selected,
+            recentColors = recentColors,
+            onColorUsed = ::rememberColor,
             onDismiss = { overlay = null },
             onResetLogs = ::resetRoomLogs,
             onApply = { theme, background ->
@@ -747,6 +761,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             },
         )
         OverlayKind.OwnerProfile -> OwnerProfileOverlay(
+            recentColors = recentColors,
+            onColorUsed = ::rememberColor,
             initialName = ownerName,
             initialColor = ownerColor,
             initialImage = ownerImagePath,
@@ -810,6 +826,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     editProfileIndex?.let { idx ->
         profiles.getOrNull(idx)?.let { prof ->
             ProfileOverlay(
+                recentColors = recentColors,
+                onColorUsed = ::rememberColor,
                 onDismiss = { editProfileIndex = null },
                 onSave = { updated ->
                     profiles = profiles.mapIndexed { i, p -> if (i == idx) updated else p }

@@ -141,6 +141,10 @@ internal fun OwnerAvatar(
 internal fun ProfileOverlay(
     onDismiss: () -> Unit,
     onSave: (Profile) -> Unit,
+    /** 최근 사용한 커스텀 색 (최신순) */
+    recentColors: List<Long> = emptyList(),
+    /** 커스텀 색을 적용했을 때 — 최근 목록에 기록 */
+    onColorUsed: (Long) -> Unit = {},
     /** null이면 새 캐릭터, 아니면 이 프로필을 편집 */
     editing: Profile? = null,
     /** 편집 모드에서만 — null이면 삭제 버튼 숨김 */
@@ -220,27 +224,27 @@ internal fun ProfileOverlay(
         Text("이름 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.namePresets, nameColor) { nameColor = it; nameCustomOpen = false }
+            SwatchRow(Tokens.namePresets, nameColor, recentColors) { nameColor = it; nameCustomOpen = false }
             CustomSwatch(on = nameColor !in Tokens.namePresets) {
                 nameCustomOpen = !nameCustomOpen
             }
         }
         if (nameCustomOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(nameColor) { nameColor = it }
+            ColorPalettePicker(nameColor) { nameColor = it; onColorUsed(it) }
         }
         Spacer(Modifier.height(14.dp))
         Text("말풍선 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.bubblePresets, bubbleColor) { bubbleColor = it; bubbleCustomOpen = false }
+            SwatchRow(Tokens.bubblePresets, bubbleColor, recentColors) { bubbleColor = it; bubbleCustomOpen = false }
             CustomSwatch(on = bubbleColor !in Tokens.bubblePresets) {
                 bubbleCustomOpen = !bubbleCustomOpen
             }
         }
         if (bubbleCustomOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(bubbleColor) { bubbleColor = it }
+            ColorPalettePicker(bubbleColor) { bubbleColor = it; onColorUsed(it) }
         }
         Spacer(Modifier.height(14.dp))
         Text("캐릭터 값", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
@@ -295,21 +299,45 @@ internal fun ProfileOverlay(
 }
 
 @Composable
-internal fun SwatchRow(presets: List<Long>, selected: Long, onSelect: (Long) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        presets.forEach { color ->
-            val on = selected == color
-            Box(
-                Modifier.size(32.dp)
-                    // 밝은 다이얼로그 위 선택 표시는 잉크색 아웃라인 (라이트 목업 03장)
-                    .border(2.dp, if (on) Tokens.Ink else Color.Transparent, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color(color))
-                    .clickable { onSelect(color) },
-                contentAlignment = Alignment.Center,
-            ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
+internal fun SwatchRow(
+    presets: List<Long>,
+    selected: Long,
+    /** 최근 사용한 커스텀 색 — 프리셋 뒤에 구분선과 함께 붙는다 (목업 01장) */
+    recent: List<Long> = emptyList(),
+    onSelect: (Long) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        presets.forEach { color -> DesktopSwatch(color, selected == color) { onSelect(color) } }
+        if (recent.isNotEmpty()) {
+            Box(Modifier.width(1.dp).height(16.dp).background(Tokens.Line))
+            recent.forEach { color ->
+                DesktopSwatch(color, selected == color, outlined = true) { onSelect(color) }
+            }
         }
     }
+}
+
+/** @param outlined 흰색 계열도 보이도록 옅은 테두리 (최근 색용) */
+@Composable
+private fun DesktopSwatch(
+    color: Long,
+    on: Boolean,
+    outlined: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Box(
+        Modifier.size(32.dp)
+            // 밝은 다이얼로그 위 선택 표시는 잉크색 아웃라인 (라이트 목업 03장)
+            .border(2.dp, if (on) Tokens.Ink else Color.Transparent, CircleShape)
+            .clip(CircleShape)
+            .background(Color(color))
+            .then(if (outlined) Modifier.border(1.dp, Tokens.Line, CircleShape) else Modifier)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { if (on) Text("✓", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF10151C)) }
 }
 
 /** 커스텀 컬러 진입용 무지개 스와치 — on이면 프리셋 밖의 색이 선택된 상태 */
@@ -575,6 +603,8 @@ internal fun ProfileManagerOverlay(
  */
 @Composable
 internal fun OwnerProfileOverlay(
+    recentColors: List<Long> = emptyList(),
+    onColorUsed: (Long) -> Unit = {},
     initialName: String,
     initialColor: Long,
     initialImage: String?,
@@ -626,7 +656,7 @@ internal fun OwnerProfileOverlay(
         Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Spacer(Modifier.height(7.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SwatchRow(Tokens.bubblePresets, color) {
+            SwatchRow(Tokens.bubblePresets, color, recentColors) {
                 color = it
                 customOpen = false
             }
@@ -634,7 +664,7 @@ internal fun OwnerProfileOverlay(
         }
         if (customOpen) {
             Spacer(Modifier.height(8.dp))
-            ColorPalettePicker(color) { color = it }
+            ColorPalettePicker(color) { color = it; onColorUsed(it) }
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

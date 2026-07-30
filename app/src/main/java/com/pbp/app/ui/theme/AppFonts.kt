@@ -41,17 +41,8 @@ object AppFonts {
         }
 }
 
-/**
- * Typography의 모든 스타일에 기본 글꼴을 입히고, AlertDialog 타이틀(headlineSmall)이
- * 타이포 스케일 최대치 18sp를 넘지 않게 낮춘다 (ui-guidelines 3장 — M3 기본 24sp).
- */
+/** Typography의 모든 스타일에 기본 글꼴을 입힌다 */
 fun typographyWith(fontFamily: FontFamily?): Typography {
-    return typographyFamily(fontFamily).let {
-        it.copy(headlineSmall = it.headlineSmall.copy(fontSize = 18.sp, lineHeight = 24.sp))
-    }
-}
-
-private fun typographyFamily(fontFamily: FontFamily?): Typography {
     val base = Typography()
     // AlertDialog 타이틀(headlineSmall)의 기본 24sp는 타입 스케일 밖 —
     // 커스텀 다이얼로그 타이틀과 같은 18sp로 맞춘다 (디자인 감사 P3-2)

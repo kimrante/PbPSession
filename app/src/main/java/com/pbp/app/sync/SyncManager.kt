@@ -21,6 +21,8 @@ import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+// awaitClose는 ProducerScope 확장 함수라 정규화된 이름으로는 호출할 수 없다 — 임포트 필요
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -180,7 +182,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 .addSnapshotListener { snapshot, error ->
                     trySend(if (error != null || snapshot == null) null else snapshot.size())
                 }
-            kotlinx.coroutines.channels.awaitClose { registration.remove() }
+            awaitClose { registration.remove() }
         }
 
     /** members/{myUid} 문서 보장 — 보안 규칙의 방 접근 근거 */

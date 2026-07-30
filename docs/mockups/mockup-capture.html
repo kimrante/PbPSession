@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 목업 — 대화 캡처(범위 선택 → 이미지 내보내기)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* 디자인 토큰 — 라이트 모드 기준 (PbP-design-spec 0장) + v2 스페이싱 */
+:root{
+  --bg:#f4f2ec; --panel:#ffffff; --panel-2:#efeade;
+  --line:rgba(20,25,32,.10); --ink:#23272e; --ink-dim:#6d7480; --ink-sub:rgba(20,25,32,.72);
+  --postit:#ffd05c; --accent:#e0b13e; --accent-ink:#a3781a;
+  --theme:#5f9ec7; --fail:#c94f4f; --ok:#3b82f6;
+  --bubble-me:#ffd9a8; --bubble-you:#bfe3f6; --bubble-ink:#10151c; --bubble-gm:#e7e2d4;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-pill:999px;
+  --appbar-h:56px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#e9e5db;color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
+  padding:var(--sp-6) var(--sp-5);
+}
+.doc{max-width:1180px;margin:0 auto}
+
+/* ── 문서 머리글·섹션 (센터 정렬 기준) ── */
+.dochead{text-align:center;padding:var(--sp-5) 0}
+.dochead h1{font-family:'Gowun Batang',serif;font-size:26px;font-weight:700;letter-spacing:-.4px}
+.dochead p{font-size:13px;color:var(--ink-dim);margin-top:var(--sp-2);line-height:1.7}
+.sec{margin-top:var(--sp-6)}
+.sechead{text-align:center;padding:var(--sp-4) 0}
+.sechead h2{font-size:15px;font-weight:900;letter-spacing:.4px}
+.sechead h2 b{color:var(--accent-ink)}
+.sechead p{font-size:11px;color:var(--ink-dim);margin-top:var(--sp-1)}
+.rail{display:flex;flex-wrap:wrap;gap:var(--sp-5);justify-content:center;align-items:flex-start}
+.cap{text-align:center;padding:var(--sp-3) 0;max-width:340px;margin:0 auto}
+.cap b{display:block;font-size:12px;font-weight:900;color:var(--accent-ink)}
+.cap span{display:block;font-size:11px;color:var(--ink-dim);line-height:1.65;margin-top:var(--sp-1)}
+
+/* ── 폰 프레임 ── */
+.unit{width:340px}
+.phone{width:340px;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px}
+.screen{border-radius:29px;overflow:hidden;background:var(--bg);height:704px;display:flex;flex-direction:column;position:relative}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700;position:relative;z-index:1}
+
+/* 채팅 배경 — 아침 안개의 등대 + 밝은 가독성 베일 */
+.chat-bg{
+  flex:1;display:flex;flex-direction:column;min-height:0;position:relative;
+  background:
+    radial-gradient(340px 200px at 82% 12%, rgba(255,238,190,.75), transparent 62%),
+    radial-gradient(500px 340px at 20% 108%, rgba(148,186,214,.55), transparent 70%),
+    linear-gradient(178deg,#b9d2e4 0%, #d6e4ee 45%, #eef3f6 100%);
+}
+.chat-bg::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(249,251,253,.6),rgba(249,251,253,.22) 30%,rgba(249,251,253,.62));pointer-events:none}
+.chat-bg>*{position:relative}
+
+/* 상단 바 — 타이틀 묶음은 정중앙, 좌우 인셋 동일 (mockup-chat-header) */
+.appbar{height:var(--appbar-h);flex-shrink:0;position:relative;background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.35))}
+.appbar .side{position:absolute;inset:0;display:flex;align-items:center;padding:0 var(--sp-2)}
+.icon-btn{width:40px;height:40px;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:17px;color:rgba(20,25,32,.7);flex-shrink:0}
+.grow{flex:1}
+.barmid{position:absolute;inset:0 96px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.bar-title{font-family:'Gowun Batang',serif;font-size:15px;line-height:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bar-sub{font-size:11px;line-height:11px;font-weight:500;color:var(--ink-sub);display:flex;align-items:center;gap:var(--sp-1);margin-top:var(--sp-1)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--theme);flex-shrink:0}
+/* 캡처 모드 상단 바 — 시그니처 톤으로 모드 전환을 알린다 */
+.appbar.mode{background:linear-gradient(180deg,rgba(255,208,92,.95),rgba(255,208,92,.72))}
+.appbar.mode .bar-title{font-family:'Noto Sans KR',sans-serif;font-size:15px}
+.appbar.mode .bar-sub{color:rgba(30,25,10,.66)}
+.appbar.mode .icon-btn{color:rgba(30,25,10,.72)}
+.barmid.wide{inset:0 var(--sp-6)}
+
+/* ── 메시지 목록 ── */
+.msgs{flex:1;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;justify-content:flex-end;gap:var(--sp-3);overflow:hidden}
+.sys{align-self:center;background:rgba(20,25,32,.32);color:rgba(255,255,255,.86);font-size:10px;border-radius:var(--r-pill);padding:3px 12px}
+.narr{background:rgba(255,255,255,.78);border-radius:4px var(--r-card) var(--r-card) 4px;padding:var(--sp-3) var(--sp-4);box-shadow:0 3px 12px rgba(60,70,85,.12)}
+.narr p{font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;color:#3c3526}
+.mrow{display:flex;gap:var(--sp-2);align-items:flex-end}
+.mrow.me{justify-content:flex-end}
+.avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--panel-2);border:1px solid rgba(255,255,255,.85);align-self:flex-start}
+.mcol{display:flex;flex-direction:column;max-width:210px}
+.mrow.me .mcol{align-items:flex-end}
+.mname{font-size:11px;font-weight:700;margin-bottom:var(--sp-1);text-shadow:0 1px 3px rgba(255,255,255,.8)}
+.bubble{border-radius:4px var(--r-card) var(--r-card) var(--r-card);padding:var(--sp-2) var(--sp-3);font-size:13px;line-height:1.5;color:var(--bubble-ink);font-weight:500;width:fit-content;box-shadow:0 2px 8px rgba(60,70,85,.10)}
+.mrow.me .bubble{border-radius:var(--r-card) 4px var(--r-card) var(--r-card)}
+.mtime{font-size:10px;color:var(--theme);flex-shrink:0;padding-bottom:2px}
+.diceline{align-self:center;display:flex;gap:var(--sp-2);align-items:center;background:rgba(255,255,255,.85);border:1px solid rgba(200,158,52,.5);border-radius:var(--r-cell);padding:6px 14px;font-size:11px;color:#7a5b12;font-weight:700}
+.diceline i{font-style:normal;color:var(--ok)}
+/* 인용 말풍선 — 명조 쌍따옴표 (mockup-quote-bubble) */
+.bubble.quote{position:relative;padding:14px 26px}
+.bubble.quote::before,.bubble.quote::after{position:absolute;font-family:'Gowun Batang',serif;font-weight:700;font-size:24px;line-height:1;color:rgba(16,21,28,.32)}
+.bubble.quote::before{content:"\201C";left:9px;top:9px}
+.bubble.quote::after{content:"\201D";right:9px;bottom:9px}
+
+/* ── 입력 영역 (평상시) ── */
+.inputzone{flex-shrink:0;background:rgba(255,255,255,.86);border-top:1px solid var(--line);padding:var(--sp-2) var(--sp-3)}
+.inputrow{display:flex;align-items:center;gap:var(--sp-2)}
+.field{flex:1;background:rgba(20,25,32,.05);border:1px solid var(--line);border-radius:var(--r-cell);padding:9px var(--sp-3);font-size:12px;color:var(--ink-dim)}
+.send{width:40px;height:40px;border-radius:var(--r-cell);background:var(--theme);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+
+/* ── 캡처 범위 선택 ── */
+/* 범위 밖은 흐리게, 범위 안은 옅은 옐로 밴드로 한 덩어리처럼 묶는다 */
+.msgs.picking .out{opacity:.32;filter:saturate(.55)}
+.band{position:relative;padding:var(--sp-2) var(--sp-2);margin:0 calc(var(--sp-2) * -1);border-radius:0;background:rgba(255,208,92,.26);box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent)}
+.band.first{border-radius:var(--r-cell) var(--r-cell) 0 0;box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent)}
+.band.last{border-radius:0 0 var(--r-cell) var(--r-cell);box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 -2px 0 var(--accent)}
+.band.only{border-radius:var(--r-cell);box-shadow:inset 0 0 0 2px var(--accent)}
+/* 밴드가 연속으로 붙도록 목록 gap을 밴드 사이에서만 제거 */
+.msgs.picking{gap:var(--sp-3)}
+.msgs.picking .band + .band{margin-top:calc(var(--sp-3) * -1)}
+.edge{position:absolute;top:calc(var(--sp-2) * -1);left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:9px;font-weight:900;border-radius:var(--r-pill);padding:2px 10px;white-space:nowrap;z-index:2}
+.band.last .edge{top:auto;bottom:calc(var(--sp-2) * -1)}
+/* 하단 캡처 액션 바 — 입력줄 자리를 대체, 상하 패딩 동일.
+   높이를 고정해 선택 상태가 바뀌어도 바가 튀지 않는다 */
+.capbar{flex-shrink:0;height:70px;background:var(--panel);border-top:1px solid var(--line);padding:var(--sp-3) var(--sp-4);display:flex;align-items:center;gap:var(--sp-3)}
+/* 부제는 한 줄 고정 — 감기면 바 안쪽 상하 여백이 어긋난다 (넘치면 말줄임) */
+.capbar .info{min-width:0;overflow:hidden}
+.capbar .info b{display:block;font-size:13px;line-height:19px;font-weight:900;color:var(--ink)}
+.capbar .info span{display:block;font-size:10px;line-height:14px;color:var(--ink-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ghost{font-size:11px;font-weight:700;color:var(--ink-dim);border:1px solid var(--line);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3);white-space:nowrap}
+.cta{background:var(--postit);color:#2a230c;font-size:13px;font-weight:900;border-radius:var(--r-pill);padding:var(--sp-3) var(--sp-4);white-space:nowrap;box-shadow:0 4px 14px rgba(224,177,62,.4)}
+.cta.off{background:rgba(20,25,32,.08);color:rgba(20,25,32,.34);box-shadow:none}
+
+/* ── 롱프레스 액션 팝업 (캡처 항목 추가) ── */
+.dim{position:absolute;inset:0;background:rgba(30,35,45,.38);z-index:3;display:flex;flex-direction:column;justify-content:center;padding:0 var(--sp-5);backdrop-filter:blur(2px)}
+.target{display:flex;justify-content:flex-end;margin-bottom:var(--sp-3)}
+.target .wrap{display:flex;flex-direction:column;align-items:flex-end}
+.target .mname{color:#fff;text-shadow:0 1px 4px rgba(20,25,32,.6)}
+.target .bubble{box-shadow:0 0 0 2px var(--accent), 0 14px 34px rgba(30,40,55,.35)}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sheet);padding:var(--sp-4);box-shadow:0 24px 60px rgba(30,40,55,.35)}
+.dlg h3{font-size:15px;font-weight:700;color:var(--ink);padding:0 var(--sp-3) var(--sp-2)}
+.opt{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell)}
+.opt.hover{background:rgba(255,208,92,.14)}
+.opt .ic{width:34px;height:34px;border-radius:var(--r-cell);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.opt.edit .ic{background:rgba(255,208,92,.28);border:1px solid rgba(200,158,52,.5)}
+.opt.danger .ic{background:rgba(201,79,79,.10);border:1px solid rgba(201,79,79,.3)}
+.opt.pic .ic{background:rgba(95,158,199,.16);border:1px solid rgba(95,158,199,.5)}
+.opt b{display:block;font-size:13px;font-weight:700;color:var(--accent-ink)}
+.opt.danger b{color:var(--fail)}
+.opt.pic b{color:#33719c}
+.opt>div:last-child{min-width:0}
+.opt span{display:block;font-size:11px;color:var(--ink-dim);line-height:1.5}
+.acts{display:flex;justify-content:flex-end;padding-top:var(--sp-2)}
+.acts i{font-style:normal;font-size:13px;font-weight:700;color:var(--ink-dim);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-pill)}
+
+/* ── 미리보기 화면 ── */
+.prev-wrap{flex:1;min-height:0;background:var(--bg);display:flex;flex-direction:column}
+.prev-scroll{flex:1;min-height:0;overflow:hidden;padding:var(--sp-4);display:flex;justify-content:center;align-items:flex-start}
+/* 결과는 360dp 고정 폭으로 그려지므로, 미리보기는 그 폭을 축소해 보여준다 (줄바꿈이 결과와 같아지도록) */
+.prev-scroll .shot{zoom:.8}
+.shot{width:360px;background:#eef3f6;border:1px solid var(--line);border-radius:var(--r-cell);overflow:hidden;box-shadow:0 10px 28px rgba(40,50,65,.18)}
+.shot .sheet{
+  background:
+    radial-gradient(240px 140px at 82% 10%, rgba(255,238,190,.7), transparent 62%),
+    linear-gradient(178deg,#c3d8e8 0%, #dbe8f0 45%, #f1f5f7 100%);
+  padding:var(--sp-3);
+}
+/* 캡처 이미지 머리글·낙관 — 위아래 같은 패딩 */
+.shot .head,.shot .foot{background:rgba(255,255,255,.9);padding:var(--sp-2) var(--sp-3);display:flex;align-items:center;gap:var(--sp-2)}
+.shot .head{border-bottom:1px solid var(--line)}
+.shot .foot{border-top:1px solid var(--line)}
+.shot .head .rt{flex:1;min-width:0}
+.shot .head b{display:block;font-family:'Gowun Batang',serif;font-size:12px;font-weight:700;color:var(--ink)}
+.shot .head span{display:block;font-size:9px;color:var(--ink-dim);margin-top:2px}
+.shot .foot span{font-size:9px;color:var(--ink-dim)}
+.shot .foot .mark{margin-left:auto;font-size:9px;font-weight:900;color:var(--accent-ink);letter-spacing:.6px}
+.tile{width:22px;height:22px;border-radius:7px;background:linear-gradient(140deg,#ffd05c,#efb945);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tile svg{width:13px;height:14px}
+.shot .msgs{padding:var(--sp-3);gap:var(--sp-3);flex:none;justify-content:flex-start;overflow:visible}
+.prevbar{flex-shrink:0;background:var(--panel);border-top:1px solid var(--line);padding:var(--sp-3) var(--sp-4);display:flex;align-items:center;gap:var(--sp-2)}
+.toggle{display:flex;align-items:center;gap:var(--sp-2);font-size:11px;font-weight:700;color:var(--ink);flex:1}
+.sw{width:34px;height:20px;border-radius:var(--r-pill);background:var(--postit);position:relative;flex-shrink:0}
+.sw::after{content:"";position:absolute;top:2px;left:16px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.sw.off{background:rgba(20,25,32,.16)}
+.sw.off::after{left:2px}
+.btn{font-size:12px;font-weight:900;border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-4);white-space:nowrap}
+.btn.line{border:1px solid var(--accent);color:var(--accent-ink)}
+.btn.fill{background:var(--postit);color:#2a230c}
+.toast{position:absolute;left:var(--sp-5);right:var(--sp-5);bottom:84px;background:rgba(20,25,32,.9);color:#fff;font-size:11px;font-weight:700;text-align:center;border-radius:var(--r-pill);padding:var(--sp-3) var(--sp-4);z-index:4}
+
+/* ── 결과 이미지 해부도 ── */
+.anat{display:flex;flex-wrap:wrap;gap:var(--sp-5);justify-content:center;align-items:flex-start}
+.anat .shot{width:360px}
+.notes{max-width:520px;display:flex;flex-direction:column;gap:var(--sp-3)}
+.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--r-cell);padding:var(--sp-3) var(--sp-4)}
+.note.r{border-left-color:var(--fail)}
+.note.b{border-left-color:var(--theme)}
+.note h4{font-size:12px;font-weight:900;color:var(--ink)}
+.note p{font-size:11px;color:var(--ink-dim);line-height:1.75;margin-top:var(--sp-1)}
+.note code{background:rgba(20,25,32,.06);border-radius:4px;padding:1px 5px;font-size:10px;font-family:ui-monospace,monospace}
+.note b{color:var(--accent-ink)}
+
+/* ── 구현 지시 표 ── */
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-cell);overflow:hidden;font-size:11px}
+th,td{padding:var(--sp-3) var(--sp-3);border-bottom:1px solid var(--line);text-align:left;vertical-align:top;line-height:1.7}
+th{background:var(--panel-2);font-size:10px;font-weight:900;letter-spacing:.3px}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap;font-weight:700;color:var(--accent-ink)}
+td code{background:rgba(20,25,32,.06);border-radius:4px;padding:1px 5px;font-size:10px;font-family:ui-monospace,monospace}
+td b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<div class="dochead">
+  <h1>대화 캡처 — 범위 선택 → 이미지 내보내기</h1>
+  <p>특정 메시지부터 특정 메시지까지를 골라 한 장의 이미지로 합칩니다. 기존 <b>HTML 로그 내보내기(↓)</b>는 방 전체를 문서로 남기는 기능이라 그대로 두고,<br>
+  캡처는 <b>지금 이 대목만 잘라 공유</b>하는 별개 경로로 둡니다. 라이트 모드 기준 · 스페이싱은 4dp 그리드 6단계만 사용.</p>
+</div>
+
+<!-- ══════════ 01. 흐름 ══════════ -->
+<div class="sec">
+  <div class="sechead">
+    <h2><b>01</b> · 흐름 — 롱프레스 진입 → 범위 선택 → 미리보기 → 저장</h2>
+    <p>네 화면 모두 상단 바 56dp · 본문 좌우 16dp · 하단 바 상하 패딩 12dp로 같은 규격을 씁니다</p>
+  </div>
+  <div class="rail">
+
+    <!-- ── A. 진입 ── -->
+    <div class="unit">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+        <div class="chat-bg">
+          <div class="appbar">
+            <div class="side"><div class="icon-btn">←</div><div class="grow"></div><div class="icon-btn">↓</div><div class="icon-btn">⚙</div></div>
+            <div class="barmid">
+              <div class="bar-title">등대에서 만나요</div>
+              <div class="bar-sub">GM <i class="dot"></i> 2명 참여 중</div>
+            </div>
+          </div>
+          <div class="msgs">
+            <div class="sys">2026년 7월 30일</div>
+            <div class="narr"><p>아침 아홉 시의 등대는 안개에 잠겨 윤곽만 남아 있었다. 계단을 오르는 발소리만이 탑 안쪽을 천천히 울렸다.</p></div>
+            <div class="mrow">
+              <div class="avatar">🌊</div>
+              <div class="mcol">
+                <div class="mname" style="color:#33719c">카야</div>
+                <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+              </div>
+              <div class="mtime">21:03</div>
+            </div>
+            <div class="mrow me">
+              <div class="mtime">21:05</div>
+              <div class="mcol">
+                <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+                <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지.</div>
+              </div>
+              <div class="avatar">🌙</div>
+            </div>
+          </div>
+        </div>
+        <div class="dim">
+          <div class="target">
+            <div class="wrap">
+              <div class="mname">밤샘꾼 · 21:05</div>
+              <div class="bubble" style="background:var(--bubble-me);border-radius:var(--r-card) 4px var(--r-card) var(--r-card)">값은 이야기로 치르지.</div>
+            </div>
+          </div>
+          <div class="dlg">
+            <h3>메시지</h3>
+            <div class="opt edit"><div class="ic">✏️</div><div><b>편집</b><span>본문을 고치면 (수정됨) 표시가 남습니다</span></div></div>
+            <div class="opt danger"><div class="ic">🗑️</div><div><b>삭제</b><span>공유된 방이면 상대 화면에서도 사라집니다</span></div></div>
+            <div class="opt pic hover"><div class="ic">🖼️</div><div><b>캡처</b><span>여기부터 범위를 골라 이미지로 만듭니다</span></div></div>
+            <div class="acts"><i>취소</i></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap"><b>A · 진입 — 롱프레스 메뉴에 '캡처' 추가</b>
+        <span>편집·삭제 아래 세 번째 항목. 캡처는 남의 말도 담아야 하므로 <b>상대 메시지에서도 팝업이 열리며,</b> 그때는 캡처 한 줄만 보입니다.</span></div>
+    </div>
+
+    <!-- ── B. 끝점 선택 대기 ── -->
+    <div class="unit">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+        <div class="chat-bg">
+          <div class="appbar mode">
+            <div class="side"><div class="icon-btn">✕</div><div class="grow"></div></div>
+            <div class="barmid wide">
+              <div class="bar-title">캡처할 범위 선택</div>
+              <div class="bar-sub">끝 메시지를 탭하세요</div>
+            </div>
+          </div>
+          <div class="msgs picking">
+            <div class="sys out">2026년 7월 30일</div>
+            <div class="narr out"><p>아침 아홉 시의 등대는 안개에 잠겨 윤곽만 남아 있었다. 계단을 오르는 발소리만이 탑 안쪽을 천천히 울렸다.</p></div>
+            <div class="mrow out">
+              <div class="avatar">🌊</div>
+              <div class="mcol">
+                <div class="mname" style="color:#33719c">카야</div>
+                <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+              </div>
+              <div class="mtime">21:03</div>
+            </div>
+            <div class="band only">
+              <div class="edge">시작</div>
+              <div class="mrow me">
+                <div class="mtime">21:05</div>
+                <div class="mcol">
+                  <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+                  <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지.</div>
+                </div>
+                <div class="avatar">🌙</div>
+              </div>
+            </div>
+            <div class="diceline out">🎲 1d100 → 37 <i>· 성공</i></div>
+            <div class="mrow out">
+              <div class="avatar">🌊</div>
+              <div class="mcol">
+                <div class="mname" style="color:#33719c">카야</div>
+                <div class="bubble quote" style="background:var(--bubble-you)">…좋아요. 딱 한 잔만.</div>
+              </div>
+              <div class="mtime">21:14</div>
+            </div>
+          </div>
+        </div>
+        <div class="capbar">
+          <div class="info"><b>1개 선택됨</b><span>시작 21:05 · 밤샘꾼</span></div>
+          <div class="grow"></div>
+          <div class="cta off">이미지 만들기</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>B · 시작점만 정해진 상태</b>
+        <span>롱프레스한 메시지가 곧 시작점이 됩니다. 범위 밖은 흐리게(32%), 시작점은 옐로 테두리 + '시작' 배지. 아직 끝이 없으니 <b>버튼은 잠깁니다.</b></span></div>
+    </div>
+
+    <!-- ── C. 범위 확정 ── -->
+    <div class="unit">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+        <div class="chat-bg">
+          <div class="appbar mode">
+            <div class="side"><div class="icon-btn">✕</div><div class="grow"></div></div>
+            <div class="barmid wide">
+              <div class="bar-title">캡처할 범위 선택</div>
+              <div class="bar-sub">양 끝을 다시 탭해 조절할 수 있어요</div>
+            </div>
+          </div>
+          <div class="msgs picking">
+            <div class="sys out">2026년 7월 30일</div>
+            <div class="narr out"><p>아침 아홉 시의 등대는 안개에 잠겨 윤곽만 남아 있었다. 계단을 오르는 발소리만이 탑 안쪽을 천천히 울렸다.</p></div>
+            <div class="band first">
+              <div class="edge">시작</div>
+              <div class="mrow">
+                <div class="avatar">🌊</div>
+                <div class="mcol">
+                  <div class="mname" style="color:#33719c">카야</div>
+                  <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+                </div>
+                <div class="mtime">21:03</div>
+              </div>
+            </div>
+            <div class="band">
+              <div class="mrow me">
+                <div class="mtime">21:05</div>
+                <div class="mcol">
+                  <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+                  <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지.</div>
+                </div>
+                <div class="avatar">🌙</div>
+              </div>
+            </div>
+            <div class="band">
+              <div class="diceline">🎲 1d100 → 37 <i>· 성공</i></div>
+            </div>
+            <div class="band last">
+              <div class="mrow">
+                <div class="avatar">🌊</div>
+                <div class="mcol">
+                  <div class="mname" style="color:#33719c">카야</div>
+                  <div class="bubble quote" style="background:var(--bubble-you)">…좋아요. 딱 한 잔만.</div>
+                </div>
+                <div class="mtime">21:14</div>
+              </div>
+              <div class="edge">끝</div>
+            </div>
+          </div>
+        </div>
+        <div class="capbar">
+          <div class="info"><b>4개 선택됨</b><span>21:03–21:14 · 약 1,180px</span></div>
+          <div class="grow"></div>
+          <div class="cta">이미지 만들기</div>
+        </div>
+      </div></div>
+      <div class="cap"><b>C · 범위 확정 — 연속 밴드로 한 덩어리</b>
+        <span>선택 구간은 옅은 옐로 밴드가 <b>끊기지 않고 이어져</b> 범위임을 보여줍니다. 하단 바에 개수·시간 범위·예상 높이. 시스템 줄·다이스도 함께 담깁니다.</span></div>
+    </div>
+
+    <!-- ── D. 미리보기 ── -->
+    <div class="unit">
+      <div class="phone"><div class="screen">
+        <div class="statusbar"><span>21:44</span><span>▲ ● ▮</span></div>
+        <div class="appbar">
+          <div class="side"><div class="icon-btn">←</div><div class="grow"></div></div>
+          <div class="barmid">
+            <div class="bar-title" style="font-family:'Noto Sans KR',sans-serif">캡처 미리보기</div>
+            <div class="bar-sub">4개 · 1,180 × 720</div>
+          </div>
+        </div>
+        <div class="prev-wrap">
+          <div class="prev-scroll">
+            <div class="shot">
+              <div class="head">
+                <div class="tile"><svg viewBox="0 0 26 28"><path d="M13 1 24.5 11 13 27 1.5 11z" fill="#23272e"/><path d="M13 1v26M1.5 11h23" stroke="#ffd05c" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg></div>
+                <div class="rt"><b>등대에서 만나요</b><span>2026-07-30 21:03 – 21:14 · 4개 메시지</span></div>
+              </div>
+              <div class="sheet">
+                <div class="msgs">
+                  <div class="mrow">
+                    <div class="avatar">🌊</div>
+                    <div class="mcol">
+                      <div class="mname" style="color:#33719c">카야</div>
+                      <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+                    </div>
+                    <div class="mtime">21:03</div>
+                  </div>
+                  <div class="mrow me">
+                    <div class="mtime">21:05</div>
+                    <div class="mcol">
+                      <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+                      <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지.</div>
+                    </div>
+                    <div class="avatar">🌙</div>
+                  </div>
+                  <div class="diceline">🎲 1d100 → 37 <i>· 성공</i></div>
+                  <div class="mrow">
+                    <div class="avatar">🌊</div>
+                    <div class="mcol">
+                      <div class="mname" style="color:#33719c">카야</div>
+                      <div class="bubble quote" style="background:var(--bubble-you)">…좋아요. 딱 한 잔만.</div>
+                    </div>
+                    <div class="mtime">21:14</div>
+                  </div>
+                </div>
+              </div>
+              <div class="foot"><span>PbP · 등대에서 만나요</span><span class="mark">2026-07-30</span></div>
+            </div>
+          </div>
+          <div class="prevbar">
+            <div class="toggle"><i class="sw"></i>방 배경 포함</div>
+            <div class="btn line">공유</div>
+            <div class="btn fill">저장</div>
+          </div>
+        </div>
+        <div class="toast">갤러리에 저장했습니다</div>
+      </div></div>
+      <div class="cap"><b>D · 미리보기 — 저장 전에 결과를 그대로 확인</b>
+        <span>합쳐진 이미지를 실제 비율로 보여줍니다. <b>방 배경 포함</b> 토글 하나만 두고(끄면 종이 톤), 오른쪽에 공유·저장. 저장 후 토스트.</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ 02. 결과 이미지 구조 ══════════ -->
+<div class="sec">
+  <div class="sechead">
+    <h2><b>02</b> · 내보낸 이미지의 구조 — 머리글 · 본문 · 낙관</h2>
+    <p>화면을 찍는 게 아니라 선택 범위만 다시 그립니다 (상단 바·입력줄·딤은 들어가지 않습니다)</p>
+  </div>
+  <div class="anat">
+    <div class="shot">
+      <div class="head">
+        <div class="tile"><svg viewBox="0 0 26 28"><path d="M13 1 24.5 11 13 27 1.5 11z" fill="#23272e"/><path d="M13 1v26M1.5 11h23" stroke="#ffd05c" stroke-width="1.2" fill="none" stroke-linecap="round"/></svg></div>
+        <div class="rt"><b>등대에서 만나요</b><span>2026-07-30 21:03 – 21:14 · 4개 메시지</span></div>
+      </div>
+      <div class="sheet">
+        <div class="msgs">
+          <div class="mrow">
+            <div class="avatar">🌊</div>
+            <div class="mcol">
+              <div class="mname" style="color:#33719c">카야</div>
+              <div class="bubble" style="background:var(--bubble-you)">등불 값이라니, 여긴 공영 등대잖아요.</div>
+            </div>
+            <div class="mtime">21:03</div>
+          </div>
+          <div class="mrow me">
+            <div class="mtime">21:05</div>
+            <div class="mcol">
+              <div class="mname" style="color:#c07b1f">밤샘꾼</div>
+              <div class="bubble" style="background:var(--bubble-me)">값은 이야기로 치르지.</div>
+            </div>
+            <div class="avatar">🌙</div>
+          </div>
+          <div class="diceline">🎲 1d100 → 37 <i>· 성공</i></div>
+          <div class="mrow">
+            <div class="avatar">🌊</div>
+            <div class="mcol">
+              <div class="mname" style="color:#33719c">카야</div>
+              <div class="bubble quote" style="background:var(--bubble-you)">…좋아요. 딱 한 잔만.</div>
+            </div>
+            <div class="mtime">21:14</div>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><span>PbP · 등대에서 만나요</span><span class="mark">2026-07-30</span></div>
+    </div>
+    <div class="notes">
+      <div class="note"><h4>머리글 — 방을 알아볼 최소 정보</h4>
+        <p>로고 타일 22dp(런처 아이콘과 같은 d10) + 방 이름(명조 12sp) + <code>날짜 시작–끝 · N개 메시지</code>.
+        이미지만 돌아다녀도 어느 방 어느 날의 대화인지 알 수 있게 하는 것이 목적입니다. 상하 패딩 <b>8dp 동일</b>.</p></div>
+      <div class="note"><h4>본문 — 채팅 화면과 같은 부품을 재사용</h4>
+        <p>말풍선·아바타·이름색·시간·인용 따옴표·다이스 카드·GM 서술 문단 모두 화면과 <b>같은 컴포저블</b>로 그립니다.
+        너비는 <code>360dp</code> 고정(화면 폭에 따라 결과가 달라지지 않도록), 좌우 여백은 화면과 같은 <code>16dp</code>.</p></div>
+      <div class="note b"><h4>낙관 — 출처 한 줄</h4>
+        <p><code>PbP · 방 이름</code>과 날짜만. 워터마크를 크게 넣지 않습니다 — 로그 이미지의 주인은 대화이고,
+        머리글에 이미 방 정보가 있어 반복입니다. 머리글과 <b>같은 상하 패딩 8dp</b>.</p></div>
+      <div class="note r"><h4>긴 범위 — 높이 상한과 자동 분할</h4>
+        <p>안드로이드 <code>Bitmap</code>은 아주 긴 세로 이미지에서 메모리로 터지고, 뷰어 앱에서도 열리지 않습니다.
+        <b>한 장 최대 8,000px</b>로 자르고 넘으면 여러 장으로 나눠 저장하며 낙관 옆에 <code>1/3</code>을 붙입니다.
+        선택 개수 상한은 <b>200개</b>(= 채팅 한 페이지 분량)로 두고, 넘으면 하단 바에 안내를 띄우고 버튼을 잠급니다.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 03. 상호작용 규칙 ══════════ -->
+<div class="sec">
+  <div class="sechead">
+    <h2><b>03</b> · 범위 선택 규칙 — 탭 한 번의 뜻을 헷갈리지 않게</h2>
+  </div>
+  <div class="anat">
+    <div class="notes" style="max-width:560px">
+      <div class="note"><h4>탭의 의미는 위치로 정해집니다</h4>
+        <p>① 시작만 정해진 상태에서 <b>다른 메시지를 탭</b>하면 그게 끝점이 됩니다(위를 탭하면 위로 뻗습니다 — 순서는 자동 정렬).<br>
+        ② 범위가 정해진 뒤 <b>양 끝 메시지를 탭</b>하면 그 끝만 그 자리로 옮겨 조절합니다.<br>
+        ③ 범위 <b>바깥을 탭</b>하면 가까운 쪽 끝이 거기까지 늘어납니다. 범위가 갑자기 초기화되는 일은 없습니다.</p></div>
+      <div class="note"><h4>한 메시지가 여러 말풍선일 때</h4>
+        <p>캐릭터 대사가 섞인 발화는 화면에서 말풍선 여러 개로 쪼개지지만, 선택 단위는 <b>메시지 1건</b>입니다
+        (<code>message.id</code> 기준). 조각 하나를 탭하면 그 메시지 전체가 잡히고, 이미지에도 조각이 다 들어갑니다.</p></div>
+      <div class="note"><h4>모드 중에는 대화를 건드리지 않습니다</h4>
+        <p>캡처 모드에서는 입력줄 자리를 하단 캡처 바가 대신하고, 롱프레스 편집·삭제·프로필 전환은 잠깁니다.
+        <b>뒤로 가기(✕ 또는 시스템 back)는 모드 종료</b>이며 방을 나가지 않습니다.</p></div>
+      <div class="note b"><h4>선택 도중 새 메시지가 오면</h4>
+        <p>목록에는 그대로 쌓이지만 <b>자동 스크롤은 멈춥니다</b>(고르던 자리가 밀리지 않게). 새 메시지는 범위 밖이라 흐리게 보이고,
+        끝점으로 탭해 담을 수 있습니다. 범위 안 메시지가 상대에 의해 삭제되면 그 건만 범위에서 빠지고 개수가 줄어듭니다.</p></div>
+      <div class="note r"><h4>PC(데스크톱)는 같은 규칙, 다른 손</h4>
+        <p>롱프레스가 없으므로 <b>우클릭 메뉴에 '캡처'</b>를 넣고, 모드 중에는 클릭으로 범위를 잡습니다.
+        <code>Shift+클릭</code>으로 끝점 지정, <code>Esc</code>로 모드 종료. 결과는 파일 저장 대화상자로 PNG를 씁니다.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 04. 구현 지시 ══════════ -->
+<div class="sec">
+  <div class="sechead">
+    <h2><b>04</b> · 구현 지시 — 무엇을 어디에 넣는지</h2>
+    <p>기존 <code>LogExporter</code>(HTML 전체 로그)는 건드리지 않습니다. 캡처는 별도 경로입니다</p>
+  </div>
+  <table>
+    <tr><th>대상</th><th>지금</th><th>변경</th></tr>
+    <tr>
+      <td>롱프레스 진입</td>
+      <td><code>MessageBlock</code>의 <code>onLongClick</code>이 <code>if (!message.incoming)</code>로 <b>내 메시지에서만</b> 발동</td>
+      <td>상대 메시지도 팝업이 열리도록 조건 제거. <code>MessageActionDialog</code>에 <code>canEdit: Boolean</code> 추가 —
+        <code>false</code>면 편집·삭제 줄을 감추고 <b>캡처만</b> 표시. 캡처 줄은 <code>MessageActionRow</code>를 그대로 재사용
+        (타일 색만 <code>themeDefault</code> 계열)</td>
+    </tr>
+    <tr>
+      <td>캡처 모드 상태</td>
+      <td>없음</td>
+      <td><code>ChatScreen</code>에 <code>captureRange: Pair&lt;Long, Long?&gt;?</code>를 <code>rememberSaveable</code>로 보유
+        (메시지 id 쌍 — 회전에도 유지, 다이얼로그 대상들과 같은 방식). <code>null</code>이면 평상시.
+        범위 판정은 <code>messages</code>의 <b>인덱스 구간</b>으로 계산해 <code>remember(messages, range)</code>로 캐시</td>
+    </tr>
+    <tr>
+      <td>선택 표시</td>
+      <td><code>MessageBlock(message, grouped, themeColor, onLongPress)</code></td>
+      <td>파라미터 2개 추가: <code>selection: Selection</code>(<code>None</code>/<code>Out</code>/<code>In</code>/<code>Start</code>/<code>End</code>)과
+        <code>onTap</code>. <code>Out</code>이면 <code>alpha .32f</code>(<code>Modifier.alpha</code>), <code>In</code> 계열이면
+        시그니처 <code>.26f</code> 밴드 + 좌우 2dp 테두리, 양 끝에 배지. <b>말풍선 자체는 손대지 않습니다</b> —
+        감싸는 <code>Box</code>에만 배경·테두리를 얹습니다</td>
+    </tr>
+    <tr>
+      <td>하단 바</td>
+      <td><code>InputZone</code></td>
+      <td>캡처 모드면 <code>InputZone</code> 대신 <b>신규</b> <code>CaptureBar</code>를 그립니다 —
+        개수·시간 범위·예상 높이 + 비활성 가능한 CTA. 상하 패딩은 <code>gap3</code>로 동일.
+        <code>BackHandler</code>로 back = 모드 종료</td>
+    </tr>
+    <tr>
+      <td>이미지 렌더링</td>
+      <td>없음</td>
+      <td><b>신규</b> <code>export/CaptureRenderer.kt</code>. 화면 캡처가 아니라 <b>오프스크린 재그리기</b>:
+        <code>ComposeView</code>를 <code>360dp</code> 고정 폭으로 <code>measure/layout</code>한 뒤
+        <code>Bitmap</code> <code>Canvas</code>에 <code>draw()</code>. 본문은 <code>MessageBlock</code>을
+        <code>selection = None</code>으로 재사용하므로 화면과 결과가 갈라지지 않습니다</td>
+    </tr>
+    <tr>
+      <td>머리글·낙관</td>
+      <td>없음</td>
+      <td>같은 파일의 <code>CaptureHeader</code>/<code>CaptureFooter</code> 컴포저블.
+        방 아이콘은 <code>ic_logo_d10</code>, 날짜 문자열은 <code>formatTime</code> 옆에
+        <code>formatDateRange(first, last)</code>를 추가해 만듭니다</td>
+    </tr>
+    <tr>
+      <td>저장·공유</td>
+      <td>HTML은 <code>CreateDocument("text/html")</code></td>
+      <td>저장은 <code>MediaStore.Images</code>(갤러리에 바로 보이도록, <code>Pictures/PbP/</code>),
+        공유는 <code>FileProvider</code> + <code>ACTION_SEND</code> <code>image/png</code>.
+        문서 프로바이더가 없을 때를 대비한 <code>runCatching</code> 처리는 기존 내보내기와 동일하게</td>
+    </tr>
+    <tr>
+      <td>배경 포함 토글</td>
+      <td>없음</td>
+      <td>미리보기 화면의 스위치 1개. 켜면 <code>RoomBackdrop</code>과 같은 배경 + 가독성 베일,
+        끄면 <code>panel2</code> 종이 톤. 마지막 선택은 <code>SharedPreferences("pbp-settings")</code>의
+        <code>captureWithBackground</code>에 저장</td>
+    </tr>
+    <tr>
+      <td>상한</td>
+      <td>없음</td>
+      <td>범위 <b>200개</b> 초과 시 CTA 잠금 + 하단 바 안내. 렌더 결과가 <b>8,000px</b>를 넘으면
+        메시지 경계에서 나눠 여러 장 저장(낙관에 <code>n/N</code>). 분할 지점이 말풍선을 가로지르지 않게
+        <b>메시지 단위로만</b> 자릅니다</td>
+    </tr>
+    <tr>
+      <td>데스크톱</td>
+      <td><code>ChatPane</code> 우클릭 메뉴 없음</td>
+      <td>같은 규칙을 우클릭 메뉴 + <code>Shift+클릭</code> + <code>Esc</code>로 이식.
+        렌더는 <code>ImageComposeScene</code>으로 같은 <code>360dp</code> 폭에 그려
+        <b>모바일과 결과 이미지가 동일</b>하게 맞춥니다. 저장은 파일 대화상자(PNG)</td>
+    </tr>
+  </table>
+</div>
+
+</div>
+</body>
+</html>

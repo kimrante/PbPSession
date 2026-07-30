@@ -1,6 +1,7 @@
 package com.pbp.app.ui.roomlist
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -41,6 +42,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
 import com.pbp.app.PbpApp
+import com.pbp.app.R
 import com.pbp.app.data.ChatRoom
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
@@ -125,13 +128,20 @@ fun RoomListScreen(nav: NavController) {
                 Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.sp4),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
                 Box(
                     Modifier
                         .size(36.dp)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Brush.linearGradient(listOf(Color(0xFF2A3340), Color(0xFF171D26)))),
+                        .background(Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))),
                     contentAlignment = Alignment.Center,
-                ) { Text("⬦", color = Color(0xFFEFE8D6), fontSize = 18.sp) }
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_logo_d10),
+                        contentDescription = null,
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
                 Spacer(Modifier.width(PbpDimens.sp3))
                 Column {
                     Text(

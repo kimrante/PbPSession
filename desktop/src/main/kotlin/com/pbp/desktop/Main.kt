@@ -692,11 +692,12 @@ private fun LeftPane(
             Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // 새 앱 아이콘(시안 02 '포스트잇')과 동일한 옐로 타일 + 잉크 d10
             Box(
                 Modifier.size(36.dp).clip(RoundedCornerShape(10.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF2A3340), Color(0xFF171D26)))),
+                    .background(Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))),
                 contentAlignment = Alignment.Center,
-            ) { Text("⬦", color = Color(0xFFEFE8D6), fontSize = 17.sp) }
+            ) { D10Mark(Modifier.size(width = 20.dp, height = 21.dp)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 // 라이트 모드 "PbP" 강조색 = 잉크 블랙 (스펙 2장)
@@ -803,6 +804,39 @@ private fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifier
     }
     val colors = preset ?: Tokens.backgroundPresets.getValue("preset_lighthouse")
     Box(modifier.background(Brush.verticalGradient(listOf(Color(colors.first), Color(colors.second)))))
+}
+
+/** 새 앱 아이콘과 같은 d10 마크 — 잉크 면 5개 + 옐로 분할선 (모바일 ic_logo_d10과 동일 지오메트리) */
+@Composable
+private fun D10Mark(modifier: Modifier = Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        val faces = listOf(
+            listOf(50f to 6f, 9f to 54f, 33f to 60f) to Color(0xFF23272E),
+            listOf(9f to 54f, 50f to 98f, 33f to 60f) to Color(0xFF181C22),
+            listOf(50f to 6f, 91f to 54f, 67f to 60f) to Color(0xFF2A2F38),
+            listOf(91f to 54f, 50f to 98f, 67f to 60f) to Color(0xFF1D222A),
+            listOf(50f to 6f, 67f to 60f, 50f to 98f, 33f to 60f) to Color(0xFF23272E),
+        )
+        val sx = size.width / 100f
+        val sy = size.height / 104f
+        faces.forEach { (points, color) ->
+            val path = androidx.compose.ui.graphics.Path().apply {
+                points.forEachIndexed { index, (x, y) ->
+                    if (index == 0) moveTo(x * sx, y * sy) else lineTo(x * sx, y * sy)
+                }
+                close()
+            }
+            drawPath(path, color)
+            drawPath(
+                path,
+                Color(0xFFFFD05C),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2f * sx,
+                    join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                ),
+            )
+        }
+    }
 }
 
 @Composable

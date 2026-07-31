@@ -370,7 +370,6 @@ internal fun NarrationBlock(
                 text = text,
                 fontSize = 13.sp,
                 color = tokens.narrInk,
-                rubyColor = tokens.signature,
                 fontFamily = GowunBatang,
                 lineHeight = 24.sp,
             )
@@ -498,7 +497,6 @@ internal fun BubbleRow(
                             text = quoteInner,
                             fontSize = 13.sp,
                             color = inkColor,
-                            rubyColor = inkColor.copy(alpha = .65f),
                             lineHeight = 20.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 26.dp, vertical = 14.dp),
@@ -522,8 +520,7 @@ internal fun BubbleRow(
                                 text = body,
                                 fontSize = 13.sp,
                                 color = inkColor,
-                                rubyColor = inkColor.copy(alpha = .65f),
-                                lineHeight = 20.sp,
+                                    lineHeight = 20.sp,
                                 fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
                             )
                         }

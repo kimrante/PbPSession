@@ -124,6 +124,13 @@ fun RoomListScreen(nav: NavController) {
     })
     val context = LocalContext.current
     val tokens = Pbp.colors
+    // 앱 이름 아래에는 세션 개수 대신 지금 설치된 버전을 보여 준다 —
+    // 어느 빌드로 테스트 중인지 화면에서 바로 확인할 수 있어야 한다
+    val appVersion = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
     val rooms by vm.rooms.collectAsState()
     val previews by vm.previews.collectAsState()
     val unread by vm.unread.collectAsState()
@@ -209,7 +216,7 @@ fun RoomListScreen(nav: NavController) {
                     }
                     Spacer(Modifier.height(PbpDimens.gap1))
                     Text(
-                        "진행 중인 세션 ${rooms.size}",
+                        "v$appVersion",
                         fontSize = 11.sp,
                         lineHeight = 11.sp,
                         fontWeight = FontWeight.Medium,

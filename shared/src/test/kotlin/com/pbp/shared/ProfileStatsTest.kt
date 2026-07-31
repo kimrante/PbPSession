@@ -71,4 +71,29 @@ class ProfileStatsTest {
         val (plain, _) = ProfileStats.substitute("1d100<={은신} 판정", mapOf("은신" to "50"))
         assertEquals("1d100<=50 판정", plain)
     }
+
+    @Test
+    fun `이름 중간·뒤쪽으로도 찾는다 — 괄호·공백 차이는 무시`() {
+        val stats = listOf("근접전(도검)" to "65", "회피" to "40", "근접전 격투" to "50")
+        // 뒤쪽 조각만 입력해도 추천된다
+        assertEquals(listOf("근접전(도검)"), ProfileStats.paletteSuggestions("도검", stats))
+        // 앞부분 일치가 먼저 온다
+        assertEquals(
+            listOf("근접전(도검)", "근접전 격투"),
+            ProfileStats.paletteSuggestions("근접전", stats),
+        )
+        // 전각 괄호로 입력해도 같은 결과
+        assertEquals(listOf("근접전(도검)"), ProfileStats.paletteSuggestions("（도검）", stats))
+        // 이름에 없는 조각은 추천하지 않는다
+        assertEquals(emptyList<String>(), ProfileStats.paletteSuggestions("사격", stats))
+    }
+
+    @Test
+    fun `값 목록을 가나다순으로 정렬한다`() {
+        val stats = listOf("회피" to "40", "근접전" to "65", "APP" to "50")
+        assertEquals(
+            listOf("APP", "근접전", "회피"),
+            ProfileStats.sortByName(stats).map { it.first },
+        )
+    }
 }

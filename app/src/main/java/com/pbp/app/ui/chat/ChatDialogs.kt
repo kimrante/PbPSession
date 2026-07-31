@@ -146,14 +146,7 @@ internal fun MessageActionDialog(
             ) {
                 Text("메시지", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                 Spacer(Modifier.height(PbpDimens.gap2))
-                MessageActionRow(
-                    icon = "📋",
-                    tileColor = tokens.inkDim,
-                    title = "복사",
-                    titleColor = tokens.ink,
-                    subtitle = "본문을 클립보드에 담습니다",
-                    onClick = onCopy,
-                )
+                // 순서: 편집 · 복사 · 캡처 · 삭제 — 파괴적인 삭제를 맨 아래로
                 if (canModify) {
                 MessageActionRow(
                     icon = "✏️",
@@ -163,6 +156,24 @@ internal fun MessageActionDialog(
                     subtitle = "본문을 고치면 (수정됨) 표시가 남습니다",
                     onClick = onEdit,
                 )
+                }
+                MessageActionRow(
+                    icon = "📋",
+                    tileColor = tokens.inkDim,
+                    title = "복사",
+                    titleColor = tokens.ink,
+                    subtitle = "본문을 클립보드에 담습니다",
+                    onClick = onCopy,
+                )
+                MessageActionRow(
+                    icon = "🖼️",
+                    tileColor = tokens.themeDefault,
+                    title = "캡처",
+                    titleColor = Color(PbpPalette.nameColorForLight(0xFF8EC5E8)),
+                    subtitle = "여기부터 범위를 골라 이미지로 만듭니다",
+                    onClick = onCapture,
+                )
+                if (canModify) {
                 MessageActionRow(
                     icon = "🗑️",
                     tileColor = tokens.danger,
@@ -172,15 +183,6 @@ internal fun MessageActionDialog(
                     onClick = onDelete,
                 )
                 }
-                // 캡처는 복사와 같이 누구 메시지에서든 — canModify 밖에 둔다
-                MessageActionRow(
-                    icon = "🖼️",
-                    tileColor = tokens.themeDefault,
-                    title = "캡처",
-                    titleColor = Color(PbpPalette.nameColorForLight(0xFF8EC5E8)),
-                    subtitle = "여기부터 범위를 골라 이미지로 만듭니다",
-                    onClick = onCapture,
-                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     Text(
                         "취소",

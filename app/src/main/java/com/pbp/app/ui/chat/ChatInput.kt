@@ -56,6 +56,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -96,6 +97,11 @@ import kotlinx.coroutines.withContext
 /** 입력 영역 — 프로필 스트립·판정 팔레트·잡담 토글·입력줄 (리뷰 B3) */
 
 @OptIn(ExperimentalFoundationApi::class)
+/** 커서 이동용 방향키 — 입력창 안에서만 쓰이고 포커스 이동으로 새어 나가면 안 된다 */
+private val ARROW_KEYS = setOf(
+    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
+)
+
 @Composable
 internal fun InputZone(
     profiles: List<CharacterProfile>,
@@ -259,6 +265,9 @@ internal fun InputZone(
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
+                    // 입력창이 처리하지 않은 방향키를 여기서 삼킨다. 그냥 두면 컴포즈의
+                    // 포커스 이동이 받아 커서가 말풍선·버튼으로 튀어 나간다
+                    .onKeyEvent { event -> event.key in ARROW_KEYS }
                     // 물리 키보드에서 Ctrl+Enter로 바로 전송
                     .onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown &&

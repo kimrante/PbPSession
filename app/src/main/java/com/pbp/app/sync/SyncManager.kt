@@ -278,8 +278,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     "inviteCode" to code,
                     "themeColor" to room.themeColor,
                     "rule" to room.rule,
-                    // 갤러리 이미지는 기기 로컬 파일이라 프리셋만 상대에게 전달
-                    "backgroundKey" to room.backgroundKey.takeIf { it.startsWith("preset_") },
+                    // 배경은 공유하지 않는다 — 각자 원하는 배경을 쓴다 (기기 로컬 설정)
                 )
             ).await()
             // 원격 생성 직후 로컬에 기록 — 이후 단계가 실패해도 재시도가 이 문서를 이어받는다
@@ -362,7 +361,8 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         val roomId = create(
             roomDoc.getString("name") ?: "공유 캠페인",
             roomDoc.getLong("themeColor") ?: com.pbp.shared.Protocol.DEFAULT_THEME_COLOR,
-            roomDoc.getString("backgroundKey") ?: com.pbp.shared.Protocol.DEFAULT_BACKGROUND,
+            // 배경은 공유 대상이 아니다 — 참여자는 기본 배경으로 시작하고 각자 바꾼다
+            com.pbp.shared.Protocol.DEFAULT_BACKGROUND,
             roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
         )
         db.roomDao().setRemote(roomId, roomDoc.id, code)
@@ -447,18 +447,16 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         db.messageDao().setUploaded(message.id)
     }
 
-    /** 마스터의 테마·배경 변경을 상대에게 전파 (갤러리 이미지는 로컬 파일이라 프리셋만) */
-    fun pushRoomSettings(remoteRoomId: String, themeColor: Long, backgroundKey: String) {
+    /**
+     * 테마 컬러 변경을 상대에게 전파.
+     * **배경은 전파하지 않는다** — 방 배경은 기기마다 따로 고르는 개인 설정이다.
+     */
+    fun pushRoomSettings(remoteRoomId: String, themeColor: Long) {
         scope.launch {
             runCatching {
                 ensureAuth()
                 firestore.collection("rooms").document(remoteRoomId)
-                    .update(
-                        mapOf(
-                            "themeColor" to themeColor,
-                            "backgroundKey" to backgroundKey.takeIf { it.startsWith("preset_") },
-                        )
-                    ).await()
+                    .update(mapOf("themeColor" to themeColor)).await()
             }.onFailure { android.util.Log.w("PbpSync", "방 설정 전파 실패", it) }
         }
     }
@@ -687,17 +685,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
                 if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener
+                // 배경은 읽지 않는다 — 상대가 바꿔도 내 배경은 그대로다 (개인 설정)
                 val themeColor = snapshot.getLong("themeColor")
-                val backgroundKey = snapshot.getString("backgroundKey")
                 scope.launch {
                     val room = db.roomDao().get(localRoomId) ?: return@launch
                     if (themeColor != null && themeColor != room.themeColor) {
                         db.roomDao().setThemeColor(localRoomId, themeColor)
-                    }
-                    if (backgroundKey != null && backgroundKey.startsWith("preset_") &&
-                        backgroundKey != room.backgroundKey
-                    ) {
-                        db.roomDao().setBackground(localRoomId, backgroundKey)
                     }
                 }
             }

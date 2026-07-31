@@ -335,15 +335,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
-                    // 커스텀 배경(파일 경로)은 기기 로컬 전용 — 서버 값은 preset_일 때만 반영 (모바일과 동일)
-                    val serverBg = meta?.backgroundKey?.takeIf { it.startsWith("preset_") }
+                    // 배경은 읽지 않는다 — 상대가 바꿔도 내 배경은 그대로 (개인 설정)
                     if (meta != null && cur != null &&
-                        (meta.themeColor != cur.themeColor || meta.name != cur.name ||
-                            (serverBg != null && serverBg != cur.backgroundKey))
+                        (meta.themeColor != cur.themeColor || meta.name != cur.name)
                     ) {
                         val updated = cur.copy(
                             themeColor = meta.themeColor,
-                            backgroundKey = serverBg ?: cur.backgroundKey,
                             name = meta.name,
                         )
                         rooms = rooms.map { if (it.remoteId == cur.remoteId) updated else it }
@@ -709,7 +706,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         val joined = existing ?: JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey ?: Protocol.DEFAULT_BACKGROUND, isMaster = false,
+                            // 배경은 공유 대상이 아니다 — 기본으로 시작해 각자 바꾼다
+                            backgroundKey = Protocol.DEFAULT_BACKGROUND, isMaster = false,
                             rule = meta.rule,
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
@@ -747,7 +745,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
-                            backgroundKey = meta.backgroundKey ?: Protocol.DEFAULT_BACKGROUND, isMaster = true,
+                            backgroundKey = Protocol.DEFAULT_BACKGROUND, isMaster = true,
                             rule = meta.rule ?: "coc7",
                         )
                         rooms = rooms + joined
@@ -802,7 +800,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 // PATCH가 서버에 착지하기 전 폴링이 옛 값을 다시 덮지 않도록 유예 (P3-14)
                 metaFreezeUntil = System.currentTimeMillis() + DesktopTiming.META_FREEZE_MS
                 scope.launch(Dispatchers.IO) {
-                    firestore.updateRoomSettings(room.remoteId, theme, background)
+                    firestore.updateRoomSettings(room.remoteId, theme)
                 }
                 overlay = null
             },

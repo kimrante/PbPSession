@@ -91,16 +91,18 @@ class PbpRepository(private val db: AppDatabase) {
         pushRoomSettings(roomId)
     }
 
-    /** 방 배경(프리셋 key 또는 파일 경로) 변경(누구나 가능) — 공유 방이면 상대에게 실시간 전파 */
+    /**
+     * 방 배경 변경 — **이 기기에만 적용된다.** 배경은 각자 취향대로 고르는 개인 설정이라
+     * 서버에 올리지도, 상대 것을 받지도 않는다.
+     */
     suspend fun setBackground(roomId: Long, key: String) {
         db.roomDao().setBackground(roomId, key)
-        pushRoomSettings(roomId)
     }
 
     private suspend fun pushRoomSettings(roomId: Long) {
         val room = db.roomDao().get(roomId) ?: return
         val remoteId = room.remoteId ?: return
-        syncManager?.pushRoomSettings(remoteId, room.themeColor, room.backgroundKey)
+        syncManager?.pushRoomSettings(remoteId, room.themeColor)
     }
 
     /**

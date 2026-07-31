@@ -63,6 +63,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -509,7 +510,7 @@ internal fun NarrationBlock(message: Message, text: String, onLongPress: () -> U
         // 서술은 문단 자체가 화면 — 서술자·시간 등 메타 표기는 두지 않는다 (모바일과 동일)
         MarkupText(
             text = text, fontSize = 13.sp, color = Tokens.NarrInk,
-            rubyColor = Tokens.SignatureInk, fontFamily = GowunBatang, lineHeight = 24.sp,
+            fontFamily = GowunBatang, lineHeight = 24.sp,
         )
     }
 }
@@ -613,7 +614,7 @@ internal fun BubbleRow(
                         )
                         MarkupText(
                             text = quoteInner, fontSize = 13.sp, color = inkColor,
-                            rubyColor = inkColor.copy(alpha = .65f), lineHeight = 20.sp,
+                            lineHeight = 20.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 26.dp, vertical = 14.dp),
                         )
@@ -640,7 +641,7 @@ internal fun BubbleRow(
                             }
                             MarkupText(
                                 text = body, fontSize = 13.sp, color = inkColor,
-                                rubyColor = inkColor.copy(alpha = .65f), lineHeight = 20.sp,
+                                lineHeight = 20.sp,
                                 fontWeight = if (message.isOoc) FontWeight.Normal else FontWeight.Medium,
                             )
                         }
@@ -758,6 +759,11 @@ internal val avatarsInFlight: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()
 
 @OptIn(ExperimentalFoundationApi::class)
+/** 커서 이동용 방향키 — 입력창 밖으로 새어 나가면 포커스가 옮겨 간다 */
+private val ARROW_KEYS = setOf(
+    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
+)
+
 @Composable
 internal fun InputZone(
     room: JoinedRoom,
@@ -926,6 +932,9 @@ internal fun InputZone(
                     value = input,
                     onValueChange = { input = it },
                     modifier = Modifier.weight(1f)
+                        // 입력창이 처리하지 않은 방향키를 삼킨다 — 그냥 두면 포커스가
+                        // 말풍선·버튼으로 옮겨 가 커서가 입력창을 벗어난다 (모바일과 동일)
+                        .onKeyEvent { event -> event.key in ARROW_KEYS }
                         .onPreviewKeyEvent { event ->
                             // PC는 Ctrl+Enter로 바로 전송 (모바일과 동일 규칙).
                             // 한글 IME 조합 중에는 KeyDown이 IME에 먹혀 도달하지 않으므로

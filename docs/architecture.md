@@ -138,7 +138,8 @@ com.pbp.app
 주요 문서 구조:
 
 ```
-rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeColor, backgroundKey, rule
+rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeColor, rule
+                                  (backgroundKey는 v0.8.0부터 기기 로컬 전용 — 서버에 쓰지 않는다)
 rooms/{roomId}/messages/{msgId}   type, body, diceExpr, diceOutcome, sender*, isOoc,
                                   createdAt, editedAt, authorUid, avatarId
 rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt, platform, lastReadAt

@@ -6,7 +6,9 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -92,7 +94,8 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
                 bubbleColor = bubbleColor,
                 textColor = textColor,
                 imagePath = newImagePath ?: existing?.imagePath,
-                stats = ProfileStats.encode(stats),
+                // 저장할 때 이름 가나다순으로 — 추가한 순서대로 쌓이면 찾기 어렵다
+                stats = ProfileStats.encode(ProfileStats.sortByName(stats)),
             )
             app.repository.saveProfile(profile)
         }
@@ -146,6 +149,10 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     ) { mutableStateListOf<Pair<String, String>>() }
     var newStatName by rememberSaveable { mutableStateOf("") }
     var newStatValue by rememberSaveable { mutableStateOf("") }
+    // 꾹 눌러 편집 중인 항목 — 그 줄만 입력 폼으로 바뀐다
+    var editingStat by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var editName by rememberSaveable { mutableStateOf("") }
+    var editValue by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(profileId) {
         existing = vm.load(profileId)
@@ -309,8 +316,40 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 ) {
                     stats.forEach { statEntry ->
                         val (statName, statValue) = statEntry
+                        if (statEntry == editingStat) {
+                            // 꾹 누른 항목은 입력할 때와 같은 두 칸짜리 폼으로 바뀐다
+                            StatInputRow(
+                                name = editName,
+                                value = editValue,
+                                onName = { editName = it },
+                                onValue = { editValue = it },
+                                confirmLabel = "확인",
+                                onConfirm = {
+                                    val newName = editName.trim()
+                                    val index = stats.indexOf(statEntry)
+                                    if (index >= 0) {
+                                        val updated = newName to editValue.trim()
+                                        stats[index] = updated
+                                        // 이름을 다른 항목과 같게 바꿨다면 그쪽을 지운다 (중복 방지)
+                                        stats.removeAll { it !== updated && it.first == newName }
+                                    }
+                                    editingStat = null
+                                },
+                                onCancel = { editingStat = null },
+                            )
+                        } else {
                         Row(
-                            Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
+                            Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        editName = statName
+                                        editValue = statValue
+                                        editingStat = statEntry
+                                    },
+                                )
+                                .padding(vertical = PbpDimens.gap3),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
@@ -332,44 +371,28 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 contentAlignment = Alignment.Center,
                             ) { Text("✕", fontSize = 11.sp, color = tokens.inkDim) }
                         }
+                        }
                         HorizontalDivider(thickness = 1.dp, color = tokens.line)
                     }
-                    Row(
-                        Modifier.padding(vertical = PbpDimens.gap2),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        OutlinedTextField(
-                            value = newStatName,
-                            onValueChange = { newStatName = it },
-                            modifier = Modifier.weight(1.2f),
-                            label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
-                            singleLine = true,
-                        )
-                        Spacer(Modifier.width(PbpDimens.gap2))
-                        OutlinedTextField(
-                            value = newStatValue,
-                            onValueChange = { newStatValue = it },
-                            modifier = Modifier.weight(0.8f),
-                            label = { Text("값 (예: 50)", fontSize = 10.sp) },
-                            singleLine = true,
-                        )
-                        Spacer(Modifier.width(PbpDimens.gap2))
-                        TextButton(
-                            onClick = {
-                                val statName = newStatName.trim()
-                                // 같은 이름이 있으면 값을 교체 — 중복 항목 방지 (P1-8)
-                                val existingIdx = stats.indexOfFirst { it.first == statName }
-                                if (existingIdx >= 0) {
-                                    stats[existingIdx] = statName to newStatValue.trim()
-                                } else {
-                                    stats.add(statName to newStatValue.trim())
-                                }
-                                newStatName = ""
-                                newStatValue = ""
-                            },
-                            enabled = newStatName.isNotBlank(),
-                        ) { Text("추가", fontSize = 11.sp, color = tokens.signatureInk) }
-                    }
+                    StatInputRow(
+                        name = newStatName,
+                        value = newStatValue,
+                        onName = { newStatName = it },
+                        onValue = { newStatValue = it },
+                        confirmLabel = "추가",
+                        onConfirm = {
+                            val statName = newStatName.trim()
+                            // 같은 이름이 있으면 값을 교체 — 중복 항목 방지 (P1-8)
+                            val existingIdx = stats.indexOfFirst { it.first == statName }
+                            if (existingIdx >= 0) {
+                                stats[existingIdx] = statName to newStatValue.trim()
+                            } else {
+                                stats.add(statName to newStatValue.trim())
+                            }
+                            newStatName = ""
+                            newStatValue = ""
+                        },
+                    )
                 }
                 Spacer(Modifier.height(PbpDimens.gap2))
                 Text(
@@ -512,3 +535,50 @@ internal fun FieldLabel(text: String) {
     )
 }
 
+/**
+ * 값 입력 행 — 새로 추가할 때와 꾹 눌러 고칠 때가 같은 모양이어야 한다.
+ * [onCancel]이 있으면 편집 모드로 보고 취소 버튼을 함께 보여 준다.
+ */
+@Composable
+private fun StatInputRow(
+    name: String,
+    value: String,
+    onName: (String) -> Unit,
+    onValue: (String) -> Unit,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onCancel: (() -> Unit)? = null,
+) {
+    val tokens = Pbp.colors
+    Row(
+        Modifier.padding(vertical = PbpDimens.gap2),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OutlinedTextField(
+            value = name,
+            onValueChange = onName,
+            modifier = Modifier.weight(1.2f),
+            label = { Text("값 이름 (예: 은신)", fontSize = 10.sp) },
+            singleLine = true,
+        )
+        Spacer(Modifier.width(PbpDimens.gap2))
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValue,
+            modifier = Modifier.weight(0.8f),
+            label = { Text("값 (예: 50)", fontSize = 10.sp) },
+            singleLine = true,
+        )
+        Spacer(Modifier.width(PbpDimens.gap2))
+        Column {
+            TextButton(onClick = onConfirm, enabled = name.isNotBlank()) {
+                Text(confirmLabel, fontSize = 11.sp, color = tokens.signatureInk)
+            }
+            if (onCancel != null) {
+                TextButton(onClick = onCancel) {
+                    Text("취소", fontSize = 11.sp, color = tokens.inkDim)
+                }
+            }
+        }
+    }
+}

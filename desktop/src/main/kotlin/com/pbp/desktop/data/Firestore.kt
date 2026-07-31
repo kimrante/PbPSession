@@ -376,27 +376,17 @@ class FirestoreRest(
             mapOf(
                 "name" to name, "icon" to "", "createdAt" to System.currentTimeMillis(),
                 "inviteCode" to inviteCode, "rule" to rule,
-                "themeColor" to Protocol.DEFAULT_THEME_COLOR, "backgroundKey" to Protocol.DEFAULT_BACKGROUND,
+                "themeColor" to Protocol.DEFAULT_THEME_COLOR,
             )
         )
         return post("$base/rooms?key=$apiKey", gson.toJson(body))?.let { roomMeta(it) }
     }
 
-    fun updateRoomSettings(remoteId: String, themeColor: Long, backgroundKey: String): Boolean {
-        // 커스텀 배경(파일 경로)은 기기 로컬 전용 — 모바일과 동일하게 preset_만 서버에 쓴다.
-        // 커스텀이면 필드가 mask에만 있어 서버 값이 삭제되고, 수신 측은 자기 배경을 유지한다.
-        val body = fields(
-            mapOf(
-                "themeColor" to themeColor,
-                "backgroundKey" to backgroundKey.takeIf { it.startsWith("preset_") },
-            )
-        )
-        return patch(
-            "$base/rooms/$remoteId?key=$apiKey" +
-                "&updateMask.fieldPaths=themeColor&updateMask.fieldPaths=backgroundKey",
-            gson.toJson(body),
-        )
-    }
+    /** 테마 컬러만 전파한다 — 배경은 기기마다 따로 고르는 개인 설정 (모바일과 동일) */
+    fun updateRoomSettings(remoteId: String, themeColor: Long): Boolean = patch(
+        "$base/rooms/$remoteId?key=$apiKey&updateMask.fieldPaths=themeColor",
+        gson.toJson(fields(mapOf("themeColor" to themeColor))),
+    )
 
     // ── 메시지 ────────────────────────────────────────────
 

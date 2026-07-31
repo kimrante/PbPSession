@@ -39,6 +39,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -58,6 +59,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -360,7 +362,18 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         }
     }
 
-    Scaffold(containerColor = tokens.bg) { padding ->
+    // 시간·배터리가 보이는 시스템 영역을 검정으로. 안드로이드 15부터는 시스템이 상태 바를
+    // 칠하지 않아 앱 배경이 그대로 비치는데, 채팅 배경은 어두워서 밝은 띠가 도드라졌다.
+    // 이 색은 인셋 영역에서만 보인다 — 본문은 RoomBackdrop이 덮는다.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = (view.context as? android.app.Activity)?.window
+        val bars = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, view) }
+        val wasLight = bars?.isAppearanceLightStatusBars
+        bars?.isAppearanceLightStatusBars = false // 검정 위에는 흰 아이콘
+        onDispose { if (wasLight != null) bars.isAppearanceLightStatusBars = wasLight }
+    }
+    Scaffold(containerColor = Color.Black) { padding ->
         // consumeWindowInsets: Scaffold가 이미 적용한 내비게이션 바 패딩을
         // imePadding이 또 더하지 않도록 소비 처리 — 키보드와 입력줄 사이 틈 방지
         Box(

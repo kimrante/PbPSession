@@ -181,7 +181,6 @@ fun MarkupText(
     text: String,
     fontSize: TextUnit,
     color: Color,
-    rubyColor: Color,
     modifier: Modifier = Modifier,
     fontFamily: FontFamily? = null,
     fontWeight: FontWeight? = null,
@@ -192,8 +191,8 @@ fun MarkupText(
     // buildMarkup은 컴포저블이 아니라 토큰을 직접 못 읽는다 — 여기서 넘긴다
     val valueColor = Pbp.colors.statBlue
     // AnnotatedString·인라인 콘텐츠는 리컴포지션마다 재구성하지 않도록 캐시
-    val (annotated, inline) = remember(text, fontSize, color, rubyColor, family, fontWeight, valueColor) {
-        buildMarkup(text, fontSize, color, rubyColor, family, fontWeight, valueColor)
+    val (annotated, inline) = remember(text, fontSize, color, family, fontWeight, valueColor) {
+        buildMarkup(text, fontSize, color, family, fontWeight, valueColor)
     }
     Text(
         annotated,
@@ -220,7 +219,6 @@ private fun buildMarkup(
     text: String,
     fontSize: TextUnit,
     color: Color,
-    rubyColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
     /** 캐릭터 값 치환 강조색 — 컴포저블이 아니라 호출부에서 토큰을 받는다 */
@@ -261,7 +259,7 @@ private fun buildMarkup(
                         // 상자가 글자 높이보다 크면 그 줄이 벌어지고 베이스라인도 어긋난다.)
                         Placeholder(width.em, RUBY_BOX_EM.em, PlaceholderVerticalAlign.AboveBaseline)
                     ) {
-                        RubyStack(node.base, node.ruby, fontSize, color, rubyColor, fontFamily, fontWeight)
+                        RubyStack(node.base, node.ruby, fontSize, color, fontFamily, fontWeight)
                     }
                 }
             }
@@ -281,7 +279,6 @@ private fun RubyStack(
     ruby: String,
     fontSize: TextUnit,
     color: Color,
-    rubyColor: Color,
     fontFamily: FontFamily?,
     fontWeight: FontWeight?,
 ) {
@@ -305,7 +302,8 @@ private fun RubyStack(
             ruby,
             fontSize = fontSize * RUBY_SCALE,
             lineHeight = fontSize * RUBY_SCALE,
-            color = rubyColor,
+            // 독음도 본문과 같은 글자색 — 발화자가 정한 색을 그대로 따른다
+            color = color,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             softWrap = false,
@@ -317,16 +315,21 @@ private fun RubyStack(
         val rubyPl = measurables[1].measure(Constraints())
         val fb = basePl[FirstBaseline]
         val baseline = if (fb != AlignmentLine.Unspecified) fb else basePl.height
+        // 독음을 본문 쪽으로 조금 내린다 — 너무 떠 있으면 어느 글자의 독음인지 흐려진다
+        val drop = (fontSize.toPx() * RUBY_DROP_EM).toInt()
         layout(constraints.maxWidth, constraints.maxHeight) {
             val baseY = constraints.maxHeight - baseline // 베이스라인을 상자 밑변에
             basePl.place((constraints.maxWidth - basePl.width) / 2, baseY)
-            rubyPl.place((constraints.maxWidth - rubyPl.width) / 2, baseY - rubyPl.height)
+            rubyPl.place((constraints.maxWidth - rubyPl.width) / 2, baseY - rubyPl.height + drop)
         }
     }
 }
 
 /** 독음 글자 크기 = 본문의 42% */
 private const val RUBY_SCALE = 0.42f
+
+/** 독음을 본문 쪽으로 내리는 양(본문 크기 대비) — 데스크톱과 같은 값이어야 한다 */
+private const val RUBY_DROP_EM = 0.12f
 
 /** 루비 인라인 상자 높이(em) — 본문 어센트보다 작아야 줄 메트릭에 영향이 없다 */
 private const val RUBY_BOX_EM = 0.8f

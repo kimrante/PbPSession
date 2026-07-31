@@ -26,6 +26,15 @@ object ProfileStats {
         stats.entries.associate { (key, value) -> sanitize(key).trim() to sanitize(value) }
             .filterKeys { it.isNotBlank() }
 
+    /**
+     * 값 이름 가나다순 정렬 — 저장할 때 한 번 돌린다.
+     * 한글·영문이 섞여도 사람이 기대하는 순서가 되도록 로케일 대조기를 쓴다.
+     */
+    fun sortByName(stats: List<Pair<String, String>>): List<Pair<String, String>> {
+        val collator = java.text.Collator.getInstance(java.util.Locale.KOREAN)
+        return stats.sortedWith(compareBy(collator) { it.first })
+    }
+
     fun encode(stats: List<Pair<String, String>>): String =
         stats.map { sanitize(it.first).trim() to sanitize(it.second) }
             .filter { it.first.isNotBlank() }
@@ -42,18 +51,33 @@ object ProfileStats {
             }
 
     /**
+     * 비교용 정규화 — 괄호·공백·구두점을 지우고 전각을 반각으로 접는다.
+     * "근접전(도검)"을 "도검"으로도, "근접전 도검"·"근접전（도검）"으로도 찾게 하려는 것이다.
+     */
+    private fun fold(s: String): String = buildString {
+        s.forEach { ch ->
+            // 전각 영숫자·괄호(U+FF01~U+FF5E)는 반각으로
+            val c = if (ch.code in 0xFF01..0xFF5E) (ch.code - 0xFEE0).toChar() else ch
+            if (!c.isWhitespace() && (c.isLetterOrDigit())) append(c.lowercaseChar())
+        }
+    }
+
+    /**
      * 채팅 팔레트 추천: 입력 중인 짧은 텍스트가 값 이름과 부분 일치하면
      * `1d100<={이름}` 판정 매크로 후보를 돌려준다. 숫자 값만 판정 대상.
+     *
+     * 이름 중간·뒤쪽도 잡힌다 — "근접전(도검)"은 "도검"으로도 찾을 수 있어야 한다.
+     * 괄호·공백 차이로 놓치지 않도록 양쪽을 [fold]로 정규화해 비교한다.
      * 앞부분 일치를 우선하고 최대 6개.
      */
     fun paletteSuggestions(query: String, stats: List<Pair<String, String>>): List<String> {
-        val q = query.trim()
-        if (q.isEmpty() || q.length > 12 || q.any { it.isWhitespace() }) return emptyList()
+        val q = fold(query)
+        if (q.isEmpty() || q.length > 12) return emptyList()
         return stats
             .filter { (name, value) ->
-                value.trim().toIntOrNull() != null && name.contains(q, ignoreCase = true)
+                value.trim().toIntOrNull() != null && fold(name).contains(q)
             }
-            .sortedByDescending { it.first.startsWith(q, ignoreCase = true) }
+            .sortedByDescending { fold(it.first).startsWith(q) }
             .map { it.first }
             .distinct() // 같은 이름 값이 중복 저장돼 있어도 LazyRow 키 충돌 방지 (P1-8)
             .take(6)

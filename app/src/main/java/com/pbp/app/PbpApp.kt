@@ -53,6 +53,9 @@ class PbpApp : Application(), coil3.SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // 알림 채널을 첫 메시지 때가 아니라 시작할 때 만든다 — 설치 직후에도
+        // 시스템 설정에서 알림 방식을 확인·조정할 수 있고, 구 채널 정리도 함께 끝난다
+        notifier
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) { resumedActivities++ }
             override fun onActivityPaused(activity: Activity) { resumedActivities-- }

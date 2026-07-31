@@ -83,6 +83,8 @@ com.pbp.app
 - **GM 렌더링 조정** — 서술 문단은 낙관·아바타 없이 문단만, 인용("???")·일반 말풍선은 GM의 실제 프로필 이미지 표시
 - **테마·배경 실시간 동기화** — 마스터가 변경하면 방 문서 update → 상대 기기의 방 문서 리스너가 즉시 로컬 반영 (`SyncManager.pushRoomSettings`/`attachRoomDoc`)
 - **FCM 백그라운드 푸시** — 클라이언트 완비: firebase-messaging + `notify/FcmService`(본문 비노출 알림, 포그라운드 중복 억제) + 기기 토큰을 `rooms/{id}/members/{deviceId}`에 자동 등록.
+  알림은 화면 위에 뜨는 **헤드업(플로팅)** 방식 — 채널 중요도 HIGH. 채널 중요도는
+  만든 뒤 코드로 바꿀 수 없어 ID를 `messages_heads_up`으로 새로 냈다(구 `messages`는 삭제).
   서버 발송은 `functions/index.js`(Firestore onCreate → 상대 토큰으로 데이터 푸시).
   **배포만 남음(사용자 작업)**: Firebase 콘솔에서 Blaze 요금제 활성화 후
   `npx firebase-tools login` → `npx firebase-tools deploy --only functions --project pbp-session-1195c`

@@ -21,22 +21,39 @@ import com.pbp.app.data.Message
  * 푸시 알림 (스펙 7장).
  * 형식 고정: 보낸 이 원형 프로필 아이콘 + 이름 + "~님의 메시지가 도착했습니다."
  * 채팅 본문은 어떤 경우에도 노출하지 않는다 (GM 서술 포함).
+ *
+ * 화면 위에 잠깐 떠오르는 **플로팅(헤드업) 알림**이다 — 메신저 앱과 같은 방식.
+ * 헤드업은 채널 중요도가 HIGH일 때만 뜨고, **채널 중요도는 만든 뒤에 코드로 바꿀 수
+ * 없다.** 그래서 기존 채널을 고치는 대신 새 ID로 만들고 옛 채널은 지운다.
  */
 class MessageNotifier(private val context: Context) {
 
     companion object {
-        private const val CHANNEL_ID = "messages"
+        /**
+         * 중요도 HIGH 채널. v0.7.3까지 쓰던 [LEGACY_CHANNEL_ID]는 DEFAULT라
+         * 알림이 상태 표시줄에만 조용히 쌓였다 — ID를 바꿔야 새 중요도가 먹는다.
+         */
+        private const val CHANNEL_ID = "messages_heads_up"
+        private const val LEGACY_CHANNEL_ID = "messages"
 
         /** 알림 탭으로 열 방의 Firestore 문서 ID — MainActivity가 읽어 해당 방으로 이동 */
         const val EXTRA_REMOTE_ROOM_ID = "com.pbp.app.extra.REMOTE_ROOM_ID"
     }
 
     init {
+        val manager = context.getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
-            CHANNEL_ID, "새 메시지", NotificationManager.IMPORTANCE_DEFAULT
-        ).apply { description = "미확인 메시지 도착 알림" }
-        context.getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(channel)
+            CHANNEL_ID, "새 메시지", NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "메시지가 오면 화면 위에 잠깐 띄웁니다"
+            enableVibration(true)
+            enableLights(true)
+            setShowBadge(true)
+        }
+        manager.createNotificationChannel(channel)
+        // 설정 화면에 죽은 채널이 남지 않게 정리. 사용자가 새 채널에서 끈 설정은
+        // 그대로 유지되므로 이 호출이 취향을 되돌리지는 않는다.
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
     }
 
     /**
@@ -71,6 +88,10 @@ class MessageNotifier(private val context: Context) {
             .setContentText("${senderName}님의 메시지가 도착했습니다.")
             .setContentIntent(pending)
             .setAutoCancel(true)
+            // 채널이 없던 시절 기기(및 일부 제조사 런처)까지 헤드업으로 뜨게 한다
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // 메신저 알림으로 분류돼야 방해 금지 예외·대화 영역에서 제대로 다뤄진다
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         circularAvatar(imagePath)?.let { builder.setLargeIcon(it) }
 
         context.getSystemService(NotificationManager::class.java)

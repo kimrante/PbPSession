@@ -164,9 +164,9 @@ body{
 
 /* 값 목록 — 2열 그리드, 셀 규격은 프로필 행과 같은 반경·패딩 */
 .vlist{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}
-.vcell{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);border:1px solid var(--line);border-radius:var(--r-cell);padding:var(--sp-2) var(--sp-3)}
+.vcell{display:flex;align-items:center;justify-content:center;gap:var(--sp-2);border:1px solid var(--line);border-radius:var(--r-cell);padding:var(--sp-2) var(--sp-3)}
 .vcell b{font-size:12px;font-weight:700;color:var(--ink)}
-.vcell i{font-style:normal;font-size:13px;font-weight:900;color:var(--ink-dim)}
+.vcell i{font-style:normal;font-size:11px;font-weight:900;color:var(--accent-ink)}
 .vcell.on{background:rgba(255,208,92,.2);border-color:var(--accent)}
 .vcell.on i{color:var(--accent-ink)}
 .sfoot{display:flex;align-items:center;gap:var(--sp-3);padding-top:var(--sp-4)}
@@ -205,7 +205,8 @@ td b{color:var(--ink)}
 <div class="dochead">
   <h1>자동 판정 요청 — GM이 걸고, 캐릭터 주인이 굴린다</h1>
   <p>GM 프로필이 활성일 때만 보이는 기능입니다. GM이 <b>대상 캐릭터와 값</b>을 골라 보내면 채팅 중앙에 판정 문구가 뜨고,<br>
-  <b>그 캐릭터를 가진 사람만</b> 눌러 굴릴 수 있습니다. 라이트 모드 기준 · 스페이싱은 4dp 그리드 6단계만 사용.</p>
+  <b>그 캐릭터를 가진 사람만</b> 눌러 굴릴 수 있습니다. 라이트 모드 기준 · 스페이싱은 4dp 그리드 6단계만 사용.<br>
+  <b>구현 순서·지점은 <code>docs/judge-request-implementation.md</code>(작업 지시서)에 있습니다.</b></p>
 </div>
 
 <!-- ══════════ 01. 흐름 ══════════ -->
@@ -329,21 +330,21 @@ td b{color:var(--ink)}
               <div class="tt"><b>카야</b><span>어떤 값으로 판정할까요?</span></div>
             </div>
             <div class="vlist">
-              <div class="vcell on"><b>민첩</b><i>55</i></div>
-              <div class="vcell"><b>관찰력</b><i>70</i></div>
-              <div class="vcell"><b>설득</b><i>40</i></div>
-              <div class="vcell"><b>도서관</b><i>65</i></div>
-              <div class="vcell"><b>회피</b><i>27</i></div>
+              <div class="vcell on"><b>민첩</b><i>✓</i></div>
+              <div class="vcell"><b>관찰력</b></div>
+              <div class="vcell"><b>설득</b></div>
+              <div class="vcell"><b>도서관</b></div>
+              <div class="vcell"><b>회피</b></div>
             </div>
             <div class="sfoot">
-              <div class="hint">1d100 ≤ 55 하향 판정<br>크툴루의 부름 7판</div>
+              <div class="hint">카야의 민첩 값으로 1d100 하향 판정<br>크툴루의 부름 7판</div>
               <div class="cta">보내기</div>
             </div>
           </div>
         </div>
       </div></div>
       <div class="cap"><b>C · 값 고르기 — 하나만 선택</b>
-        <span>숫자 값만 나옵니다(직업 '탐정' 같은 글자 값은 굴릴 수 없음). 하단에 <b>어떤 다이스로 굴러갈지</b>를 미리 보여 주고, 고르기 전에는 보내기가 잠깁니다.</span></div>
+        <span>숫자 값만 나옵니다(직업 '탐정' 같은 글자 값은 굴릴 수 없음). <b>숫자는 보이지 않습니다</b> — GM 기기에는 상대 캐릭터의 값이 없고, 굴림은 대상자 기기에서 그때의 값으로 이뤄지기 때문입니다.</span></div>
     </div>
 
     <!-- ── D. 캐릭터 주인 시점 ── -->
@@ -452,6 +453,12 @@ td b{color:var(--ink)}
   </div>
   <div class="states">
     <div class="notes">
+      <div class="note r"><h4>선행 조건 — GM 기기에는 상대 캐릭터가 없다</h4>
+        <p>캐릭터 프로필은 <b>기기 로컬 데이터</b>이고 서버로 동기화되지 않습니다
+        (<code>profiles</code> 테이블에 sync 경로가 없음). 그래서 이 기능은 <b>캐릭터 명단 공유가 먼저</b> 필요합니다.
+        방법은 이미 있는 <code>rooms/{id}/members/{uid}</code> 문서에 <b>이름·이모지·이름색·숫자 값의 이름 목록</b>만
+        얹는 것입니다 — 그 문서를 보는 리스너가 이미 하나 돌고 있어(읽음·입력 중 표시) <b>추가 읽기가 0</b>입니다.
+        <b>값(숫자)은 보내지 않습니다</b> — GM에게 필요 없고, 굴림은 대상자 기기에서 그때의 값으로 하기 때문입니다.</p></div>
       <div class="note"><h4>버튼은 GM 프로필일 때만</h4>
         <p>활성 프로필이 <code>isGm = true</code>일 때만 판정 요청 줄이 보입니다. 프로필을 바꾸면 즉시 사라집니다 —
         방의 마스터 여부(<code>room.isMaster</code>)가 아니라 <b>지금 말하고 있는 프로필</b>을 기준으로 합니다.
@@ -490,6 +497,15 @@ td b{color:var(--ink)}
   </div>
   <table>
     <tr><th>대상</th><th>지금</th><th>변경</th></tr>
+    <tr>
+      <td>캐릭터 명단 공유<br><b>(선행)</b></td>
+      <td>프로필은 기기 로컬 — <code>SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId</code>.
+        서버로 나가는 경로가 <b>없음</b></td>
+      <td>각 기기가 자기 <code>rooms/{id}/members/{uid}</code> 문서에 <code>characters</code> 배열을
+        <code>merge</code>로 얹습니다 — <code>[{name, emoji, nameColor, stats:["민첩",…]}]</code>.
+        <b>값(숫자)은 넣지 않습니다.</b> 이미 <code>observePeerState</code>가 같은 컬렉션을 구독하고 있어
+        <b>추가 읽기 0</b>이고, 프로필이 바뀔 때만 씁니다</td>
+    </tr>
     <tr>
       <td>메시지 타입</td>
       <td><code>enum MessageType { TEXT, DICE, SYSTEM }</code></td>

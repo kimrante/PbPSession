@@ -102,4 +102,11 @@ object ProfileStats {
         }
         return plain to marked
     }
+
+    /**
+     * `"1d100<={민첩}"` → `"민첩"`. 치환이 안 된 판정식에서 값 이름을 캐낸다 (J6) —
+     * 모바일·데스크톱이 같은 규칙으로 "값이 없습니다" 다이얼로그를 띄우기 위한 단일 출처.
+     */
+    fun statNameOf(diceExpr: String): String? =
+        placeholder.find(diceExpr)?.groupValues?.get(1)
 }

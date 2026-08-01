@@ -148,6 +148,8 @@ internal fun ChatPane(
     captureError: String?,
     /** 판정 요청을 눌렀을 때 — 그 캐릭터를 가진 쪽에서만 호출된다 (J6) */
     onJudgeRoll: (Message) -> Unit,
+    /** GM 프로필로 말하는 중에만 보이는 판정 요청 열기 (J8) */
+    onJudgeRequest: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -310,6 +312,7 @@ internal fun ChatPane(
                 onShowMarkupHelp = onShowMarkupHelp,
                 onTyping = onTyping,
                 onTypingStopped = onTypingStopped,
+                onJudgeRequest = onJudgeRequest,
             )
         }
     }
@@ -886,6 +889,8 @@ internal fun InputZone(
     /** 실제로 글자가 바뀔 때만 — 가만히 있는 상태는 입력 중이 아니다 */
     onTyping: () -> Unit = {},
     onTypingStopped: () -> Unit = {},
+    /** GM 프로필로 말하는 중에만 보이는 판정 요청 열기 (J8) */
+    onJudgeRequest: () -> Unit = {},
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
@@ -992,6 +997,23 @@ internal fun InputZone(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // room.isMaster가 아니라 **지금 말하고 있는 프로필** 기준 — GM이 자기 NPC로
+            // 말하는 중에는 요청을 걸 수 없고, 그게 자연스럽다 (모바일과 동일)
+            if (profiles.getOrNull(room.activeProfileIndex)?.isGm == true) {
+                Text(
+                    "＋ 판정 요청",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Tokens.SignatureInk,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color(0x2EFFD05C))
+                        .border(1.dp, Color(0x66C89E34), RoundedCornerShape(999.dp))
+                        .clickable(onClick = onJudgeRequest)
+                        .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름 부분 입력 시 판정 매크로 (모바일과 동일)
             val activeStats = profiles.getOrNull(room.activeProfileIndex)?.stats ?: emptyMap()
             val suggestions = ProfileStats.paletteSuggestions(input, activeStats)

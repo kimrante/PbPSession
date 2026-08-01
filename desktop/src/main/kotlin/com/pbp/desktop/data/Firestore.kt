@@ -11,6 +11,9 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 import com.pbp.shared.Protocol
 
+/** 상대가 올린 캐릭터 한 명 (J8). 값은 **이름만** 온다 — 숫자는 소유자 기기에만 있다 */
+data class PeerCharacter(val name: String, val emoji: String, val stats: List<String>)
+
 /** 메시지 (Firestore 문서 ↔ 로컬 모델) — 안드로이드 앱과 같은 스키마 */
 data class Message(
     val docId: String,
@@ -412,6 +415,45 @@ class FirestoreRest(
             gson.toJson(root),
         )
         if (ok) pushedCharacters[remoteRoomId] = signature
+    }
+
+    /**
+     * 다른 멤버가 올린 캐릭터 명단 (J8). **GM이 판정 요청 창을 열 때만** 부른다 —
+     * 폴링에 얹으면 2.5초마다 members를 읽게 되므로 절대 상시로 만들지 말 것.
+     * 1:1 방이라 한 번에 문서 2건(=읽기 2회)이다.
+     */
+    fun listPeerCharacters(remoteRoomId: String): List<PeerCharacter> {
+        val myUid = uid
+        val res = get("$base/rooms/$remoteRoomId/members?key=$apiKey") ?: return emptyList()
+        val documents = res.getAsJsonArray("documents") ?: return emptyList()
+        val out = mutableListOf<PeerCharacter>()
+        documents.forEach { element ->
+            val doc = runCatching { element.asJsonObject }.getOrNull() ?: return@forEach
+            if (doc.docId() == myUid) return@forEach
+            val entries = doc.getAsJsonObject("fields")
+                ?.getAsJsonObject(Protocol.Field.CHARACTERS)
+                ?.getAsJsonObject("arrayValue")
+                ?.getAsJsonArray("values") ?: return@forEach
+            entries.forEach entry@{ raw ->
+                // 상대가 구버전이거나 쓰다 만 문서일 수 있다 — 한 건이 깨져도 나머지는 살린다
+                val fields = runCatching {
+                    raw.asJsonObject.getAsJsonObject("mapValue").getAsJsonObject("fields")
+                }.getOrNull() ?: return@entry
+                val name = fields.getAsJsonObject(Protocol.Character.NAME)
+                    ?.get("stringValue")?.asString?.takeIf { it.isNotBlank() } ?: return@entry
+                val stats = fields.getAsJsonObject(Protocol.Character.STATS)
+                    ?.getAsJsonObject("arrayValue")?.getAsJsonArray("values")
+                    ?.mapNotNull { runCatching { it.asJsonObject.get("stringValue").asString }.getOrNull() }
+                    .orEmpty()
+                out += PeerCharacter(
+                    name = name,
+                    emoji = fields.getAsJsonObject(Protocol.Character.EMOJI)
+                        ?.get("stringValue")?.asString.orEmpty(),
+                    stats = stats,
+                )
+            }
+        }
+        return out
     }
 
     /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */

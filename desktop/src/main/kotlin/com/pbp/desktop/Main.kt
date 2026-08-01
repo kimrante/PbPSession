@@ -216,6 +216,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     // 프로필 칩 길게 눌러 편집 — 앱과 동일 흐름
     var editProfileIndex by remember { mutableStateOf<Int?>(null) }
 
+    // 판정 요청 (J8) — 창을 열었는지, 후보 명단(null이면 불러오는 중),
+    // 그리고 대상 캐릭터에 값이 없어 물어봐야 하는 요청
+    var judgeOpen by remember { mutableStateOf(false) }
+    var judgeCandidates by remember { mutableStateOf<List<JudgeCandidate>?>(null) }
+    var judgeNeedValue by remember { mutableStateOf<Pair<Message, String>?>(null) }
+
     // 방 카드 길게 눌러 나가기 — 앱의 방 삭제(길게)와 동일 위계
     var leaveTarget by remember { mutableStateOf<JoinedRoom?>(null) }
 
@@ -636,6 +642,55 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
 
     /**
+     * GM이 판정 요청 창을 연다 (J8). 후보 명단은 **이때 한 번만** 받아온다 —
+     * 폴링에 얹으면 members를 상시로 읽게 되므로 절대 옮기지 말 것.
+     */
+    fun openJudgeRequest() {
+        val room = selected ?: return
+        judgeOpen = true
+        judgeCandidates = null
+        scope.launch {
+            val peers = withContext(Dispatchers.IO) { firestore.listPeerCharacters(room.remoteId) }
+            // 오너 프로필은 캐릭터가 아니라 애초에 이 목록에 들어오지 않는다
+            val mine = profiles.filterNot { it.isGm }.map { profile ->
+                JudgeCandidate(
+                    name = profile.name,
+                    emoji = profile.emoji,
+                    nameColor = profile.nameColor,
+                    // 주사위가 굴러가야 하므로 숫자 값만 고를 수 있다
+                    stats = ProfileStats.sanitize(profile.stats.orEmpty())
+                        .filterValues { it.trim().toIntOrNull() != null }
+                        .keys.toList(),
+                )
+            }
+            val peerCandidates = peers.map { JudgeCandidate(it.name, it.emoji, null, it.stats) }
+            judgeCandidates = (mine + peerCandidates).distinctBy { it.name }
+        }
+    }
+
+    /** 판정 요청을 보낸다 (J8) — 값 **이름**만 싣는다. 숫자는 소유자 기기에만 있다 */
+    fun sendJudgeRequest(targetName: String, statName: String) {
+        val room = selected ?: return
+        val gm = profiles.getOrNull(room.activeProfileIndex) ?: return
+        lastLocalSendAt.set(System.currentTimeMillis())
+        scope.launch(Dispatchers.IO) {
+            firestore.postMessage(
+                room.remoteId,
+                messageValues(
+                    type = Protocol.MessageType.JUDGE,
+                    // 구버전 클라이언트에서는 이 문구가 그대로 말풍선으로 보인다
+                    body = "$targetName, $statName 판정",
+                    sender = gm,
+                    isOoc = false,
+                    authorUid = authorUid(),
+                    diceExpr = Rules.judgeCommand(room.rule ?: Rules.COC7, statName),
+                    judgeTarget = targetName,
+                ),
+            )
+        }
+    }
+
+    /**
      * 판정 요청을 눌러 굴린다 (J6) — 요청이 지목한 캐릭터로 나간다. 지금 활성 프로필이
      * 무엇이든 상관없고, 활성 프로필을 바꾸지도 않는다.
      */
@@ -648,8 +703,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         val profile = profiles.find { it.name == target } ?: return
         val (plain, _) = ProfileStats.substitute(expr, ProfileStats.sanitize(profile.stats.orEmpty()))
         val command = DiceBot.parse(plain) ?: run {
-            // 그 캐릭터에 그 값이 없다 — PC에서는 프로필 편집으로 값을 넣은 뒤 다시 누른다
-            System.err.println("판정에 쓸 값이 없습니다 — 프로필에 값을 추가한 뒤 다시 눌러 주세요")
+            // 치환이 안 됐다 = 그 캐릭터에 그 값이 없다. 값을 받아 채운 뒤 굴린다 (J8)
+            ProfileStats.statNameOf(expr)?.let { judgeNeedValue = request to it }
             return
         }
         val result = DiceBot.roll(command)
@@ -670,6 +725,20 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 ),
             )
         }
+    }
+
+    /** 요청에 값을 채워 넣고 바로 굴린다 — 대상 캐릭터에 그 값이 없었을 때 (J8) */
+    fun addStatAndRoll(request: Message, statName: String, value: Int) {
+        val target = request.judgeTarget ?: return
+        val index = profiles.indexOfFirst { it.name == target }
+        if (index < 0) return
+        val merged = profiles[index].stats.orEmpty() + (statName to value.toString())
+        profiles = profiles.mapIndexed { i, profile ->
+            if (i == index) profile.copy(stats = ProfileStats.sortByName(merged.toList()).toMap())
+            else profile
+        }
+        persist()
+        rollJudge(request)
     }
 
     fun exportLogs() {
@@ -824,6 +893,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 captureEndPicked = captureEnd != null,
                 captureError = captureError,
                 onJudgeRoll = ::rollJudge,
+                onJudgeRequest = ::openJudgeRequest,
                 onToggleCaptureExcludeOoc = {
                     captureExcludeOoc = !captureExcludeOoc
                     config.captureExcludeOoc = captureExcludeOoc
@@ -1098,6 +1168,28 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 } else null,
             )
         }
+    }
+    if (judgeOpen) {
+        JudgeRequestOverlay(
+            candidates = judgeCandidates,
+            rule = selected?.rule ?: Rules.COC7,
+            onDismiss = { judgeOpen = false },
+            onSend = { targetName, statName ->
+                sendJudgeRequest(targetName, statName)
+                judgeOpen = false
+            },
+        )
+    }
+    judgeNeedValue?.let { (request, statName) ->
+        JudgeValueOverlay(
+            targetName = request.judgeTarget.orEmpty(),
+            statName = statName,
+            onDismiss = { judgeNeedValue = null },
+            onConfirm = { value ->
+                addStatAndRoll(request, statName, value)
+                judgeNeedValue = null
+            },
+        )
     }
     messageDelete?.let { target ->
         OverlayScaffold("메시지 삭제", onDismiss = { messageDelete = null }) {

@@ -388,6 +388,5 @@ fun numericStatNames(profile: CharacterProfile): List<String> =
  */
 fun judgeKey(request: Message): String = request.remoteId ?: "local-${request.id}"
 
-/** "1d100<={민첩}" → "민첩" */
-fun statNameOf(diceExpr: String): String? =
-    Regex("""\{([^{}]+)\}""").find(diceExpr)?.groupValues?.get(1)
+/** "1d100<={민첩}" → "민첩". 규칙은 :shared가 단일 출처 — 데스크톱도 같은 것을 쓴다 */
+fun statNameOf(diceExpr: String): String? = ProfileStats.statNameOf(diceExpr)

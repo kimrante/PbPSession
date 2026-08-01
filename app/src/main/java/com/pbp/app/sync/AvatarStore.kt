@@ -79,8 +79,12 @@ internal class AvatarStore(
         file.parentFile?.mkdirs()
         // 임시 파일에 쓴 뒤 교체 — 쓰다 중단되면 깨진 파일이 영구 캐시되는 것 방지
         val tmp = File(file.parentFile, "remote-$avatarId.tmp")
-        tmp.writeBytes(Base64.decode(data, Base64.NO_WRAP))
-        if (!tmp.renameTo(file)) {
+        // 쓰기까지 통째로 감싼다 — 디스크가 차서 writeBytes가 던지면 부분 파일이 남는다 (L5)
+        val moved = runCatching {
+            tmp.writeBytes(Base64.decode(data, Base64.NO_WRAP))
+            tmp.renameTo(file)
+        }.getOrDefault(false)
+        if (!moved) {
             tmp.delete()
             return null
         }

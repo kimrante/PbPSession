@@ -256,10 +256,17 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     val typing = peers.maxByOrNull {
                         it.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L
                     }
+                    // typingUntil은 상대 시계로 찍힌 값이라 내 시계와 어긋날 수 있다.
+                    // 내 시계 기준 TTL을 넘지 않게 잘라 잔상을 막는다 (읽음 확인과 달리
+                    // 타이핑만 두 시계를 비교하는 구조라 이 보정이 필요하다, P2)
+                    val cap = System.currentTimeMillis() + Protocol.TYPING_TTL_MS
                     trySend(
                         PeerState(
                             readAt = peerRead,
-                            typingUntil = typing?.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L,
+                            typingUntil = minOf(
+                                typing?.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L,
+                                cap,
+                            ),
                             typingName = typing?.getString(Protocol.Field.TYPING_NAME),
                         )
                     )
@@ -269,6 +276,18 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
 
     /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */
     private val lastTypingPushAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** 로컬 방 id 기준 스로틀 — 키 입력마다 DB를 조회하지 않으려고 먼저 본다 (P4) */
+    private val lastTypingDueAt = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
+    /** 지금 올릴 차례인가. true를 돌려주면 그 시각을 소비한 것으로 친다 */
+    fun typingDue(localRoomId: Long): Boolean {
+        val now = System.currentTimeMillis()
+        val last = lastTypingDueAt[localRoomId] ?: 0L
+        if (now - last < Protocol.TYPING_THROTTLE_MS) return false
+        lastTypingDueAt[localRoomId] = now
+        return true
+    }
 
     /**
      * 입력 중 알림 — **실제 입력 이벤트가 있을 때만** 부른다.

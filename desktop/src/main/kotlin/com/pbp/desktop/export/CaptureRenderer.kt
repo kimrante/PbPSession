@@ -1,6 +1,9 @@
 package com.pbp.desktop.export
 
 import androidx.compose.foundation.background
+import com.pbp.desktop.rememberLocalBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,13 +70,13 @@ object CaptureRenderer {
         val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
         if (messages.isEmpty()) return emptyList()
         val chunks = splitByHeight(messages)
-        return chunks.mapIndexedNotNull { index, chunk ->
-            runCatching {
-                renderOne(
-                    room, chunk, myUid, avatarCache, firestore, withBackground,
-                    page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
-                )
-            }.getOrNull()
+        // 예외를 삼키지 않는다 — 중간 청크만 사라지면 "1/3, 3/3"짜리 캡처가 조용히 저장된다.
+        // 모바일은 v0.7.2에서 같은 패턴을 걷어냈다 (R5)
+        return chunks.mapIndexed { index, chunk ->
+            renderOne(
+                room, chunk, myUid, avatarCache, firestore, withBackground,
+                page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
+            )
         }
     }
 
@@ -130,11 +133,17 @@ object CaptureRenderer {
 
     private const val CHROME_DP = 120f
 
+    /** 모바일 CaptureRenderer.estimate와 같은 규칙이어야 한다 (R1) */
     private fun estimate(message: Message): Float = when {
         message.type != "TEXT" || message.isOoc -> 28f
-        message.senderIsGm -> 90f
-        else -> 46f + (message.body.length / 24) * 18f
+        message.senderIsGm -> 34f + lines(message.body, perLine = 26) * 20f
+        else -> 30f + lines(message.body, perLine = 17) * 20f
     }
+
+    private fun lines(body: String, perLine: Int): Int =
+        body.split('\n').sumOf { line ->
+            maxOf(1, (line.length + perLine - 1) / perLine)
+        }.coerceAtLeast(1)
 }
 
 @Composable
@@ -160,6 +169,15 @@ private fun CaptureSheet(
                                 Brush.verticalGradient(listOf(Color(preset.first), Color(preset.second)))
                             )
                     )
+                } else {
+                    // 프리셋이 아니면 로컬 파일 배경 — 화면과 같은 그림이 나와야 한다 (R7)
+                    rememberLocalBitmap(room.backgroundKey)?.let { bitmap ->
+                        Image(
+                            bitmap, null,
+                            modifier = Modifier.matchParentSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                 }
                 Box(
                     Modifier

@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -141,6 +142,8 @@ internal fun ChatPane(
     onToggleCaptureBackground: () -> Unit,
     captureExcludeOoc: Boolean,
     onToggleCaptureExcludeOoc: () -> Unit,
+    /** 끝점이 정해졌는가 — 한 건만 고른 상태와 "아직 끝 미선택"을 구분한다 (R7) */
+    captureEndPicked: Boolean,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -154,7 +157,7 @@ internal fun ChatPane(
             // PC는 좌측 정렬 유지 (trpg-app-mockup-pc-light.html) — 넓은 창에서 제목이
             // 사이드바 쪽 시선 흐름과 이어지고, 부제 규격만 모바일과 공유한다.
             if (captureIdx != null) CaptureModeBar(
-                subtitle = if (captureIdx.first == captureIdx.last) "끝 메시지를 클릭하세요"
+                subtitle = if (!captureEndPicked) "끝 메시지를 클릭하세요"
                 else "양 끝을 다시 클릭해 조절할 수 있어요",
                 onClose = onCaptureExit,
             ) else
@@ -262,7 +265,7 @@ internal fun ChatPane(
                 )
                 CaptureBar(
                     count = picked.size,
-                    timeRange = if (captureIdx.first == captureIdx.last) null else timeRangeLabel(picked),
+                    timeRange = if (captureEndPicked) timeRangeLabel(picked) else null,
                     startLabel = picked.firstOrNull()?.let {
                         "시작 " + formatTime(it.createdAt) + " · " + it.senderName
                     },
@@ -386,8 +389,10 @@ internal fun MessageBlock(
         message.senderIsGm -> {
             // 정규식 분해를 리컴포지션마다 반복하지 않는다 (F2)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
+            // 시각은 마지막 인용에만 — 인용이 여럿이면 중복 표시된다 (모바일 R4와 동일)
+            val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                parts.forEach { part ->
+                parts.forEachIndexed { index, part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
                             message, part.text,
@@ -398,7 +403,7 @@ internal fun MessageBlock(
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text, overrideName = "GM",
                             overrideBubbleColor = Tokens.gmQuoteBubble,
-                            showTime = showTime,
+                            showTime = showTime && index == lastQuote,
                             onLongPress = onLongPress,
                         )
                     }
@@ -412,6 +417,7 @@ internal fun MessageBlock(
                 BubbleRow(
                     message, myUid, room, avatarCache, firestore,
                     showHeader = !grouped,
+                    showTime = showTime,
                     onLongPress = onLongPress,
                 )
             } else {
@@ -537,7 +543,11 @@ internal fun BubbleRow(
     /** 이 조각이 대사(인용)임을 호출부가 이미 판정한 경우 */
     quoteBubble: Boolean = false,
     showHeader: Boolean = true, // false = 연속 메시지 (아바타·이름 생략)
-    showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
+    /**
+     * 시각 표시 여부. **기본값을 두지 않는다** — 전달을 잊어 시간 접기가 사문화된 일이
+     * 세 번 반복돼(읽음 리뷰 R2 → GM 분기만 → 일반 말풍선 누락), 컴파일러가 잡게 했다.
+     */
+    showTime: Boolean,
     onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == myUid && overrideName == null
@@ -726,6 +736,9 @@ internal fun MessageAvatar(
                 fetchAvatarCached(firestore, room.remoteId, avatarId)?.let { bytes ->
                     runCatching {
                         org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                    }.onFailure {
+                        // 못 여는 캐시 파일은 지운다 — 안 그러면 같은 파일을 계속 다시 읽는다 (L2)
+                        dropBrokenAvatarCache(avatarId)
                     }.getOrNull()
                 }
             }
@@ -949,6 +962,8 @@ internal fun InputZone(
                         }
                     },
                     modifier = Modifier.weight(1f)
+                        // 창을 옮기면 치던 것을 멈춘 것으로 본다 (모바일과 동일, P4)
+                        .onFocusChanged { if (!it.isFocused) onTypingStopped() }
                         // 입력창이 처리하지 않은 방향키를 삼킨다 — 그냥 두면 포커스가
                         // 말풍선·버튼으로 옮겨 가 커서가 입력창을 벗어난다 (모바일과 동일)
                         .onKeyEvent { event -> event.key in ARROW_KEYS }

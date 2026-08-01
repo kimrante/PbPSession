@@ -80,8 +80,8 @@ object Protocol {
      *
      * TTL은 스로틀보다 넉넉해야 한다 — 같으면 연달아 치는 중에도 한 번씩 꺼진다.
      */
-    const val TYPING_THROTTLE_MS = 4_000L
-    const val TYPING_TTL_MS = 7_000L
+    const val TYPING_THROTTLE_MS = 6_000L
+    const val TYPING_TTL_MS = 9_000L
 
     /** 방 기본값 — 양 클라이언트가 같은 값을 써야 첫 화면이 갈라지지 않는다 */
     const val DEFAULT_BACKGROUND = "preset_lighthouse"

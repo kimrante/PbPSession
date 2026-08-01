@@ -281,6 +281,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         var lastCreatedAt = session.lastCreatedAt
         var lastMetaPollAt = 0L
         var lastActivityAt = System.currentTimeMillis()
+        // 직전 폴 시각 — 중복 윈도는 "다음 주기"가 아니라 **직전에 실제로 비어 있던 시간**을
+        // 흡수해야 한다. 미포커스(30초) → 활성(2.5초)으로 바뀌는 첫 폴에서 윈도가 5초뿐이면,
+        // 직전 30초 공백에 시계 오차·늦은 커밋으로 도착한 메시지가 커서 뒤로 밀려 영구 누락된다 (M1)
+        var lastPollAt = System.currentTimeMillis()
         try {
         while (isActive) {
             val now = System.currentTimeMillis()
@@ -293,9 +297,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             }
             // 반복 1회 전체를 격리 — 예기치 못한 예외 1건이 폴링을 영구 정지시키지 않게 (C2)
             runCatching {
+                // 중복 윈도 = max(다음 주기, 직전 공백)×2 (P5·M1) — 주기가 짧아지는
+                // 순간에도 직전 긴 공백을 덮는다
+                val windowMs = maxOf(interval, now - lastPollAt) * 2
+                lastPollAt = now
                 val fetched = withContext(Dispatchers.IO) {
-                    // 중복 윈도는 주기×2 (P5) — 시계 오차·커밋 재정렬 흡수에 충분
-                    firestore.listMessagesSince(room.remoteId, lastCreatedAt, windowMs = interval * 2)
+                    firestore.listMessagesSince(room.remoteId, lastCreatedAt, windowMs = windowMs)
                 }
                 // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
                 if (fetched != null && fetched.isNotEmpty()) {
@@ -316,7 +323,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     }.associateBy { it.docId }
                     if (fresh.isNotEmpty()) lastActivityAt = now // 수신 = 활동 (P2)
                     if (fresh.isNotEmpty() || edited.isNotEmpty()) {
+                        // 기존 목록도 삭제 목록으로 거른다 — 리셋과 폴이 겹쳐 지운 메시지가
+                        // 되살아나도 다음 폴에서 스스로 낫는다 (M2 방어선)
                         messages = (messages.map { edited[it.docId] ?: it } + fresh)
+                            .filterNot { it.docId in session.deletedDocIds }
                             .sortedBy { it.createdAt }
                         session.messages = messages
                     }
@@ -360,9 +370,13 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             }
         }
         } finally {
-            // 방 전환·창 종료 시 최종 상태를 파일 캐시에 남긴다 (P3 근본 수정)
-            withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
-                RoomCacheStore.save(room.remoteId, session.messages, session.lastCreatedAt)
+            // 방 전환·창 종료 시 최종 상태를 파일 캐시에 남긴다 (P3 근본 수정).
+            // 나간 방은 저장하지 않는다 — leaveRoom이 세션을 먼저 지우므로 여기서
+            // 다시 쓰면 삭제한 캐시 파일이 되살아나 영구 잔류한다 (L1)
+            if (roomSessions.containsKey(room.remoteId)) {
+                withContext(kotlinx.coroutines.NonCancellable + Dispatchers.IO) {
+                    RoomCacheStore.save(room.remoteId, session.messages, session.lastCreatedAt)
+                }
             }
         }
     }
@@ -449,10 +463,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             val ids = firestore.listMessages(room.remoteId)?.map { it.docId }
             val ok = ids != null && ids.all { firestore.deleteMessage(room.remoteId, it) }
             if (ok) {
-                val session = sessionFor(room.remoteId)
-                session.deletedDocIds.addAll(ids.orEmpty())
-                messages = emptyList()
-                session.messages = emptyList()
+                // 로컬 상태는 폴 루프가 소유한다 — IO 스레드에서 직접 비우면 fetch로
+                // 서스펜드해 있던 폴이 재개하며 리셋 전 목록을 되살리고 파일 캐시에까지
+                // 다시 쓴다. 상태 변경은 UI 스코프에서 한 번에 (M2)
+                withContext(Dispatchers.Main) {
+                    val session = sessionFor(room.remoteId)
+                    session.deletedDocIds.addAll(ids.orEmpty())
+                    session.messages = emptyList()
+                    session.lastSavedAt = System.currentTimeMillis() // 진행 중 폴의 스로틀 저장 차단
+                    messages = emptyList()
+                }
                 RoomCacheStore.delete(room.remoteId) // 파일 캐시도 초기화
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
@@ -525,6 +545,20 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         captureRendering = true
         val uid = authorUid()
         scope.launch {
+            // 렌더는 동기라 이미지 로딩을 기다려 주지 않는다 — 필요한 아바타를 먼저 받아
+            // 캐시에 채운다. 이러면 렌더 중 서버 요청이 0이 되고 빈 원도 남지 않는다 (P3·R6)
+            withContext(Dispatchers.IO) {
+                picked.mapNotNull { it.avatarId }.distinct()
+                    .filter { it !in avatarCache }
+                    .forEach { id ->
+                        fetchAvatarCached(firestore, room.remoteId, id)?.let { bytes ->
+                            runCatching {
+                                org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                            }.onFailure { dropBrokenAvatarCache(id) }
+                                .getOrNull()?.let { avatarCache[id] = it }
+                        }
+                    }
+            }
             val pages = withContext(Dispatchers.Default) {
                 runCatching {
                     com.pbp.desktop.export.CaptureRenderer.render(
@@ -708,6 +742,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     persist()
                 },
                 captureExcludeOoc = captureExcludeOoc,
+                captureEndPicked = captureEnd != null,
                 onToggleCaptureExcludeOoc = {
                     captureExcludeOoc = !captureExcludeOoc
                     config.captureExcludeOoc = captureExcludeOoc

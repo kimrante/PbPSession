@@ -97,7 +97,6 @@ import kotlinx.coroutines.withContext
 
 /** 입력 영역 — 프로필 스트립·판정 팔레트·잡담 토글·입력줄 (리뷰 B3) */
 
-@OptIn(ExperimentalFoundationApi::class)
 /** 입력 중 표시 줄 높이 — 문구가 있든 없든 같아야 입력 영역이 위아래로 튀지 않는다 */
 private val TYPING_ROW_HEIGHT = 14.dp
 
@@ -106,6 +105,7 @@ private val ARROW_KEYS = setOf(
     Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun InputZone(
     profiles: List<CharacterProfile>,

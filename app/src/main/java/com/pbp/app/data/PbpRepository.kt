@@ -125,10 +125,15 @@ class PbpRepository(private val db: AppDatabase) {
         else syncManager?.observePeerState(remoteId)
             ?: kotlinx.coroutines.flow.flowOf(SyncManager.PeerState())
 
-    /** 입력 이벤트가 있을 때만 — 스로틀은 SyncManager가 한다 */
+    /**
+     * 입력 이벤트가 있을 때만. 스로틀을 **먼저** 확인한다 —
+     * 키를 누를 때마다 Room을 조회할 이유가 없다 (P4)
+     */
     suspend fun pushTyping(roomId: Long, name: String) {
+        val sync = syncManager ?: return
+        if (!sync.typingDue(roomId)) return
         val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
-        syncManager?.pushTyping(remoteId, name)
+        sync.pushTyping(remoteId, name)
     }
 
     suspend fun clearTyping(roomId: Long) {

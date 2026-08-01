@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.Message
+import com.pbp.app.export.CaptureRenderer
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
@@ -106,9 +107,11 @@ internal fun CaptureBar(
     onMake: () -> Unit,
 ) {
     val tokens = Pbp.colors
-    val enabled = timeRange != null && !overLimit && !rendering
+    val tooTall = (estimatedPx ?: 0) > CaptureRenderer.MAX_TOTAL_HEIGHT_PX
+    val enabled = timeRange != null && !overLimit && !tooTall && !rendering
     val subtitle = when {
         overLimit -> "한 번에 ${ChatViewModel.PAGE_SIZE}개까지 고를 수 있어요"
+        tooTall -> "너무 길어요 — 범위를 나눠서 만들어 주세요"
         rendering -> "이미지를 만들고 있어요…"
         timeRange != null -> "$timeRange · 약 ${"%,d".format(estimatedPx ?: 0)}px"
         else -> startLabel ?: "끝 메시지를 탭하세요"
@@ -133,7 +136,7 @@ internal fun CaptureBar(
                 subtitle,
                 fontSize = 10.sp,
                 lineHeight = 14.sp,
-                color = if (overLimit) tokens.danger else tokens.inkDim,
+                color = if (overLimit || tooTall) tokens.danger else tokens.inkDim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

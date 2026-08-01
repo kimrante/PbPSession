@@ -178,7 +178,7 @@ body{background:#E9E4D8;color:#2A2620;font-family:'Noto Sans KR','Malgun Gothic'
 .lbubble.lchat{background:#E3DED2!important;color:#8B8474!important;border:1px dashed #C5BDA9}
 .lnarr{font-family:'Gowun Batang','Batang',serif;font-size:11.5px;line-height:1.8;color:#3D3628;border-left:2px solid #C9A227;padding:2px 0 2px 12px;margin:4px 4px 12px;white-space:pre-wrap}
 .lnarr .nmeta{font-family:'Noto Sans KR',sans-serif;font-size:8.5px;color:#A39A86}
-ruby rt{font-size:7px;color:#C9A227}
+ruby rt{font-size:7px;color:inherit}
 </style>
 </head>
 <body>

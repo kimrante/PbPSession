@@ -201,6 +201,15 @@ internal fun fetchAvatarCached(
     return bytes
 }
 
+/**
+ * 디코드에 실패한 원격 아바타 캐시 파일을 지운다 (L2).
+ * 바이트는 읽히는데 Skia가 못 여는 파일이면 재시도해도 같은 파일을 다시 읽어
+ * 그 아바타가 영구히 이모지 폴백으로 남는다 — 지워야 다음에 새로 받는다.
+ */
+internal fun dropBrokenAvatarCache(avatarId: String) {
+    runCatching { java.io.File(AppPaths.dir(AppPaths.AVATARS_REMOTE), avatarId).delete() }
+}
+
 /** 방별 업로드 완료 표시 — 같은 이미지의 중복 업로드 방지 (모바일 uploadedAvatars와 동일) */
 internal val uploadedAvatarKeys: MutableSet<String> =
     java.util.concurrent.ConcurrentHashMap.newKeySet()

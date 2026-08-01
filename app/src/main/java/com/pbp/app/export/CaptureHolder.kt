@@ -18,6 +18,14 @@ import com.pbp.app.data.Message
  */
 object CaptureHolder {
 
+    /**
+     * 재렌더용 스코프 — 화면 스코프를 쓰면 회전으로 취소돼 설정만 바뀌고 이미지는
+     * 옛 상태로 남는다 (R7). 캡처는 화면보다 오래 사는 작업이다.
+     */
+    val scope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+    )
+
     /** 다시 그릴 때 필요한 원본 — 배경 포함 토글이 바뀌면 이걸로 재렌더한다 */
     data class Request(
         val roomName: String,
@@ -37,8 +45,12 @@ object CaptureHolder {
         this.pages = pages
     }
 
+    /**
+     * 참조만 놓는다 — 즉시 recycle하지 않는다. 공유 압축처럼 아직 이 비트맵을 읽고 있는
+     * 코루틴이 있을 수 있고, 화면의 Image 노드도 한 프레임 늦게 사라진다 (R4).
+     * 회수는 GC에 맡긴다.
+     */
     fun clear() {
-        pages.forEach { if (!it.isRecycled) it.recycle() }
         pages = emptyList()
         request = null
     }

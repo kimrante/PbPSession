@@ -3,6 +3,7 @@ package com.pbp.shared
 import com.pbp.shared.PbpMarkup
 import com.pbp.shared.PbpMarkup.Node
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -108,5 +109,27 @@ class PbpMarkupTest {
     fun `괄호만 있거나 대괄호만 있으면 루비가 아니다`() {
         assertTrue(PbpMarkup.parse("(주석) 그리고 [대괄호]")
             .filterIsInstance<PbpMarkup.Node.Ruby>().isEmpty())
+    }
+
+    @Test
+    fun `인라인 스타일이 루비를 가로질러도 유지된다`() {
+        val nodes = PbpMarkup.parse("**굵게 (독음)[本文] 계속**")
+        // 별표가 문자로 남지 않는다
+        val text = nodes.filterIsInstance<PbpMarkup.Node.Span>().joinToString("") { it.text }
+        assertFalse(text.contains("*"))
+        // 루비 앞뒤 텍스트가 모두 굵게
+        val spans = nodes.filterIsInstance<PbpMarkup.Node.Span>().filter { it.text.isNotBlank() }
+        assertTrue(spans.isNotEmpty())
+        assertTrue(spans.all { it.bold })
+        // 루비 노드는 그대로 살아 있다
+        assertTrue(nodes.any { it is PbpMarkup.Node.Ruby && it.base == "本文" })
+    }
+
+    @Test
+    fun `스타일이 값 치환을 가로질러도 유지된다`() {
+        val nodes = PbpMarkup.parse("~~취소 {{50}} 계속~~")
+        val spans = nodes.filterIsInstance<PbpMarkup.Node.Span>().filter { it.text.isNotBlank() }
+        assertTrue(spans.all { it.strike })
+        assertTrue(nodes.any { it is PbpMarkup.Node.Value && it.text == "50" })
     }
 }

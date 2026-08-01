@@ -69,6 +69,11 @@ fun CapturePreviewScreen(nav: NavController) {
 
     // 공유용 캐시는 화면을 벗어날 때 비운다
     DisposableEffect(Unit) { onDispose { CaptureSaver.clearShareCache(context) } }
+    // 뒤로 나가면(회전이 아니라 실제 이탈) 페이지를 놓는다 — 수백 MB가 남아 있을 수 있다 (R7)
+    val backStackEntry = nav.currentBackStackEntry
+    DisposableEffect(backStackEntry) {
+        onDispose { if (nav.currentBackStackEntry != backStackEntry) CaptureHolder.clear() }
+    }
 
     // 배경·잡담 설정은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
     val rerender = {
@@ -76,7 +81,9 @@ fun CapturePreviewScreen(nav: NavController) {
         val activity = context.findActivity()
         if (request != null && activity != null) {
             busy = true
-            scope.launch {
+            // 회전으로 화면이 재생성돼도 재렌더가 끊기면 안 된다 — 설정만 바뀌고
+            // 이미지는 옛 상태로 남는다 (R7)
+            CaptureHolder.scope.launch {
                 val result = runCatching {
                     CaptureRenderer.render(
                         activity = activity,
@@ -245,8 +252,12 @@ fun CapturePreviewScreen(nav: NavController) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .clickable(enabled = !busy && bitmaps.isNotEmpty()) {
+                            // 공유 중에는 토글을 잠근다 — 압축하는 사이 재렌더가 끼면
+                            // 쓰던 비트맵이 recycle돼 빈 이미지가 공유된다 (R4)
+                            busy = true
                             scope.launch {
                                 val intent = CaptureSaver.shareIntent(context, bitmaps, roomName)
+                                busy = false
                                 if (intent == null) {
                                     Toast.makeText(context, "공유할 이미지가 없습니다", Toast.LENGTH_SHORT)
                                         .show()

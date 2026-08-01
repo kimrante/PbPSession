@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.ImageLoader
 import coil3.request.ImageRequest
 import com.pbp.app.data.Message
 import com.pbp.app.ui.chat.MessageBlock
@@ -85,6 +84,13 @@ object CaptureRenderer {
     /** 한 장 최대 높이(px). 넘으면 메시지 경계에서 나눠 여러 장으로 만든다 */
     const val MAX_HEIGHT_PX = 8_000
 
+    /**
+     * 한 번에 만들 수 있는 총 높이(px) 상한 — 720×이 높이×4바이트가 한꺼번에 힙에 올라간다.
+     * 32,000px ≈ 4장 ≈ 92MB. 이보다 크면 기기에 따라 OOM으로 죽고, 그때는 이미 만든
+     * 장들까지 함께 잃는다. 개수 제한(200건)과 같은 방식으로 **미리 거절한다** (R2).
+     */
+    const val MAX_TOTAL_HEIGHT_PX = 32_000
+
     val widthPx = (SHEET_WIDTH_DP * RENDER_DENSITY).toInt()
 
     /**
@@ -105,21 +111,47 @@ object CaptureRenderer {
         @Suppress("NAME_SHADOWING")
         val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
         if (messages.isEmpty()) return emptyList()
+        // 총 높이 상한 — 넘으면 만들다 OOM으로 죽는 대신 이유를 말하고 멈춘다 (R2)
+        val estimated = estimateHeightPx(messages)
+        require(estimated <= MAX_TOTAL_HEIGHT_PX) {
+            "범위가 너무 깁니다 (약 ${estimated}px) — 나눠서 만들어 주세요"
+        }
         // 아바타는 Coil AsyncImage라 두 프레임만으로는 안 붙는다 — 캐시를 먼저 채운다
         preloadAvatars(activity, messages, backgroundKey.takeIf { withBackground })
-        val chunks = splitByHeight(messages)
-        // 예외를 삼키지 않는다 — 삼키면 "이미지를 만들지 못했습니다"만 남고 원인을 알 수 없다
-        return chunks.mapIndexed { index, chunk ->
+        // 추정으로 1차 분할한 뒤, 실제로 그려 보고 넘치면 그 청크만 쪼개 다시 그린다.
+        // 추정은 아무리 다듬어도 어긋나므로 **실측이 최종 판정**이어야 한다 (R1)
+        val pending = ArrayDeque(splitByHeight(messages))
+        val rendered = mutableListOf<List<Message>>()
+        val bitmaps = mutableListOf<Bitmap>()
+        while (pending.isNotEmpty()) {
+            val chunk = pending.removeFirst()
+            val bitmap = try {
+                // 페이지 번호는 장수가 확정된 뒤에 넣어야 해서 여기서는 비워 둔다
+                renderOne(activity, roomName, backgroundKey, chunk, withBackground, page = null)
+            } catch (tooTall: TooTallException) {
+                if (chunk.size <= 1) throw tooTall // 한 건이 상한을 넘으면 나눌 수가 없다
+                val half = chunk.size / 2
+                pending.addFirst(chunk.drop(half))
+                pending.addFirst(chunk.take(half))
+                continue
+            }
+            rendered += chunk
+            bitmaps += bitmap
+        }
+        // 장수가 정해졌으니 여러 장이면 낙관에 n/N을 붙여 다시 그린다
+        if (bitmaps.size <= 1) return bitmaps
+        bitmaps.forEach { if (!it.isRecycled) it.recycle() }
+        return rendered.mapIndexed { index, chunk ->
             renderOne(
-                activity = activity,
-                roomName = roomName,
-                backgroundKey = backgroundKey,
-                messages = chunk,
-                withBackground = withBackground,
-                page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
+                activity, roomName, backgroundKey, chunk, withBackground,
+                page = "${index + 1}/${rendered.size}",
             )
         }
     }
+
+    /** 실측 높이가 [MAX_HEIGHT_PX]를 넘었다 — 청크를 쪼개 다시 그려야 한다 */
+    class TooTallException(val heightPx: Int) :
+        IllegalStateException("한 장에 담기지 않는 높이(${heightPx}px)")
 
     /**
      * 예상 높이를 누적해 상한에 닿기 전에 끊는다. 한 번에 크게 그린 뒤 자르면
@@ -153,11 +185,27 @@ object CaptureRenderer {
     fun estimateHeightPx(messages: List<Message>): Int =
         ((CHROME_DP + messages.sumOf { estimate(it).toDouble() }.toFloat()) * RENDER_DENSITY).toInt()
 
-    private fun estimate(message: Message): Float = when {
+    /**
+     * 메시지 1건의 대략 높이(dp). **길이에 비례해야 한다** — GM 서술을 90dp 고정으로 두면
+     * 긴 서술 하나가 상한을 통째로 넘겨 페이지 하단이 잘려 나갔다 (R1).
+     *
+     * 실측 기준: 폭 360dp에서 말풍선 본문은 240dp 남짓, 13sp 한글이 줄당 17~18자,
+     * 줄 높이 20dp. GM 서술은 폭을 다 쓰므로 줄당 글자가 더 들어간다.
+     * 어디까지나 분할용 어림값이고, 최종 높이는 실측으로 다시 확인한다.
+     */
+    internal fun estimate(message: Message): Float = when {
         message.type != com.pbp.app.data.MessageType.TEXT || message.isOoc -> 28f
-        message.senderIsGm -> 90f
-        else -> 46f + (message.body.length / 24) * 18f
+        // GM 서술: 상하 여백 + 줄 수 × 줄 높이 (줄당 약 26자)
+        message.senderIsGm -> 34f + lines(message.body, perLine = 26) * 20f
+        // 말풍선: 이름·아바타 줄 + 줄 수 × 줄 높이 (줄당 약 17자)
+        else -> 30f + lines(message.body, perLine = 17) * 20f
     }
+
+    /** 줄바꿈과 자동 줄바꿈을 함께 센다 — 최소 1줄 */
+    private fun lines(body: String, perLine: Int): Int =
+        body.split('\n').sumOf { line ->
+            maxOf(1, (line.length + perLine - 1) / perLine)
+        }.coerceAtLeast(1)
 
     /** 아바타·배경 이미지를 Coil 캐시에 미리 올린다 — 빈 원으로 찍히는 것을 막는다 */
     private suspend fun preloadAvatars(
@@ -165,7 +213,9 @@ object CaptureRenderer {
         messages: List<Message>,
         backgroundPath: String?,
     ) {
-        val loader = ImageLoader(context)
+        // 실제 렌더의 AsyncImage는 싱글턴 로더를 쓴다 — 새 로더로 미리 받으면
+        // 캐시가 공유되지 않아 프리로드가 통째로 헛돈다 (R3)
+        val loader = coil3.SingletonImageLoader.get(context)
         val paths = messages.mapNotNull { it.senderImagePath }.distinct() +
             listOfNotNull(backgroundPath?.takeIf { !it.startsWith(com.pbp.shared.Protocol.PRESET_PREFIX) })
         paths.forEach { path ->
@@ -222,7 +272,9 @@ object CaptureRenderer {
                 height = view.measuredHeight
             }
             check(height > 0) { "레이아웃 높이가 0" }
-            height = height.coerceAtMost(MAX_HEIGHT_PX)
+            // 잘라내지 않는다 — 예전에는 여기서 클램프해 페이지 하단(마지막 말풍선·낙관)이
+            // 아무 말 없이 사라졌다. 넘치면 호출부가 청크를 쪼개 다시 그린다 (R1)
+            if (height > MAX_HEIGHT_PX) throw TooTallException(height)
             view.layout(0, 0, widthPx, height)
             Bitmap.createBitmap(widthPx, height, Bitmap.Config.ARGB_8888)
                 .also { view.draw(Canvas(it)) }

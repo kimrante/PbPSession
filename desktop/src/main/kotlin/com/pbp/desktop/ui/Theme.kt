@@ -16,6 +16,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.text.style.TextDecoration
@@ -137,6 +138,8 @@ private fun buildMarkup(
                             fontWeight = if (node.bold) FontWeight.ExtraBold else null,
                             fontStyle = if (node.italic) FontStyle.Italic else null,
                             textDecoration = if (node.strike) TextDecoration.LineThrough else null,
+                            // 한글 서체는 이탤릭 페이스가 없어 합성 기울임을 강제한다 (모바일과 동일, S4)
+                            fontSynthesis = if (node.italic || node.bold) FontSynthesis.All else null,
                         )
                     ) { append(node.text) }
                 }

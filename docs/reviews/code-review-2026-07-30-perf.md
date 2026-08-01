@@ -1,7 +1,7 @@
 # 코드 리뷰 보고서 — 메모리 · 성능 · 서버 폴링/읽기 비용 (2026-07-30)
 
 > **반영 현황 (같은 날 처리)**: 전 항목 완료 — P1~P9, M1~M3(캐시 상한·트레이 훅 포함),
-> F1~F3(아바타 인코딩 memoize·uploadedAvatars 영속화·FCM 토큰 방별 쓰기·알림 아바타
+> F1~F3(아바타 인코딩 memoize·uploadedAvatars 영속화(데스크톱은 메모리 한정 — L4)·FCM 토큰 방별 쓰기·알림 아바타
 > 캐시·ChatScreen remember·주석 정정), P3 근본 수정(방별 파일 캐시 — 재시작에도
 > 커서 유지, `~/.pbp-desktop/cache/`, 로그 초기화·방 나가기 시 삭제).
 > 콘솔 확인: DB 리전 = asia-northeast3 (사용자 확인, firebase-security.md 기록).

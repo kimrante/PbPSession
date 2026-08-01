@@ -120,9 +120,21 @@ class PbpRepository(private val db: AppDatabase) {
      * 상대(모바일)가 어디까지 읽었는지. 로컬 전용 방이거나 상대가 데스크톱이면 null —
      * 읽음 확인은 모바일끼리만 성립한다.
      */
-    fun observePeerReadAt(remoteId: String?) =
-        if (remoteId == null) kotlinx.coroutines.flow.flowOf(null)
-        else syncManager?.observePeerReadAt(remoteId) ?: kotlinx.coroutines.flow.flowOf(null)
+    fun observePeerState(remoteId: String?) =
+        if (remoteId == null) kotlinx.coroutines.flow.flowOf(SyncManager.PeerState())
+        else syncManager?.observePeerState(remoteId)
+            ?: kotlinx.coroutines.flow.flowOf(SyncManager.PeerState())
+
+    /** 입력 이벤트가 있을 때만 — 스로틀은 SyncManager가 한다 */
+    suspend fun pushTyping(roomId: Long, name: String) {
+        val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
+        syncManager?.pushTyping(remoteId, name)
+    }
+
+    suspend fun clearTyping(roomId: Long) {
+        val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
+        syncManager?.clearTyping(remoteId)
+    }
 
     /**
      * 발화 프로필 교체. 화면에 안내 메시지를 남기지 않는다 —

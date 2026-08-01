@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -97,6 +98,9 @@ import kotlinx.coroutines.withContext
 /** 입력 영역 — 프로필 스트립·판정 팔레트·잡담 토글·입력줄 (리뷰 B3) */
 
 @OptIn(ExperimentalFoundationApi::class)
+/** 입력 중 표시 줄 높이 — 문구가 있든 없든 같아야 입력 영역이 위아래로 튀지 않는다 */
+private val TYPING_ROW_HEIGHT = 14.dp
+
 /** 커서 이동용 방향키 — 입력창 안에서만 쓰이고 포커스 이동으로 새어 나가면 안 된다 */
 private val ARROW_KEYS = setOf(
     Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
@@ -112,6 +116,11 @@ internal fun InputZone(
     onAddProfile: () -> Unit,
     onSend: (String, Boolean) -> Unit,
     rule: String,
+    /** "○○님이 입력 중…" — 없으면 자리만 비워 둔다(높이는 늘 같다) */
+    typingLabel: String? = null,
+    /** 실제로 글자가 바뀔 때만 */
+    onTyping: () -> Unit = {},
+    onTypingStopped: () -> Unit = {},
 ) {
     val tokens = Pbp.colors
     // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록.
@@ -128,7 +137,15 @@ internal fun InputZone(
         com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
     }
     val onOocToggle = { oocOn = !oocOn }
-    val onInputChange = { text: String -> input = text }
+    val onInputChange = { text: String ->
+        val changed = text != input
+        input = text
+        // 입력 이벤트가 실제로 있을 때만 알린다. 비우면 즉시 끈다 —
+        // 포커스만 있거나 써 둔 글을 그대로 두는 상태는 입력 중이 아니다.
+        if (changed) {
+            if (text.isBlank()) onTypingStopped() else onTyping()
+        }
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -176,6 +193,21 @@ internal fun InputZone(
                     ) { Text("＋", color = tokens.inkDim, fontSize = 15.sp) }
                     Text("추가", fontSize = 10.sp, color = tokens.inkDim)
                 }
+            }
+        }
+        // 입력 중 표시 — 자리를 늘 차지해 상대가 치기 시작해도 입력 영역이 튀지 않는다
+        Box(
+            Modifier.fillMaxWidth().height(TYPING_ROW_HEIGHT),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (typingLabel != null) {
+                Text(
+                    typingLabel,
+                    fontSize = 10.sp,
+                    color = tokens.inkDim,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
             }
         }
         Spacer(Modifier.height(PbpDimens.gap2))
@@ -265,6 +297,8 @@ internal fun InputZone(
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
+                    // 입력창을 벗어나면 치던 것을 멈춘 것으로 본다
+                    .onFocusChanged { if (!it.isFocused) onTypingStopped() }
                     // 입력창이 처리하지 않은 방향키를 여기서 삼킨다. 그냥 두면 컴포즈의
                     // 포커스 이동이 받아 커서가 말풍선·버튼으로 튀어 나간다
                     .onKeyEvent { event -> event.key in ARROW_KEYS }

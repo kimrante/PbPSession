@@ -138,11 +138,27 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
      * 넣으면 메시지 1건마다 Firestore 리스너가 해제·재등록된다.
      */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val peerReadAt = room
+    val peerState = room
         .map { it?.remoteId }
         .distinctUntilChanged()
-        .flatMapLatest { repo.observePeerReadAt(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .flatMapLatest { repo.observePeerState(it) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            com.pbp.app.sync.SyncManager.PeerState(),
+        )
+
+    /**
+     * 입력 중 알림 — 입력창에서 **실제로 글자가 바뀔 때만** 부른다.
+     * 포커스만 있는 상태, 써 둔 글을 그대로 두는 상태는 입력 중이 아니다.
+     */
+    fun notifyTyping() = viewModelScope.launch {
+        val name = profiles.value.find { it.id == room.value?.activeProfileId }?.name ?: return@launch
+        repo.pushTyping(roomId, name)
+    }
+
+    /** 전송·비움·포커스 해제 때 즉시 끈다 */
+    fun notifyTypingStopped() = viewModelScope.launch { repo.clearTyping(roomId) }
 
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
 
@@ -248,7 +264,21 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
     // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
-    val peerReadAt by vm.peerReadAt.collectAsStateWithLifecycle()
+    val peerState by vm.peerState.collectAsStateWithLifecycle()
+    val peerReadAt = peerState.readAt
+    // 입력 중 표시는 시간이 지나면 저절로 꺼져야 한다. 상대가 손을 멈추면 아무것도
+    // 오지 않으므로(그게 설계다) 화면이 스스로 만료를 확인한다 — 네트워크는 쓰지 않는다.
+    var typingNow by remember { mutableStateOf(0L) }
+    LaunchedEffect(peerState.typingUntil) {
+        while (peerState.typingUntil > System.currentTimeMillis()) {
+            typingNow = System.currentTimeMillis()
+            kotlinx.coroutines.delay(500)
+        }
+        typingNow = System.currentTimeMillis()
+    }
+    val typingLabel = peerState.typingName
+        ?.takeIf { peerState.typingUntil > typingNow }
+        ?.let { "${it}님이 입력 중…" }
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
@@ -561,8 +591,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc ->
                         vm.send(text, ooc)
+                        vm.notifyTypingStopped()
                         pendingScrollToLatest = true // 내 전송·판정은 항상 최신으로 스크롤
                     },
+                    typingLabel = typingLabel,
+                    onTyping = vm::notifyTyping,
+                    onTypingStopped = vm::notifyTypingStopped,
                     rule = room?.rule ?: com.pbp.shared.Rules.COC7,
                 )
             }

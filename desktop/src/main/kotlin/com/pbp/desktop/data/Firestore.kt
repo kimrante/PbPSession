@@ -346,6 +346,45 @@ class FirestoreRest(
         )
     }
 
+    /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */
+    private val lastTypingPushAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * 입력 중 알림 — **쓰기만 한다.** 데스크톱은 상대의 입력 중을 표시하지 않으므로
+     * 읽기가 늘지 않는다(모바일 쪽은 이미 붙어 있는 members 리스너로 받는다).
+     * 실제로 글자가 바뀔 때만 부르고, 손을 멈추면 typingUntil이 지나 저절로 꺼진다.
+     */
+    fun pushTyping(remoteRoomId: String, name: String) {
+        val now = System.currentTimeMillis()
+        if (now - (lastTypingPushAt[remoteRoomId] ?: 0L) < Protocol.TYPING_THROTTLE_MS) return
+        lastTypingPushAt[remoteRoomId] = now
+        val memberId = uid ?: return
+        patch(
+            "$base/rooms/$remoteRoomId/members/$memberId?key=$apiKey" +
+                "&updateMask.fieldPaths=typingUntil&updateMask.fieldPaths=typingName" +
+                "&updateMask.fieldPaths=platform",
+            gson.toJson(
+                fields(
+                    mapOf(
+                        "typingUntil" to now + Protocol.TYPING_TTL_MS,
+                        "typingName" to name,
+                        "platform" to Protocol.Platform.DESKTOP,
+                    )
+                )
+            ),
+        )
+    }
+
+    /** 전송·비움 때 즉시 끈다. 올린 적이 없으면 쓰지 않는다 */
+    fun clearTyping(remoteRoomId: String) {
+        if (lastTypingPushAt.remove(remoteRoomId) == null) return
+        val memberId = uid ?: return
+        patch(
+            "$base/rooms/$remoteRoomId/members/$memberId?key=$apiKey&updateMask.fieldPaths=typingUntil",
+            gson.toJson(fields(mapOf("typingUntil" to 0L))),
+        )
+    }
+
     /** 초대 코드 → 방 매핑 문서 생성 (방 생성 시) */
     fun createInviteCode(code: String, remoteRoomId: String): Boolean = patch(
         "$base/inviteCodes/$code?key=$apiKey",

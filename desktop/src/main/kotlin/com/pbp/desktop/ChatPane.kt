@@ -129,6 +129,8 @@ internal fun ChatPane(
     onExport: () -> Unit,
     /** 입력창 "?" — 지원 문법 도움말 오버레이 열기 */
     onShowMarkupHelp: () -> Unit,
+    onTyping: () -> Unit,
+    onTypingStopped: () -> Unit,
     /** 캡처 범위 (messages 인덱스). null이면 캡처 모드가 아니다 */
     captureIdx: IntRange?,
     onCaptureTap: (Int) -> Unit,
@@ -283,6 +285,8 @@ internal fun ChatPane(
                 onAddProfile = onAddProfile,
                 onEditProfile = onEditProfile,
                 onShowMarkupHelp = onShowMarkupHelp,
+                onTyping = onTyping,
+                onTypingStopped = onTypingStopped,
             )
         }
     }
@@ -774,6 +778,9 @@ internal fun InputZone(
     onAddProfile: () -> Unit,
     onEditProfile: (Int) -> Unit,
     onShowMarkupHelp: () -> Unit,
+    /** 실제로 글자가 바뀔 때만 — 가만히 있는 상태는 입력 중이 아니다 */
+    onTyping: () -> Unit = {},
+    onTypingStopped: () -> Unit = {},
 ) {
     var input by remember { mutableStateOf("") }
     var oocOn by remember { mutableStateOf(false) }
@@ -930,7 +937,13 @@ internal fun InputZone(
                 }
                 BasicTextField(
                     value = input,
-                    onValueChange = { input = it },
+                    onValueChange = { text ->
+                        val changed = text != input
+                        input = text
+                        if (changed) {
+                            if (text.isBlank()) onTypingStopped() else onTyping()
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                         // 입력창이 처리하지 않은 방향키를 삼킨다 — 그냥 두면 포커스가
                         // 말풍선·버튼으로 옮겨 가 커서가 입력창을 벗어난다 (모바일과 동일)

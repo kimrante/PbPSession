@@ -390,6 +390,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             )
         } else sender
         lastLocalSendAt.set(System.currentTimeMillis()) // 폴 주기 즉시 복귀 신호 (P2)
+        // 보냈으면 더 치고 있는 게 아니다 — 즉시 끈다
+        scope.launch(Dispatchers.IO) { firestore.clearTyping(room.remoteId) }
         scope.launch(Dispatchers.IO) {
             // 프로필 이미지가 있으면 축소본을 방 avatars 문서로 업로드 (모바일과 동일 스키마)
             val avatarId = effectiveSender.imagePath?.let { path ->
@@ -678,6 +680,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onEditProfile = { editProfileIndex = it },
                 onExport = ::exportLogs,
                 onShowMarkupHelp = { overlay = OverlayKind.MarkupHelp },
+                // 데스크톱은 입력 중을 올리기만 한다 — 표시하지 않으므로 읽기가 늘지 않는다
+                onTyping = {
+                    val name = profiles.getOrNull(room.activeProfileIndex)?.name
+                    if (name != null) {
+                        scope.launch(Dispatchers.IO) { firestore.pushTyping(room.remoteId, name) }
+                    }
+                },
+                onTypingStopped = {
+                    scope.launch(Dispatchers.IO) { firestore.clearTyping(room.remoteId) }
+                },
                 captureIdx = captureIdx,
                 onCaptureTap = ::onCaptureTap,
                 onCaptureExit = ::exitCapture,

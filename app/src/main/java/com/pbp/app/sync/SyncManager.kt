@@ -222,28 +222,94 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }
 
     /**
-     * 상대(모바일)가 어디까지 읽었는지 — members 문서의 lastReadAt 중 내 것을 뺀 최대값.
-     * 상대가 데스크톱뿐이면 null을 흘려 호출부가 "읽음" 표시를 생략한다.
+     * 상대 멤버 문서에서 뽑아 쓰는 상태.
+     *
+     * @param readAt 상대(모바일)가 읽은 마지막 메시지 시각. 데스크톱뿐이면 null
+     * @param typingUntil 이 시각까지 "입력 중". 플랫폼을 가리지 않는다 — PC에서 치는 것도 보인다
      */
-    fun observePeerReadAt(remoteRoomId: String): kotlinx.coroutines.flow.Flow<Long?> =
+    data class PeerState(
+        val readAt: Long? = null,
+        val typingUntil: Long = 0L,
+        val typingName: String? = null,
+    )
+
+    /**
+     * 상대 상태 구독 — **리스너는 하나**다. 읽음 확인과 입력 중 표시가 같은 members
+     * 스냅샷에서 나오므로, 입력 중 표시를 켜도 읽기가 추가로 늘지 않는다.
+     */
+    fun observePeerState(remoteRoomId: String): kotlinx.coroutines.flow.Flow<PeerState> =
         kotlinx.coroutines.flow.callbackFlow {
             ensureAuth() // 규칙상 인증 없이는 읽을 수 없다
             val registration = firestore.collection("rooms").document(remoteRoomId)
                 .collection("members")
                 .addSnapshotListener { snapshot, error ->
                     if (error != null || snapshot == null) {
-                        trySend(null)
+                        trySend(PeerState())
                         return@addSnapshotListener
                     }
-                    val peerRead = snapshot.documents
-                        .filter { it.id != myUid }
+                    val peers = snapshot.documents.filter { it.id != myUid }
+                    // 읽음 확인은 모바일끼리만 — 데스크톱은 lastReadAt을 쓰지 않는다
+                    val peerRead = peers
                         .filter { it.getString(Protocol.Field.PLATFORM) == Protocol.Platform.ANDROID }
                         .mapNotNull { it.getLong(Protocol.Field.LAST_READ_AT) }
                         .maxOrNull()
-                    trySend(peerRead)
+                    val typing = peers.maxByOrNull {
+                        it.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L
+                    }
+                    trySend(
+                        PeerState(
+                            readAt = peerRead,
+                            typingUntil = typing?.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L,
+                            typingName = typing?.getString(Protocol.Field.TYPING_NAME),
+                        )
+                    )
                 }
             awaitClose { registration.remove() }
         }
+
+    /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */
+    private val lastTypingPushAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * 입력 중 알림 — **실제 입력 이벤트가 있을 때만** 부른다.
+     * 포커스만 있고 가만히 있거나, 써 둔 글을 그대로 두고 있는 상태는 입력 중이 아니다.
+     * 손을 멈추면 아무것도 쓰지 않고 typingUntil이 지나 저절로 꺼진다.
+     */
+    suspend fun pushTyping(remoteRoomId: String, name: String) {
+        val now = System.currentTimeMillis()
+        val last = lastTypingPushAt[remoteRoomId] ?: 0L
+        if (now - last < Protocol.TYPING_THROTTLE_MS) return
+        lastTypingPushAt[remoteRoomId] = now
+        runCatching {
+            ensureAuth()
+            firestore.collection("rooms").document(remoteRoomId)
+                .collection("members").document(myUid)
+                .set(
+                    mapOf(
+                        Protocol.Field.TYPING_UNTIL to now + Protocol.TYPING_TTL_MS,
+                        Protocol.Field.TYPING_NAME to name,
+                        Protocol.Field.PLATFORM to Protocol.Platform.ANDROID,
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge(),
+                )
+                .await()
+        }
+    }
+
+    /** 전송·입력창 비움·포커스 해제 때 즉시 끈다. 올린 적이 없으면 쓰지 않는다 */
+    suspend fun clearTyping(remoteRoomId: String) {
+        if (lastTypingPushAt.remove(remoteRoomId) == null) return
+        runCatching {
+            ensureAuth()
+            firestore.collection("rooms").document(remoteRoomId)
+                .collection("members").document(myUid)
+                .set(
+                    mapOf(Protocol.Field.TYPING_UNTIL to 0L),
+                    com.google.firebase.firestore.SetOptions.merge(),
+                )
+                .await()
+        }
+    }
 
     /** 참여/공유 더블탭 가드 — 같은 키의 동시 실행을 차단한다 (L2) */
     private val joinInFlight = java.util.concurrent.ConcurrentHashMap<String, Boolean>()

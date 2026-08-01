@@ -142,7 +142,8 @@ rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeC
                                   (backgroundKey는 v0.8.0부터 기기 로컬 전용 — 서버에 쓰지 않는다)
 rooms/{roomId}/messages/{msgId}   type, body, diceExpr, diceOutcome, sender*, isOoc,
                                   createdAt, editedAt, authorUid, avatarId
-rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt, platform, lastReadAt
+rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt, platform, lastReadAt,
+                                  typingUntil, typingName
 rooms/{roomId}/avatars/{md5}      data (base64, 긴 변 256px)
 inviteCodes/{code}                roomId
 ```

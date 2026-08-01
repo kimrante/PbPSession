@@ -295,9 +295,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 손을 멈추면 아무것도 쓰지 않고 typingUntil이 지나 저절로 꺼진다.
      */
     suspend fun pushTyping(remoteRoomId: String, name: String) {
+        // 스로틀은 typingDue가 이미 판정했다 — 여기서 또 재면 ms 차이로 한 번씩
+        // 조용히 건너뛰어 표시가 깜빡인다 (V5)
         val now = System.currentTimeMillis()
-        val last = lastTypingPushAt[remoteRoomId] ?: 0L
-        if (now - last < Protocol.TYPING_THROTTLE_MS) return
         lastTypingPushAt[remoteRoomId] = now
         runCatching {
             ensureAuth()
@@ -315,8 +315,14 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
-    /** 전송·입력창 비움·포커스 해제 때 즉시 끈다. 올린 적이 없으면 쓰지 않는다 */
-    suspend fun clearTyping(remoteRoomId: String) {
+    /**
+     * 전송·입력창 비움·포커스 해제 때 즉시 끈다. 올린 적이 없으면 쓰지 않는다.
+     *
+     * 스로틀 슬롯도 함께 비운다 — 안 그러면 전송 직후 다시 치기 시작해도 최대 스로틀
+     * 시간만큼 상대에게 안 보인다 (V5).
+     */
+    suspend fun clearTyping(remoteRoomId: String, localRoomId: Long? = null) {
+        localRoomId?.let { lastTypingDueAt.remove(it) }
         if (lastTypingPushAt.remove(remoteRoomId) == null) return
         runCatching {
             ensureAuth()

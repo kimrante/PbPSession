@@ -28,6 +28,11 @@ data class Message(
     val isOoc: Boolean,
     val editedAt: Long?,
     val createdAt: Long,
+    /**
+     * 서버에 기록된 시각 — 폴 커서 전용. 표시·정렬에는 쓰지 않는다 (V1).
+     * 이 필드가 없는 옛 문서는 createdAt으로 떨어진다.
+     */
+    val syncAt: Long,
     val authorUid: String,
     val avatarId: String?,
 )
@@ -251,9 +256,13 @@ class FirestoreRest(
     }
 
     // ── Firestore 값 인코딩/디코딩 ────────────────────────
+    /** 타임스탬프로 써야 하는 값 — 정수로 쓰면 범위 질의에서 통째로 빠진다 (V1) */
+    class ServerTime(val millis: Long)
+
     private fun v(value: Any): JsonObject {
         val o = JsonObject()
         when (value) {
+            is ServerTime -> o.addProperty("timestampValue", rfc3339(value.millis))
             is String -> o.addProperty("stringValue", value)
             is Boolean -> o.addProperty("booleanValue", value)
             is Long -> o.addProperty("integerValue", value.toString())
@@ -274,6 +283,14 @@ class FirestoreRest(
 
     private fun JsonObject.str(name: String): String? =
         getAsJsonObject("fields")?.getAsJsonObject(name)?.get("stringValue")?.asString
+
+    /** Firestore 타임스탬프 문자열 ↔ epoch 밀리초 */
+    private fun rfc3339(millis: Long): String =
+        java.time.Instant.ofEpochMilli(millis).toString()
+
+    private fun JsonObject.timestamp(name: String): Long? =
+        getAsJsonObject("fields")?.getAsJsonObject(name)?.get("timestampValue")?.asString
+            ?.let { runCatching { java.time.Instant.parse(it).toEpochMilli() }.getOrNull() }
 
     private fun JsonObject.long(name: String): Long? =
         getAsJsonObject("fields")?.getAsJsonObject(name)?.get("integerValue")?.asString?.toLongOrNull()
@@ -445,6 +462,8 @@ class FirestoreRest(
         isOoc = doc.bool("isOoc"),
         editedAt = doc.long("editedAt"),
         createdAt = doc.long("createdAt") ?: 0L,
+        // syncAt이 없는 옛 문서는 createdAt으로 — 커서가 뒤로 가지 않게만 하면 된다
+        syncAt = doc.timestamp("syncAt") ?: doc.long("createdAt") ?: 0L,
         authorUid = doc.str("authorUid") ?: "",
         avatarId = doc.str("avatarId"),
     )
@@ -475,20 +494,40 @@ class FirestoreRest(
     }
 
     /**
-     * 증분 폴링 — createdAt >= (since - 여유 30초)인 메시지를 읽는다 (P1-4).
-     * 시계 오차·동시 타임스탬프·커밋 순서 역전으로 인한 영구 누락을 여유 윈도우로 흡수하고,
-     * 중복은 호출부의 docId dedup이 걸러낸다.
+     * 증분 폴링 — **syncAt(서버 기록 시각)** 기준으로 읽는다 (V1).
+     *
+     * 예전에는 createdAt(작성 기기의 시계)으로 잘랐는데, 오프라인에서 쓴 메시지가 나중에
+     * 커밋되면 커서보다 과거 시각으로 도착해 영영 조회되지 않았다. syncAt은 커밋 시점에
+     * 정해지므로 그런 역전이 없다. 표시 순서는 여전히 createdAt이다.
+     *
+     * 여유 윈도는 그대로 둔다 — 같은 시각 동시 커밋과 시계 오차를 흡수하고,
+     * 중복은 호출부의 docId dedup이 거른다.
      * @return null이면 오류 — 호출부는 커서를 전진시키면 안 된다
      */
-    fun listMessagesSince(remoteRoomId: String, since: Long, windowMs: Long = 30_000): List<Message>? {
+    fun listMessagesSince(
+        remoteRoomId: String,
+        since: Long,
+        windowMs: Long = 30_000,
+        /**
+         * true면 옛 방식(createdAt)으로 조회한다. **syncAt이 없는 문서**는 타임스탬프
+         * 질의에 아예 걸리지 않으므로 — 상대가 아직 구버전이면 그 메시지가 통째로
+         * 안 보인다 — 가끔 이 경로로 훑어 메꾼다 (V1 전환 안전망).
+         */
+        byCreatedAt: Boolean = false,
+    ): List<Message>? {
         if (since <= 0) return listMessages(remoteRoomId)
         // 윈도는 폴 주기×2로 동적 (P5) — 고정 30초는 활성 채팅에서 건당 ~12배 재과금
         val from = (since - windowMs).coerceAtLeast(0)
-        val query = """
+        val query = if (byCreatedAt) """
             {"structuredQuery":{"from":[{"collectionId":"messages"}],
              "where":{"fieldFilter":{"field":{"fieldPath":"createdAt"},"op":"GREATER_THAN_OR_EQUAL",
                       "value":{"integerValue":"$from"}}},
              "orderBy":[{"field":{"fieldPath":"createdAt"},"direction":"ASCENDING"}]}}
+        """.trimIndent() else """
+            {"structuredQuery":{"from":[{"collectionId":"messages"}],
+             "where":{"fieldFilter":{"field":{"fieldPath":"syncAt"},"op":"GREATER_THAN_OR_EQUAL",
+                      "value":{"timestampValue":"${rfc3339(from)}"}}},
+             "orderBy":[{"field":{"fieldPath":"syncAt"},"direction":"ASCENDING"}]}}
         """.trimIndent()
         val res = runCatching {
             val r = http.send(

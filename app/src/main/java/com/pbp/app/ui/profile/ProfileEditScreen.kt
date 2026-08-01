@@ -135,6 +135,11 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     var pickedPath by rememberSaveable {
         mutableStateOf<String?>(null) // 크롭 완료된 512px 파일
     }
+    // 저장 전 프로세스가 죽으면 그 파일은 다음 시작 때 정리(ImageGc) 대상이라 사라진다 —
+    // 경로만 복원되면 빈 아바타가 저장된다. 없으면 비운다 (V4)
+    LaunchedEffect(Unit) {
+        pickedPath?.let { if (!java.io.File(it).exists()) pickedPath = null }
+    }
     var customTarget by remember { mutableStateOf<String?>(null) } // "name" | "bubble"
     val stats = rememberSaveable(
         saver = listSaver(

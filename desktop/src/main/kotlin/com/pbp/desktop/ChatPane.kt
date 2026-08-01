@@ -119,7 +119,7 @@ internal fun ChatPane(
     profiles: List<Profile>,
     myUid: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
-    firestore: FirestoreRest,
+    firestore: FirestoreRest?,
     onSend: (String, Boolean, (Boolean, Boolean) -> Unit) -> Unit,
     onSwitchProfile: (Int) -> Unit,
     onAddProfile: () -> Unit,
@@ -144,6 +144,8 @@ internal fun ChatPane(
     onToggleCaptureExcludeOoc: () -> Unit,
     /** 끝점이 정해졌는가 — 한 건만 고른 상태와 "아직 끝 미선택"을 구분한다 (R7) */
     captureEndPicked: Boolean,
+    /** 캡처 실패 사유 — 하단 바에 그대로 보여 준다 (V3) */
+    captureError: String?,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -271,6 +273,7 @@ internal fun ChatPane(
                     },
                     overLimit = picked.size > CAPTURE_MAX,
                     rendering = captureRendering,
+                    error = captureError,
                     onMake = onCaptureMake,
                     onCancel = onCaptureExit,
                     withBackground = captureWithBackground,
@@ -306,7 +309,7 @@ internal fun MessageBlock(
     myUid: String,
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
-    firestore: FirestoreRest,
+    firestore: FirestoreRest?,
     grouped: Boolean = false,
     /** false면 시간을 감춘다 — 같은 사람이 같은 분에 이어 보낸 중간 메시지 */
     showTime: Boolean = true,
@@ -536,7 +539,7 @@ internal fun BubbleRow(
     myUid: String,
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
-    firestore: FirestoreRest,
+    firestore: FirestoreRest?,
     overrideBody: String? = null,
     overrideName: String? = null,
     overrideBubbleColor: Long? = null,
@@ -722,18 +725,21 @@ internal fun MessageAvatar(
     message: Message,
     room: JoinedRoom,
     avatarCache: MutableMap<String, ImageBitmap?>,
-    firestore: FirestoreRest,
+    firestore: FirestoreRest?,
 ) {
     val avatarId = message.avatarId
     // 이펙트는 항상 컴포지션에 있어야 한다 — 조건 안에 두면 캐시 쓰기가 리컴포지션을
     // 유발해 자기 자신을 취소시킨다(R1). 중복 fetch는 스냅샷이 아닌 별도 집합으로 막는다.
     LaunchedEffect(avatarId, room.remoteId) {
         if (avatarId == null) return@LaunchedEffect
+        // 캡처 렌더는 firestore를 넘기지 않는다 — 그리는 중에 서버로 나가는 길 자체를
+        // 없앤다(프리페치가 이미 캐시를 채워 둔다). 미스는 빈 원 (V7)
+        val remote = firestore ?: return@LaunchedEffect
         if (avatarCache[avatarId] != null) return@LaunchedEffect
         if (!avatarsInFlight.add(avatarId)) return@LaunchedEffect
         try {
             val bitmap = withContext(Dispatchers.IO) {
-                fetchAvatarCached(firestore, room.remoteId, avatarId)?.let { bytes ->
+                fetchAvatarCached(remote, room.remoteId, avatarId)?.let { bytes ->
                     runCatching {
                         org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
                     }.onFailure {

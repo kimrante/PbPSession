@@ -138,7 +138,7 @@ class PbpRepository(private val db: AppDatabase) {
 
     suspend fun clearTyping(roomId: Long) {
         val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
-        syncManager?.clearTyping(remoteId)
+        syncManager?.clearTyping(remoteId, roomId)
     }
 
     /**

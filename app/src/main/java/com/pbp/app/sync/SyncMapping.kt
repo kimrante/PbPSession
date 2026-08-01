@@ -22,6 +22,9 @@ object SyncMapping {
         "isOoc" to message.isOoc,
         "editedAt" to message.editedAt,
         "createdAt" to message.createdAt,
+        // 커밋 시점의 서버 시계 — 오프라인 큐에 오래 머물러도 이 값은 실제 도착 순서다.
+        // 데스크톱 폴 커서가 이 필드를 본다 (V1)
+        "syncAt" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
         "authorUid" to authorUid,
     )
 

@@ -41,6 +41,8 @@ internal fun CaptureBar(
     startLabel: String?,
     overLimit: Boolean,
     rendering: Boolean,
+    /** 실패 사유 — 있으면 부제 자리에 그대로 보여 준다 (V3) */
+    error: String? = null,
     onMake: () -> Unit,
     onCancel: () -> Unit,
     withBackground: Boolean,
@@ -50,6 +52,7 @@ internal fun CaptureBar(
 ) {
     val enabled = timeRange != null && !overLimit && !rendering
     val subtitle = when {
+        error != null -> error
         overLimit -> "한 번에 ${CAPTURE_MAX}개까지 고를 수 있어요"
         rendering -> "이미지를 만들고 있어요…"
         timeRange != null -> timeRange
@@ -75,7 +78,7 @@ internal fun CaptureBar(
                 subtitle,
                 fontSize = 10.sp,
                 lineHeight = 14.sp,
-                color = if (overLimit) Tokens.Danger else Tokens.InkDim,
+                color = if (overLimit || error != null) Tokens.Danger else Tokens.InkDim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

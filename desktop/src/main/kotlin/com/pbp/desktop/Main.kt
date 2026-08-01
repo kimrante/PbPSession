@@ -209,6 +209,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var captureRendering by remember { mutableStateOf(false) }
     var captureWithBackground by remember { mutableStateOf(config.captureWithBackground) }
     var captureExcludeOoc by remember { mutableStateOf(config.captureExcludeOoc) }
+    var captureError by remember { mutableStateOf<String?>(null) }
     var messageEdit by remember { mutableStateOf<Message?>(null) }
     var messageDelete by remember { mutableStateOf<Message?>(null) }
 
@@ -290,6 +291,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 흡수해야 한다. 미포커스(30초) → 활성(2.5초)으로 바뀌는 첫 폴에서 윈도가 5초뿐이면,
         // 직전 30초 공백에 시계 오차·늦은 커밋으로 도착한 메시지가 커서 뒤로 밀려 영구 누락된다 (M1)
         var lastPollAt = System.currentTimeMillis()
+        // 구버전 상대가 쓴 메시지는 syncAt이 없어 새 질의에 안 걸린다 — 가끔 옛 방식으로
+        // 훑어 메꾼다. 10분에 한 번이라 비용은 무시할 수준 (V1 전환 안전망)
+        var lastLegacySweepAt = System.currentTimeMillis()
         try {
         while (isActive) {
             val now = System.currentTimeMillis()
@@ -304,10 +308,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             runCatching {
                 // 중복 윈도 = max(다음 주기, 직전 공백)×2 (P5·M1) — 주기가 짧아지는
                 // 순간에도 직전 긴 공백을 덮는다
-                val windowMs = maxOf(interval, now - lastPollAt) * 2
+                // 절전에서 깨면 공백이 몇 시간일 수 있다 — 그만큼 되읽으면 과금만 늘고
+                // 그 구간은 어차피 커서가 뒤에 있어 잡힌다. 상한을 둔다 (V6)
+                val windowMs = (maxOf(interval, now - lastPollAt) * 2)
+                    .coerceAtMost(DesktopTiming.WINDOW_CAP_MS)
                 lastPollAt = now
+                val legacySweep = now - lastLegacySweepAt >= DesktopTiming.LEGACY_SWEEP_MS
+                if (legacySweep) lastLegacySweepAt = now
                 val fetched = withContext(Dispatchers.IO) {
-                    firestore.listMessagesSince(room.remoteId, lastCreatedAt, windowMs = windowMs)
+                    firestore.listMessagesSince(
+                        room.remoteId, lastCreatedAt, windowMs = windowMs,
+                        byCreatedAt = legacySweep,
+                    )
                 }
                 // null = 오류 — 커서를 전진시키지 않고 다음 폴링에서 재시도 (P1-6)
                 if (fetched != null && fetched.isNotEmpty()) {
@@ -335,7 +347,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             .sortedBy { it.createdAt }
                         session.messages = messages
                     }
-                    lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.createdAt })
+                    // 커서는 서버 기록 시각(syncAt) 기준 — createdAt으로 재면 오프라인에서
+                    // 쓴 메시지가 커서 뒤로 떨어져 영영 안 보인다 (V1).
+                    // 옛 방식으로 훑은 회차는 커서를 밀지 않는다 — 기준이 다른 값이다
+                    if (!legacySweep) {
+                        lastCreatedAt = maxOf(lastCreatedAt, fetched.maxOf { it.syncAt })
+                    }
                     session.lastCreatedAt = lastCreatedAt
                     // 파일 캐시 저장 — 30초 스로틀 (P3 근본 수정)
                     if (now - session.lastSavedAt > DesktopTiming.CACHE_SAVE_THROTTLE_MS) {
@@ -528,6 +545,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
     // 목업 03장의 탭 규칙 — 모바일 onCaptureTap과 같은 동작
     fun onCaptureTap(tapped: Int) {
+        captureError = null
         val range = captureIdx ?: return
         val next = captureRangeAfterTap(range, tapped)
         captureStart = messages[next.first].docId
@@ -564,24 +582,31 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         }
                     }
             }
-            val pages = withContext(Dispatchers.Default) {
+            val result = withContext(Dispatchers.Default) {
                 runCatching {
                     com.pbp.desktop.export.CaptureRenderer.render(
                         room = room,
                         messages = picked,
                         myUid = uid,
                         avatarCache = avatarCache,
-                        firestore = firestore,
+                        // 렌더러에는 넘기지 않는다 — 아바타는 위에서 미리 받아 캐시에
+                        // 채웠고, 그리는 중 서버 요청이 나갈 길을 아예 없앤다 (V7)
+                        firestore = null,
                         withBackground = config.captureWithBackground,
                         excludeOoc = config.captureExcludeOoc,
                     )
-                }.getOrDefault(emptyList())
+                }
             }
             captureRendering = false
+            val pages = result.getOrDefault(emptyList())
             if (pages.isEmpty()) {
-                System.err.println("캡처 이미지를 만들지 못했습니다")
+                // 창 안에 보여 준다 — stderr는 사용자가 볼 수 없다 (V3)
+                captureError = result.exceptionOrNull()
+                    ?.let { "캡처 실패 — ${it.message}" }
+                    ?: "캡처 이미지를 만들지 못했습니다"
                 return@launch
             }
+            captureError = null
             withContext(Dispatchers.IO) {
                 val fd = java.awt.FileDialog(null as java.awt.Frame?, "캡처 이미지 저장", java.awt.FileDialog.SAVE)
                 fd.file = "PbP_${room.name}.png"
@@ -748,6 +773,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 },
                 captureExcludeOoc = captureExcludeOoc,
                 captureEndPicked = captureEnd != null,
+                captureError = captureError,
                 onToggleCaptureExcludeOoc = {
                     captureExcludeOoc = !captureExcludeOoc
                     config.captureExcludeOoc = captureExcludeOoc

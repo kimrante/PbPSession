@@ -61,7 +61,7 @@ object CaptureRenderer {
         messages: List<Message>,
         myUid: String,
         avatarCache: MutableMap<String, ImageBitmap?>,
-        firestore: FirestoreRest,
+        firestore: FirestoreRest?,
         withBackground: Boolean,
         /** 잡담(OOC)을 이미지에서 뺀다 — 선택 범위는 그대로, 그릴 때만 거른다 (모바일과 동일) */
         excludeOoc: Boolean = false,
@@ -69,16 +69,40 @@ object CaptureRenderer {
         @Suppress("NAME_SHADOWING")
         val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
         if (messages.isEmpty()) return emptyList()
-        val chunks = splitByHeight(messages)
-        // 예외를 삼키지 않는다 — 중간 청크만 사라지면 "1/3, 3/3"짜리 캡처가 조용히 저장된다.
-        // 모바일은 v0.7.2에서 같은 패턴을 걷어냈다 (R5)
-        return chunks.mapIndexed { index, chunk ->
+        // 추정으로 1차 분할한 뒤, 실제로 재 보고 넘치면 그 청크만 쪼개 다시 그린다.
+        // 추정은 아무리 다듬어도 어긋나므로 **실측이 최종 판정**이어야 한다 (V2 — 모바일과 같은 방식).
+        // 예외는 삼키지 않는다 — 중간 청크만 사라지면 "1/3, 3/3"짜리 캡처가 조용히 저장된다 (R5)
+        val pending = ArrayDeque(splitByHeight(messages))
+        val rendered = mutableListOf<List<Message>>()
+        val pages = mutableListOf<ByteArray>()
+        while (pending.isNotEmpty()) {
+            val chunk = pending.removeFirst()
+            val bytes = try {
+                // 장수가 확정된 뒤에 낙관 번호를 넣어야 해서 여기서는 비워 둔다
+                renderOne(room, chunk, myUid, avatarCache, firestore, withBackground, page = null)
+            } catch (tooTall: TooTallException) {
+                if (chunk.size <= 1) throw tooTall // 한 건이 상한을 넘으면 나눌 수가 없다
+                val half = chunk.size / 2
+                pending.addFirst(chunk.drop(half))
+                pending.addFirst(chunk.take(half))
+                continue
+            }
+            rendered += chunk
+            pages += bytes
+        }
+        if (pages.size <= 1) return pages
+        // 장수가 정해졌으니 여러 장이면 낙관에 n/N을 붙여 다시 그린다
+        return rendered.mapIndexed { index, chunk ->
             renderOne(
                 room, chunk, myUid, avatarCache, firestore, withBackground,
-                page = if (chunks.size > 1) "${index + 1}/${chunks.size}" else null,
+                page = "${index + 1}/${rendered.size}",
             )
         }
     }
+
+    /** 실측 높이가 [MAX_HEIGHT_PX]에 닿았다 — 청크를 쪼개 다시 그려야 한다 (모바일과 같은 계약) */
+    class TooTallException(val heightPx: Int) :
+        IllegalStateException("한 장에 담기지 않는 높이(${heightPx}px)")
 
     @OptIn(ExperimentalComposeUiApi::class)
     private fun renderOne(
@@ -86,7 +110,7 @@ object CaptureRenderer {
         messages: List<Message>,
         myUid: String,
         avatarCache: MutableMap<String, ImageBitmap?>,
-        firestore: FirestoreRest,
+        firestore: FirestoreRest?,
         withBackground: Boolean,
         page: String?,
     ): ByteArray {
@@ -101,7 +125,11 @@ object CaptureRenderer {
         ImageComposeScene(widthPx, MAX_HEIGHT_PX, Density(RENDER_DENSITY), content = probe).use {
             it.render()
         }
-        val height = measured.coerceIn(1, MAX_HEIGHT_PX)
+        // 잘라내지 않는다 — 예전에는 여기서 클램프해 페이지 하단(마지막 말풍선·낙관)이
+        // 아무 말 없이 사라졌다. 프로브 씬이 상한 높이라 그 이상은 재지도 못하므로,
+        // 상한에 닿았다면 넘친 것으로 보고 호출부가 쪼개게 한다 (V2)
+        if (measured >= MAX_HEIGHT_PX) throw TooTallException(measured)
+        val height = measured.coerceAtLeast(1)
         val content: @Composable () -> Unit = {
             CaptureSheet(room, messages, myUid, avatarCache, firestore, withBackground, page)
         }
@@ -152,7 +180,7 @@ private fun CaptureSheet(
     messages: List<Message>,
     myUid: String,
     avatarCache: MutableMap<String, ImageBitmap?>,
-    firestore: FirestoreRest,
+    firestore: FirestoreRest?,
     withBackground: Boolean,
     page: String?,
 ) {

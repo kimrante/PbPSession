@@ -66,6 +66,12 @@ object DesktopTiming {
     const val CACHE_SAVE_THROTTLE_MS = 30_000L
     /** 긴 대기 중 전송·포커스 변화를 감지하는 단위 */
     const val WAKE_STEP_MS = 1_000L
+    /** 구버전 상대(syncAt 없음) 메시지를 메꾸는 훑기 주기 (V1 전환 안전망) */
+    const val LEGACY_SWEEP_MS = 600_000L
+
+    /** 중복 윈도 상한 — 절전 복귀처럼 공백이 긴 경우 되읽기 비용을 자른다 (V6) */
+    const val WINDOW_CAP_MS = 600_000L
+
     /** 내 설정 변경 직후 폴링이 옛 서버 값으로 되돌리지 않도록 하는 유예 */
     const val META_FREEZE_MS = 15_000L
 }

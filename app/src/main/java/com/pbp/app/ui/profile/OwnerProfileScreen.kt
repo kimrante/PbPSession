@@ -29,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +83,12 @@ fun OwnerProfileScreen(nav: NavController) {
     var textColor by rememberSaveable { mutableStateOf(OwnerProfile.textColor) }
     /** null=닫힘, "owner"=오너 컬러, "text"=말풍선 글씨색 */
     var customTarget by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // 저장하지 않은 채 프로세스가 죽으면 그 파일은 다음 시작 때 정리(ImageGc) 대상이라
+    // 사라진다 — 경로만 복원되면 빈 아바타가 저장된다. 없으면 비운다 (V4)
+    LaunchedEffect(Unit) {
+        imagePath?.let { if (!java.io.File(it).exists()) imagePath = null }
+    }
 
     val canSave = name.isNotBlank()
     // 미설정 상태에서는 나갈 수 없다 (목업 02-B)

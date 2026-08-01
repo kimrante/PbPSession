@@ -33,6 +33,19 @@ object Protocol {
         const val SENDER_TEXT_COLOR = "senderTextColor"
         const val IS_OOC = "isOoc"
         const val CREATED_AT = "createdAt"
+
+        /**
+         * 서버에 실제로 기록된 시각 — **폴링 커서 전용**이다. 표시·정렬은 [CREATED_AT]
+         * 그대로 쓴다.
+         *
+         * createdAt은 작성한 기기의 시계라, 오프라인에서 쓴 메시지가 몇 시간 뒤에
+         * 커밋되면 커서보다 과거 시각으로 도착해 데스크톱 폴이 영영 못 본다(V1).
+         * 이 필드는 커밋 시점에 정해지므로 그런 역전이 없다.
+         *
+         * **타입은 타임스탬프로 통일**해야 한다 — Firestore는 타입이 다르면 범위 질의가
+         * 아예 걸리지 않아, 한쪽이 정수로 쓰면 그 메시지는 조회에서 통째로 빠진다.
+         */
+        const val SYNC_AT = "syncAt"
         const val EDITED_AT = "editedAt"
         const val AUTHOR_UID = "authorUid"
         const val AVATAR_ID = "avatarId"

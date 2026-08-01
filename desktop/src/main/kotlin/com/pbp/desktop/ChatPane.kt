@@ -139,6 +139,8 @@ internal fun ChatPane(
     captureRendering: Boolean,
     captureWithBackground: Boolean,
     onToggleCaptureBackground: () -> Unit,
+    captureExcludeOoc: Boolean,
+    onToggleCaptureExcludeOoc: () -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -270,6 +272,8 @@ internal fun ChatPane(
                     onCancel = onCaptureExit,
                     withBackground = captureWithBackground,
                     onToggleBackground = onToggleCaptureBackground,
+                    excludeOoc = captureExcludeOoc,
+                    onToggleExcludeOoc = onToggleCaptureExcludeOoc,
                 )
             } else
             // 입력 영역 — 전송 시 스크롤 플래그를 세워 실제 도착까지 유지 (N4)

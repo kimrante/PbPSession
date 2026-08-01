@@ -70,6 +70,48 @@ fun CapturePreviewScreen(nav: NavController) {
     // 공유용 캐시는 화면을 벗어날 때 비운다
     DisposableEffect(Unit) { onDispose { CaptureSaver.clearShareCache(context) } }
 
+    // 배경·잡담 설정은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
+    val rerender = {
+        val request = CaptureHolder.request
+        val activity = context.findActivity()
+        if (request != null && activity != null) {
+            busy = true
+            scope.launch {
+                val result = runCatching {
+                    CaptureRenderer.render(
+                        activity = activity,
+                        roomName = request.roomName,
+                        backgroundKey = request.backgroundKey,
+                        messages = request.messages,
+                        withBackground = CaptureSettings.withBackground,
+                        excludeOoc = CaptureSettings.excludeOoc,
+                    )
+                }
+                busy = false
+                val pages = result.getOrDefault(emptyList())
+                when {
+                    // 고른 범위가 전부 잡담이면 남는 게 없다 — 설정을 되돌려 준다
+                    pages.isEmpty() && CaptureSettings.excludeOoc &&
+                        request.messages.all { it.isOoc } -> {
+                        CaptureSettings.setExcludeOoc(context, false)
+                        Toast.makeText(
+                            context,
+                            "고른 범위가 전부 잡담이라 뺄 수 없습니다",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    pages.isEmpty() -> Toast.makeText(
+                        context,
+                        "다시 그리지 못했습니다 — ${result.exceptionOrNull()?.message}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    else -> CaptureHolder.set(request, pages)
+                }
+            }
+        }
+        Unit
+    }
+
     val doSave = {
         if (!busy && bitmaps.isNotEmpty()) {
             busy = true
@@ -176,67 +218,24 @@ fun CapturePreviewScreen(nav: NavController) {
                     .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(999.dp))
-                        .clickable(enabled = !busy) {
-                            CaptureSettings.set(context, !CaptureSettings.withBackground)
-                            val request = CaptureHolder.request
-                            val activity = context.findActivity()
-                            if (request != null && activity != null) {
-                                busy = true
-                                scope.launch {
-                                    // 배경은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
-                                    val result = runCatching {
-                                        CaptureRenderer.render(
-                                            activity = activity,
-                                            roomName = request.roomName,
-                                            backgroundKey = request.backgroundKey,
-                                            messages = request.messages,
-                                            withBackground = CaptureSettings.withBackground,
-                                        )
-                                    }
-                                    busy = false
-                                    val pages = result.getOrDefault(emptyList())
-                                    if (pages.isEmpty()) {
-                                        Toast.makeText(
-                                            context,
-                                            "다시 그리지 못했습니다 — ${result.exceptionOrNull()?.message}",
-                                            Toast.LENGTH_LONG,
-                                        ).show()
-                                    } else {
-                                        CaptureHolder.set(request, pages)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(vertical = PbpDimens.gap1),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val on = CaptureSettings.withBackground
-                    Box(
-                        Modifier
-                            .size(width = 34.dp, height = 20.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (on) tokens.signature else tokens.ink.copy(alpha = .16f)),
-                        contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+                Column(Modifier.weight(1f)) {
+                    CaptureToggle(
+                        label = "배경 포함",
+                        checked = CaptureSettings.withBackground,
+                        enabled = !busy,
                     ) {
-                        Box(
-                            Modifier
-                                .padding(2.dp)
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(tokens.panel)
-                        )
+                        CaptureSettings.setBackground(context, !CaptureSettings.withBackground)
+                        rerender()
                     }
-                    Spacer(Modifier.width(PbpDimens.gap2))
-                    Text(
-                        "배경 포함",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = tokens.ink,
-                    )
+                    Spacer(Modifier.height(PbpDimens.gap1))
+                    CaptureToggle(
+                        label = "잡담 제외",
+                        checked = CaptureSettings.excludeOoc,
+                        enabled = !busy,
+                    ) {
+                        CaptureSettings.setExcludeOoc(context, !CaptureSettings.excludeOoc)
+                        rerender()
+                    }
                 }
                 Text(
                     "공유",
@@ -281,5 +280,41 @@ fun CapturePreviewScreen(nav: NavController) {
                 )
             }
         }
+    }
+}
+
+/** 캡처 설정 토글 — 두 줄이 같은 모양이어야 해서 부품으로 뺐다 */
+@Composable
+private fun CaptureToggle(
+    label: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+) {
+    val tokens = Pbp.colors
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(enabled = enabled, onClick = onToggle)
+            .padding(vertical = PbpDimens.gap1),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(width = 34.dp, height = 20.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(if (checked) tokens.signature else tokens.ink.copy(alpha = .16f)),
+            contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(
+                Modifier
+                    .padding(2.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(tokens.panel)
+            )
+        }
+        Spacer(Modifier.width(PbpDimens.gap2))
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
     }
 }

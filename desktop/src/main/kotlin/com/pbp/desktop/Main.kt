@@ -203,6 +203,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var captureEnd by remember { mutableStateOf<String?>(null) }
     var captureRendering by remember { mutableStateOf(false) }
     var captureWithBackground by remember { mutableStateOf(config.captureWithBackground) }
+    var captureExcludeOoc by remember { mutableStateOf(config.captureExcludeOoc) }
     var messageEdit by remember { mutableStateOf<Message?>(null) }
     var messageDelete by remember { mutableStateOf<Message?>(null) }
 
@@ -517,6 +518,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             (range.last + 1).coerceIn(0, messages.size),
         ).toList()
         if (picked.isEmpty() || picked.size > CAPTURE_MAX) return
+        if (captureExcludeOoc && picked.all { it.isOoc }) {
+            System.err.println("고른 범위가 전부 잡담이라 뺄 수 없습니다")
+            return
+        }
         captureRendering = true
         val uid = authorUid()
         scope.launch {
@@ -529,6 +534,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         avatarCache = avatarCache,
                         firestore = firestore,
                         withBackground = config.captureWithBackground,
+                        excludeOoc = config.captureExcludeOoc,
                     )
                 }.getOrDefault(emptyList())
             }
@@ -699,6 +705,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onToggleCaptureBackground = {
                     captureWithBackground = !captureWithBackground
                     config.captureWithBackground = captureWithBackground
+                    persist()
+                },
+                captureExcludeOoc = captureExcludeOoc,
+                onToggleCaptureExcludeOoc = {
+                    captureExcludeOoc = !captureExcludeOoc
+                    config.captureExcludeOoc = captureExcludeOoc
                     persist()
                 },
             )

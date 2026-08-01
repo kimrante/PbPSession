@@ -90,13 +90,20 @@ object CaptureRenderer {
     /**
      * @return 만들어진 비트맵 목록(여러 장이면 순서대로). 실패하면 빈 목록.
      */
+    /**
+     * @param excludeOoc 잡담(OOC)을 이미지에서 뺀다. 선택 범위는 그대로 두고 **그릴 때만**
+     *   거르므로, 머리글의 개수·시각 범위도 걸러낸 뒤 기준이 된다.
+     */
     suspend fun render(
         activity: ComponentActivity,
         roomName: String,
         backgroundKey: String,
         messages: List<Message>,
         withBackground: Boolean,
+        excludeOoc: Boolean = false,
     ): List<Bitmap> {
+        @Suppress("NAME_SHADOWING")
+        val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
         if (messages.isEmpty()) return emptyList()
         // 아바타는 Coil AsyncImage라 두 프레임만으로는 안 붙는다 — 캐시를 먼저 채운다
         preloadAvatars(activity, messages, backgroundKey.takeIf { withBackground })

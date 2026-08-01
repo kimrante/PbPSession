@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * 캡처 이미지 설정 — 지금은 '배경 포함' 하나.
+ * 캡처 이미지 설정 — 배경 포함 / 잡담 제외.
  * [OwnerProfile]과 같은 SharedPreferences·같은 규칙을 쓴다.
  */
 object CaptureSettings {
@@ -15,15 +15,26 @@ object CaptureSettings {
     var withBackground by mutableStateOf(true)
         private set
 
+    /** 켜면 잡담(OOC)은 이미지에서 빠진다 — 범위 선택 화면에서는 그대로 보인다 */
+    var excludeOoc by mutableStateOf(false)
+        private set
+
     private fun prefs(context: Context) =
         context.getSharedPreferences("pbp-settings", Context.MODE_PRIVATE)
 
     fun load(context: Context) {
-        withBackground = prefs(context).getBoolean("captureWithBackground", true)
+        val p = prefs(context)
+        withBackground = p.getBoolean("captureWithBackground", true)
+        excludeOoc = p.getBoolean("captureExcludeOoc", false)
     }
 
-    fun set(context: Context, value: Boolean) {
+    fun setBackground(context: Context, value: Boolean) {
         withBackground = value
         prefs(context).edit().putBoolean("captureWithBackground", value).apply()
+    }
+
+    fun setExcludeOoc(context: Context, value: Boolean) {
+        excludeOoc = value
+        prefs(context).edit().putBoolean("captureExcludeOoc", value).apply()
     }
 }

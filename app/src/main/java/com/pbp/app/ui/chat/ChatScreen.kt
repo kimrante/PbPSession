@@ -182,6 +182,10 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
             backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
             messages = picked,
         )
+        if (CaptureSettings.excludeOoc && picked.all { it.isOoc }) {
+            onDone("고른 범위가 전부 잡담입니다")
+            return@launch
+        }
         val result = runCatching {
             CaptureRenderer.render(
                 activity = activity,
@@ -189,6 +193,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
                 backgroundKey = request.backgroundKey,
                 messages = request.messages,
                 withBackground = CaptureSettings.withBackground,
+                excludeOoc = CaptureSettings.excludeOoc,
             )
         }.onFailure {
             android.util.Log.w("PbpCapture", "캡처 렌더 실패", it)

@@ -45,6 +45,8 @@ internal fun CaptureBar(
     onCancel: () -> Unit,
     withBackground: Boolean,
     onToggleBackground: () -> Unit,
+    excludeOoc: Boolean,
+    onToggleExcludeOoc: () -> Unit,
 ) {
     val enabled = timeRange != null && !overLimit && !rendering
     val subtitle = when {
@@ -80,6 +82,8 @@ internal fun CaptureBar(
         }
         Spacer(Modifier.width(DesktopDimens.gap3))
         GhostButton(if (withBackground) "배경 포함 ✓" else "배경 포함", Modifier, onToggleBackground)
+        Spacer(Modifier.width(DesktopDimens.gap2))
+        GhostButton(if (excludeOoc) "잡담 제외 ✓" else "잡담 제외", Modifier, onToggleExcludeOoc)
         Spacer(Modifier.width(DesktopDimens.gap2))
         GhostButton("취소", Modifier, onCancel)
         Spacer(Modifier.width(DesktopDimens.gap2))

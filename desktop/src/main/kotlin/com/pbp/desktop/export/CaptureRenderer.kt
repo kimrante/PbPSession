@@ -60,7 +60,11 @@ object CaptureRenderer {
         avatarCache: MutableMap<String, ImageBitmap?>,
         firestore: FirestoreRest,
         withBackground: Boolean,
+        /** 잡담(OOC)을 이미지에서 뺀다 — 선택 범위는 그대로, 그릴 때만 거른다 (모바일과 동일) */
+        excludeOoc: Boolean = false,
     ): List<ByteArray> {
+        @Suppress("NAME_SHADOWING")
+        val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
         if (messages.isEmpty()) return emptyList()
         val chunks = splitByHeight(messages)
         return chunks.mapIndexedNotNull { index, chunk ->

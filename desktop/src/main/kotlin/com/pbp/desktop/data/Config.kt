@@ -54,6 +54,8 @@ class AppConfig private constructor(
     @Volatile var ownerTextColor: Long? = null,
     /** 캡처 이미지에 방 배경을 포함할지 (모바일 CaptureSettings와 같은 설정) */
     @Volatile var captureWithBackground: Boolean = true,
+    /** 캡처 이미지에서 잡담(OOC)을 뺄지 (모바일 CaptureSettings와 같은 설정) */
+    @Volatile var captureExcludeOoc: Boolean = false,
     /**
      * 최근 사용한 커스텀 색 — **자리별로 따로** (name/bubble/owner/theme).
      * 각 목록은 최신순 최대 [RECENT_COLORS_MAX]개, 넘치면 가장 오래된 것부터
@@ -107,6 +109,7 @@ class AppConfig private constructor(
                 ownerImagePath = loaded?.ownerImagePath,
                 ownerTextColor = loaded?.ownerTextColor,
                 captureWithBackground = loaded?.captureWithBackground ?: true,
+                captureExcludeOoc = loaded?.captureExcludeOoc ?: false,
                 // v0.5.0의 공용 목록은 어느 자리에 쓴 색인지 알 수 없어 승계하지 않는다
                 recentColorsBySlot = loaded?.recentColorsBySlot.orEmpty()
                     .mapValues { (_, v) -> v.take(RECENT_COLORS_MAX).toMutableList() }
@@ -131,6 +134,7 @@ class AppConfig private constructor(
         val ownerImagePath: String? = null,
         val ownerTextColor: Long? = null,
         val captureWithBackground: Boolean? = null,
+        val captureExcludeOoc: Boolean? = null,
         val recentColorsBySlot: Map<String, MutableList<Long>>? = null,
     )
 
@@ -144,7 +148,7 @@ class AppConfig private constructor(
         Saved(
             deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont,
             ownerName, ownerColor, ownerImagePath, ownerTextColor, captureWithBackground,
-            recentColorsBySlot.toMap(),
+            captureExcludeOoc, recentColorsBySlot.toMap(),
         )
     )
 

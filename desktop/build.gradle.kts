@@ -30,7 +30,7 @@ compose.desktop {
         mainClass = "com.pbp.desktop.MainKt"
         nativeDistributions {
             packageName = "PbP"
-            packageVersion = "0.9.3" // 앱 versionName과 동일 스킴 (리뷰 E)
+            packageVersion = "0.9.4" // 앱 versionName과 동일 스킴 (리뷰 E)
         }
     }
 }

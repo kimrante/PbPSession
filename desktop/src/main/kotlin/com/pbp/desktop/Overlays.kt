@@ -267,10 +267,37 @@ internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
 
 @Composable
 internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
+    // 데스크톱에는 토스트가 없다 — 안내 문구를 잠깐 바꿔 복사됐음을 알린다
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2_000)
+            copied = false
+        }
+    }
     OverlayScaffold("초대 코드", onDismiss) {
         Text(
             code, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
             textAlign = TextAlign.Center, // 모바일과 동일하게 센터 (CLAUDE.md §0-(a))
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(DesktopDimens.rCell))
+                // 클릭하면 바로 복사 — 여섯 글자를 눈으로 옮겨 적을 이유가 없다 (모바일과 동일)
+                .clickable {
+                    runCatching {
+                        java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(
+                            java.awt.datatransfer.StringSelection(code), null,
+                        )
+                    }
+                    copied = true
+                }
+                .padding(vertical = DesktopDimens.gap2),
+        )
+        Text(
+            if (copied) "초대 코드를 복사했습니다" else "클릭하면 복사됩니다",
+            fontSize = 11.sp,
+            color = if (copied) Tokens.SignatureInk else Tokens.InkDim,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))

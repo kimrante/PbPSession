@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -329,6 +330,29 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                         fontWeight = FontWeight.Bold,
                         color = tokens.signature,
                         letterSpacing = 4.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(PbpDimens.rCell))
+                            // 코드를 탭하면 바로 복사 — 여섯 글자를 눈으로 옮겨 적을 이유가 없다
+                            .clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as android.content.ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("PbP 초대 코드", code)
+                                )
+                                Toast.makeText(
+                                    context,
+                                    "초대 코드를 복사했습니다",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            .padding(vertical = PbpDimens.gap2),
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        "탭하면 복사됩니다",
+                        fontSize = 11.sp,
+                        color = tokens.inkDim,
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
                     )

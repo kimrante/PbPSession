@@ -70,7 +70,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -467,6 +471,22 @@ internal fun MessageBlock(
 /** 판정 요청 카드의 상태 — 모바일 JudgeState와 같은 규칙 (J5) */
 internal enum class JudgeState { MyTurn, Waiting, Done }
 
+/**
+ * "가류 세이시로, **LUK** 판정" — 값 이름만 파랑으로 (모바일과 같은 규칙).
+ * body를 자르지 않고 구조 필드로 다시 조립한다 — 대상 이름에 쉼표가 있으면
+ * 문자열 자르기는 엉뚱한 곳에서 끊긴다. 필드가 없는 구버전 메시지는 body 그대로.
+ */
+private fun judgeLabel(message: Message): AnnotatedString {
+    val target = message.judgeTarget
+    val stat = message.diceExpr?.let { ProfileStats.statNameOf(it) }
+    if (target == null || stat == null) return AnnotatedString(message.body)
+    return buildAnnotatedString {
+        append("$target, ")
+        withStyle(SpanStyle(color = Tokens.StatBlue)) { append(stat) }
+        append(" 판정")
+    }
+}
+
 /** 판정 요청 카드 — 세 상태의 크기가 같아야 목록이 흔들리지 않는다 (모바일과 같은 규격) */
 @Composable
 private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
@@ -485,23 +505,14 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(
-                    message.body,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (state == JudgeState.Done) Tokens.InkDim else Tokens.Ink,
-                )
-                Text(
-                    when (state) {
-                        JudgeState.MyTurn -> "클릭하면 판정을 굴립니다"
-                        JudgeState.Waiting -> "${message.judgeTarget ?: "상대"}의 응답을 기다리는 중"
-                        JudgeState.Done -> "판정 완료"
-                    },
-                    fontSize = 10.sp,
-                    color = Tokens.InkDim,
-                )
-            }
+            // 상태는 오른쪽 버튼 하나로 충분하다 — 문구로 한 번 더 말하지 않는다
+            Text(
+                judgeLabel(message),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Tokens.Ink,
+                modifier = Modifier.alpha(if (state == JudgeState.Done) .55f else 1f),
+            )
             Spacer(Modifier.width(DesktopDimens.gap3))
             Box(
                 Modifier

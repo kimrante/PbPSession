@@ -103,7 +103,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     val tokens = Pbp.colors
     val room by vm.room.collectAsState()
     var showCustomTheme by remember { mutableStateOf(false) }
-    var shareCode by remember { mutableStateOf<String?>(null) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
     val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
@@ -256,12 +255,15 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             SectionTitle("공유·기타")
             SettingRow(
                 title = "방 공유 · 초대 코드",
-                subtitle = room?.inviteCode?.let { "코드 $it — 탭하여 확인" } ?: "초대 코드를 만들어 상대를 부릅니다",
+                subtitle = room?.inviteCode?.let { "코드 $it — 탭하면 복사됩니다" }
+                    ?: "초대 코드를 만들어 상대를 부릅니다",
             ) {
                 // 코드가 이미 있어도 share를 다시 호출한다 — 멤버 등록·코드 매핑·백필이
                 // 중간에 실패해 '죽은 초대코드'가 된 방을 멱등 복구 (R2)
                 vm.share { code ->
-                    if (code != null) shareCode = code
+                    // 코드를 보여 주는 창을 한 번 더 여는 대신 바로 복사한다 —
+                    // 여섯 글자를 확인하려고 단계를 하나 더 밟을 이유가 없다
+                    if (code != null) copyInviteCode(context, code)
                     else Toast.makeText(context, "공유에 실패했습니다. 네트워크를 확인해주세요.", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -318,55 +320,6 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
         )
     }
 
-    shareCode?.let { code ->
-        AlertDialog(
-            onDismissRequest = { shareCode = null },
-            title = { Text("초대 코드") },
-            text = {
-                Column {
-                    Text(
-                        code,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = tokens.signature,
-                        letterSpacing = 4.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(PbpDimens.rCell))
-                            // 코드를 탭하면 바로 복사 — 여섯 글자를 눈으로 옮겨 적을 이유가 없다
-                            .clickable {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                    as android.content.ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    android.content.ClipData.newPlainText("PbP 초대 코드", code)
-                                )
-                                Toast.makeText(
-                                    context,
-                                    "초대 코드를 복사했습니다",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                            .padding(vertical = PbpDimens.gap2),
-                        textAlign = TextAlign.Center,
-                    )
-                    Text(
-                        "탭하면 복사됩니다",
-                        fontSize = 11.sp,
-                        color = tokens.inkDim,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(PbpDimens.gap2))
-                    Text(
-                        "상대가 방 목록의 '참여'에서 이 코드를 입력하면 같은 방에 연결됩니다.",
-                        fontSize = 13.sp,
-                        color = tokens.inkDim,
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = { shareCode = null }) { Text("닫기") } },
-        )
-    }
 }
 
 @Composable
@@ -461,3 +414,11 @@ private fun SettingRow(title: String, subtitle: String, onClick: () -> Unit) {
 private fun Modifier.outlinedCell(color: Color): Modifier = this
     .clip(RoundedCornerShape(PbpDimens.rCell))
     .border(1.5.dp, color, RoundedCornerShape(PbpDimens.rCell))
+
+/** 초대 코드를 클립보드에 담고, 무엇을 담았는지 그대로 알린다 */
+private fun copyInviteCode(context: Context, code: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE)
+        as android.content.ClipboardManager
+    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PbP 초대 코드", code))
+    Toast.makeText(context, "초대 코드 \"$code\" 복사했습니다", Toast.LENGTH_SHORT).show()
+}

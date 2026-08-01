@@ -294,7 +294,7 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
                 .padding(vertical = DesktopDimens.gap2),
         )
         Text(
-            if (copied) "초대 코드를 복사했습니다" else "클릭하면 복사됩니다",
+            if (copied) "초대 코드 \"$code\" 복사했습니다" else "클릭하면 복사됩니다",
             fontSize = 11.sp,
             color = if (copied) Tokens.SignatureInk else Tokens.InkDim,
             textAlign = TextAlign.Center,

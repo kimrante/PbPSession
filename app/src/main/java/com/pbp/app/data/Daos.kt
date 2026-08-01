@@ -72,6 +72,10 @@ data class RemoteMessageRow(val remoteId: String, val body: String, val editedAt
 
 @Dao
 interface ProfileDao {
+    /** 방에서 쓸 수 있는 프로필 — 판정 굴림처럼 1회성 조회용 (J6) */
+    @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId")
+    suspend fun forRoom(roomId: Long): List<CharacterProfile>
+
     /** 아직 가리켜지는 이미지 경로 — 고아 정리(ImageGc)용 */
     @Query("SELECT DISTINCT imagePath FROM profiles WHERE imagePath IS NOT NULL")
     suspend fun allImagePaths(): List<String>
@@ -179,6 +183,10 @@ interface MessageDao {
            GROUP BY m.roomId"""
     )
     fun observeUnreadCounts(): Flow<List<UnreadCount>>
+
+    /** 이 요청에 대한 굴림 결과가 이미 있는가 — 연타 중복 방지 (J6) */
+    @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE roomId = :roomId AND judgeRef = :key)")
+    suspend fun hasJudgeResult(roomId: Long, key: String): Boolean
 
     /** 아직 가리켜지는 이미지 경로 — 고아 정리(ImageGc)가 지우면 안 되는 것들 */
     @Query("SELECT DISTINCT senderImagePath FROM messages WHERE senderImagePath IS NOT NULL")

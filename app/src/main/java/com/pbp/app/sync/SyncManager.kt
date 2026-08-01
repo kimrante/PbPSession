@@ -231,6 +231,19 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         val readAt: Long? = null,
         val typingUntil: Long = 0L,
         val typingName: String? = null,
+        /** 상대 기기가 올린 캐릭터 명단 — 판정 요청 대상 목록 (J0) */
+        val peerCharacters: List<PeerCharacter> = emptyList(),
+    )
+
+    /**
+     * 상대 기기의 캐릭터 한 명. **값은 이름만** 들어 있다 — 숫자는 굴리는 쪽에서 그때
+     * 자기 프로필에서 읽는다.
+     */
+    data class PeerCharacter(
+        val name: String,
+        val emoji: String,
+        val nameColor: Long?,
+        val stats: List<String>,
     )
 
     /**
@@ -260,8 +273,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     // 내 시계 기준 TTL을 넘지 않게 잘라 잔상을 막는다 (읽음 확인과 달리
                     // 타이핑만 두 시계를 비교하는 구조라 이 보정이 필요하다, P2)
                     val cap = System.currentTimeMillis() + Protocol.TYPING_TTL_MS
+                    val characters = peers.flatMap { doc ->
+                        parseCharacters(doc.get(Protocol.Field.CHARACTERS))
+                    }
                     trySend(
                         PeerState(
+                            peerCharacters = characters,
                             readAt = peerRead,
                             typingUntil = minOf(
                                 typing?.getLong(Protocol.Field.TYPING_UNTIL) ?: 0L,
@@ -273,6 +290,56 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 }
             awaitClose { registration.remove() }
         }
+
+    /**
+     * 스냅샷의 characters 파싱 — 모양이 어긋난 항목은 그 항목만 버린다.
+     * 상대가 쓴 데이터라 형식을 믿을 수 없다 (SyncMapping.fromMap과 같은 방어 방식).
+     */
+    private fun parseCharacters(raw: Any?): List<PeerCharacter> {
+        val list = raw as? List<*> ?: return emptyList()
+        return list.mapNotNull { item ->
+            val map = item as? Map<*, *> ?: return@mapNotNull null
+            val name = (map[Protocol.Character.NAME] as? String)?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            PeerCharacter(
+                name = name,
+                emoji = map[Protocol.Character.EMOJI] as? String ?: "",
+                nameColor = (map[Protocol.Character.NAME_COLOR] as? Number)?.toLong(),
+                stats = (map[Protocol.Character.STATS] as? List<*>)
+                    ?.filterIsInstance<String>()
+                    ?.filter { it.isNotBlank() }
+                    .orEmpty(),
+            )
+        }
+    }
+
+    /** 방마다 마지막으로 올린 캐릭터 명단 — 같은 내용을 다시 쓰지 않기 위한 가드 */
+    private val pushedCharacters = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * 이 기기의 캐릭터 명단을 멤버 문서에 올린다 (J0).
+     *
+     * 읽음 확인·입력 중이 쓰는 members 리스너에 얹히므로 **추가 읽기가 0**이다.
+     * 명단이 그대로면 쓰지 않는다 — 프로필은 자주 바뀌지 않아 실제 쓰기는 거의 없다.
+     */
+    suspend fun pushCharacters(remoteRoomId: String, characters: List<Map<String, Any?>>) {
+        val signature = characters.joinToString("|") { entry ->
+            "${entry[Protocol.Character.NAME]}:" +
+                (entry[Protocol.Character.STATS] as? List<*>)?.joinToString(",")
+        }
+        if (pushedCharacters[remoteRoomId] == signature) return
+        runCatching {
+            ensureAuth()
+            firestore.collection("rooms").document(remoteRoomId)
+                .collection("members").document(myUid)
+                .set(
+                    mapOf(Protocol.Field.CHARACTERS to characters),
+                    // 다른 필드(lastReadAt·typingUntil·fcmToken)를 지우면 안 된다
+                    com.google.firebase.firestore.SetOptions.merge(),
+                )
+                .await()
+        }.onSuccess { pushedCharacters[remoteRoomId] = signature }
+    }
 
     /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */
     private val lastTypingPushAt = java.util.concurrent.ConcurrentHashMap<String, Long>()

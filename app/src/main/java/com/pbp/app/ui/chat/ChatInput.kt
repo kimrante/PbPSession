@@ -118,6 +118,8 @@ internal fun InputZone(
     rule: String,
     /** "○○님이 입력 중…" — 없으면 자리만 비워 둔다(높이는 늘 같다) */
     typingLabel: String? = null,
+    /** GM 프로필로 말하는 중에만 보이는 판정 요청 (J2) */
+    onJudgeRequest: () -> Unit = {},
     /** 실제로 글자가 바뀔 때만 */
     onTyping: () -> Unit = {},
     onTypingStopped: () -> Unit = {},
@@ -135,6 +137,11 @@ internal fun InputZone(
     }
     val suggestions = remember(input, activeStats) {
         com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
+    }
+    // room.isMaster가 아니라 **지금 말하고 있는 프로필** 기준 — GM이 자기 NPC로
+    // 말하는 중에는 요청을 걸 수 없고, 그게 자연스럽다 (J2)
+    val gmActive = remember(profiles, activeId) {
+        profiles.find { it.id == activeId }?.isGm == true
     }
     val onOocToggle = { oocOn = !oocOn }
     val onInputChange = { text: String ->
@@ -211,6 +218,28 @@ internal fun InputZone(
             }
         }
         Spacer(Modifier.height(PbpDimens.gap2))
+        if (gmActive) {
+            // 판정 팔레트 칩과 같은 캡슐·같은 자리 — 위 프로필 스트립의 점선 '＋ 추가'와
+            // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2)
+            Box(
+                Modifier.heightIn(min = PbpDimens.touchTarget),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Text(
+                    "＋ 판정 요청",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.signatureInk,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(tokens.signature.copy(alpha = .14f))
+                        .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
+                        .clickable(onClick = onJudgeRequest)
+                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
+                )
+            }
+            Spacer(Modifier.height(PbpDimens.gap2))
+        }
         if (suggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 items(suggestions, key = { it }) { name ->

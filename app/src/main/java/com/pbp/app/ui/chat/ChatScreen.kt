@@ -74,6 +74,8 @@ import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.CaptureSettings
 import com.pbp.app.data.Message
+import com.pbp.app.data.judgeKey
+import com.pbp.app.data.numericStatNames
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
 import com.pbp.app.export.CaptureHolder
@@ -161,6 +163,29 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     fun notifyTypingStopped() = viewModelScope.launch { repo.clearTyping(roomId) }
 
     fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
+
+    // ── 판정 요청 ────────────────────────────────────────
+    init {
+        // 이 기기의 캐릭터 명단을 상대에게 알린다 — 명단이 그대로면 쓰지 않는다 (J0).
+        // 상대 GM의 요청 목록에 내 캐릭터가 뜨려면 이게 먼저 건너가야 한다.
+        viewModelScope.launch {
+            profiles.collect { list -> repo.pushCharacters(roomId, list) }
+        }
+    }
+
+    fun sendJudgeRequest(targetName: String, statName: String) = viewModelScope.launch {
+        val gm = profiles.value.find { it.id == room.value?.activeProfileId } ?: return@launch
+        repo.sendJudgeRequest(roomId, gm, targetName, statName)
+    }
+
+    /** @param onNeedValue 대상 캐릭터에 그 값이 없을 때 — 값 이름을 돌려준다 (J6) */
+    fun rollJudge(request: Message, onNeedValue: (String) -> Unit) = viewModelScope.launch {
+        repo.rollJudge(request)?.let(onNeedValue)
+    }
+
+    fun addStatAndRoll(request: Message, statName: String, value: Int) = viewModelScope.launch {
+        repo.addStatAndRoll(request, statName, value)
+    }
 
     // ── 캡처 ──────────────────────────────────────────────
     // 결과 비트맵은 CaptureHolder에 둔다 — viewModel()은 화면마다 저장소가 달라
@@ -303,6 +328,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     var showAddProfile by rememberSaveable {
         mutableStateOf(false)
     }
+    // 판정 요청 (J3) — 시트와 "값이 없어요" 다이얼로그
+    var judgeSheetOpen by rememberSaveable { mutableStateOf(false) }
+    var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
+    var needValueName by rememberSaveable { mutableStateOf("") }
     // 캡처 범위 — (시작 메시지 id, 끝 메시지 id). 끝이 null이면 아직 고르는 중.
     // 회전에도 유지되도록 다이얼로그 대상들과 같은 rememberSaveable 규칙 (N10)
     var captureStart by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -489,6 +518,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 val reversed = messages.asReversed()
                 // "읽음"은 상대가 읽은 내 메시지 중 가장 최신 1건에만 붙인다
                 val readMarkId = remember(messages, peerReadAt) { readMarkTarget(messages, peerReadAt) }
+                // 굴림이 끝난 요청 키 — 메시지마다 전체를 훑으면 O(N²)라 한 번만 만든다 (J5)
+                val rolledRefs = remember(messages) {
+                    messages.mapNotNullTo(mutableSetOf()) { it.judgeRef }
+                }
+                // 내가 가진 캐릭터 이름 — 이 이름이 대상이면 내가 굴릴 차례다
+                val myCharacters = remember(profiles) { profiles.map { it.name }.toSet() }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -524,6 +559,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                 showRead = message.id == readMarkId,
                                 themeColor = themeColor,
                                 mark = mark,
+                                judgeState = judgeStateOf(message, rolledRefs, myCharacters),
+                                onJudgeTap = {
+                                    vm.rollJudge(message) { statName ->
+                                        needValueFor = message.id
+                                        needValueName = statName
+                                    }
+                                },
                                 onTap = if (capturing) ({ onCaptureTap(idx) }) else null,
                                 // 캡처 모드에서는 편집·삭제 팝업을 잠근다
                                 onLongPress = { if (!capturing) actionTargetId = it.id },
@@ -600,11 +642,53 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         pendingScrollToLatest = true // 내 전송·판정은 항상 최신으로 스크롤
                     },
                     typingLabel = typingLabel,
+                    onJudgeRequest = { judgeSheetOpen = true },
                     onTyping = vm::notifyTyping,
                     onTypingStopped = vm::notifyTypingStopped,
                     rule = room?.rule ?: com.pbp.shared.Rules.COC7,
                 )
             }
+        }
+    }
+
+    if (judgeSheetOpen) {
+        // 내 캐릭터(GM 제외) + 상대가 올린 명단, 이름으로 중복 제거.
+        // 오너 프로필은 CharacterProfile이 아니라 애초에 이 목록에 들어오지 않는다.
+        val candidates = remember(profiles, peerState.peerCharacters) {
+            (
+                profiles.filterNot { it.isGm }.map {
+                    JudgeCandidate(it.name, it.emoji, it.nameColor, numericStatNames(it))
+                } + peerState.peerCharacters.map {
+                    JudgeCandidate(it.name, it.emoji, it.nameColor, it.stats)
+                }
+                ).distinctBy { it.name }
+        }
+        JudgeRequestSheet(
+            candidates = candidates,
+            rule = room?.rule ?: com.pbp.shared.Rules.COC7,
+            onDismiss = { judgeSheetOpen = false },
+            onSend = { targetName, statName ->
+                vm.sendJudgeRequest(targetName, statName)
+                judgeSheetOpen = false
+                pendingScrollToLatest = true
+            },
+        )
+    }
+
+    needValueFor?.let { requestId ->
+        val request = remember(messages, requestId) { messages.find { it.id == requestId } }
+        if (request == null) {
+            needValueFor = null
+        } else {
+            JudgeValueDialog(
+                targetName = request.judgeTarget ?: "",
+                statName = needValueName,
+                onDismiss = { needValueFor = null },
+                onConfirm = { value ->
+                    vm.addStatAndRoll(request, needValueName, value)
+                    needValueFor = null
+                },
+            )
         }
     }
 
@@ -680,4 +764,17 @@ fun ChatScreen(nav: NavController, roomId: Long) {
             dismissButton = { TextButton(onClick = { deleteTargetId = null }) { Text("취소") } },
         )
     }
+}
+
+/**
+ * 요청 카드의 상태 (J5) — 굴림 결과가 있으면 완료, 그 캐릭터가 내게 있으면 내 차례.
+ */
+internal fun judgeStateOf(
+    message: Message,
+    rolledRefs: Set<String>,
+    myCharacters: Set<String>,
+): JudgeState = when {
+    judgeKey(message) in rolledRefs -> JudgeState.Done
+    message.judgeTarget in myCharacters -> JudgeState.MyTurn
+    else -> JudgeState.Waiting
 }

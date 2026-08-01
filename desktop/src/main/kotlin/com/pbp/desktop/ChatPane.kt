@@ -146,6 +146,8 @@ internal fun ChatPane(
     captureEndPicked: Boolean,
     /** 캡처 실패 사유 — 하단 바에 그대로 보여 준다 (V3) */
     captureError: String?,
+    /** 판정 요청을 눌렀을 때 — 그 캐릭터를 가진 쪽에서만 호출된다 (J6) */
+    onJudgeRoll: (Message) -> Unit,
 ) {
     val theme = Color(room.themeColor)
     Box(Modifier.fillMaxSize()) {
@@ -221,6 +223,11 @@ internal fun ChatPane(
                 }
             }
             // 본문 최대 폭 720dp 중앙 정렬 — 초광폭에서 말풍선이 늘어지지 않게 (PC 규격)
+            // 굴림이 끝난 요청 키 — 메시지마다 전체를 훑으면 O(N²) (J5)
+            val rolledRefs = remember(messages) {
+                messages.mapNotNullTo(mutableSetOf()) { it.judgeRef }
+            }
+            val myCharacters = remember(profiles) { profiles.map { it.name }.toSet() }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 LazyColumn(
                     state = listState,
@@ -250,6 +257,12 @@ internal fun ChatPane(
                                 message, myUid, room, avatarCache, firestore, grouped,
                                 showTime = showTime,
                                 mark = mark,
+                                judgeState = when {
+                                    (message.docId in rolledRefs) -> JudgeState.Done
+                                    message.judgeTarget in myCharacters -> JudgeState.MyTurn
+                                    else -> JudgeState.Waiting
+                                },
+                                onJudgeTap = { onJudgeRoll(message) },
                                 onTap = if (captureIdx != null) ({ onCaptureTap(index) }) else null,
                                 // 캡처 모드에서는 편집·삭제 팝업을 잠근다
                                 onLongPress = { if (captureIdx == null) onMessageLongPress(it) },
@@ -317,6 +330,9 @@ internal fun MessageBlock(
     mark: CaptureMark = CaptureMark.NONE,
     /** 캡처 모드에서 행 전체를 클릭했을 때 */
     onTap: (() -> Unit)? = null,
+    /** 판정 요청 상태 — 화면에서 한 번 계산해 내려보낸다 (J5) */
+    judgeState: JudgeState = JudgeState.Waiting,
+    onJudgeTap: () -> Unit = {},
     onLongPress: (Message) -> Unit = {},
 ) {
     val mine = message.authorUid == myUid
@@ -327,6 +343,8 @@ internal fun MessageBlock(
     if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
     Box(wrapper) {
     when {
+        // 판정 요청 — 대상 캐릭터를 가진 쪽만 누를 수 있다 (J5)
+        message.type == "JUDGE" -> JudgeCard(message, judgeState, onJudgeTap)
         message.type == "SYSTEM" -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
@@ -440,6 +458,70 @@ internal fun MessageBlock(
             }
         }
     }
+    }
+}
+
+/** 판정 요청 카드의 상태 — 모바일 JudgeState와 같은 규칙 (J5) */
+internal enum class JudgeState { MyTurn, Waiting, Done }
+
+/** 판정 요청 카드 — 세 상태의 크기가 같아야 목록이 흔들리지 않는다 (모바일과 같은 규격) */
+@Composable
+private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
+    val border = if (state == JudgeState.MyTurn) 2.dp else 1.dp
+    val shape = RoundedCornerShape(DesktopDimens.rCard)
+    var box = Modifier
+        .clip(shape)
+        .background(Tokens.Panel)
+        .border(border, if (state == JudgeState.MyTurn) Tokens.Signature else Tokens.Line, shape)
+    if (state == JudgeState.MyTurn) box = box.clickable(onClick = onTap)
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            box.padding(
+                horizontal = DesktopDimens.gap3 - border + 1.dp,
+                vertical = DesktopDimens.gap3 - border + 1.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column {
+                Text(
+                    message.body,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (state == JudgeState.Done) Tokens.InkDim else Tokens.Ink,
+                )
+                Text(
+                    when (state) {
+                        JudgeState.MyTurn -> "클릭하면 판정을 굴립니다"
+                        JudgeState.Waiting -> "${message.judgeTarget ?: "상대"}의 응답을 기다리는 중"
+                        JudgeState.Done -> "판정 완료"
+                    },
+                    fontSize = 10.sp,
+                    color = Tokens.InkDim,
+                )
+            }
+            Spacer(Modifier.width(DesktopDimens.gap3))
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (state == JudgeState.MyTurn) Tokens.Signature
+                        else Tokens.Ink.copy(alpha = .08f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    when (state) {
+                        JudgeState.MyTurn -> "▶"
+                        JudgeState.Waiting -> "⋯"
+                        JudgeState.Done -> "✓"
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (state == JudgeState.MyTurn) Tokens.OnSignature else Tokens.InkDim,
+                )
+            }
+        }
     }
 }
 

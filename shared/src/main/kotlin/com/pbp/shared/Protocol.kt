@@ -50,6 +50,10 @@ object Protocol {
         const val AUTHOR_UID = "authorUid"
         const val AVATAR_ID = "avatarId"
 
+        // 자동 판정 요청 (J1)
+        const val JUDGE_TARGET = "judgeTarget"
+        const val JUDGE_REF = "judgeRef"
+
         // 방 문서
         const val NAME = "name"
         const val ICON = "icon"
@@ -65,6 +69,21 @@ object Protocol {
         const val LAST_READ_AT = "lastReadAt"
         const val TYPING_UNTIL = "typingUntil"
         const val TYPING_NAME = "typingName"
+
+        /**
+         * 이 기기가 가진 캐릭터 명단 — 판정 요청 대상 목록에 쓴다 (J0).
+         * 값의 **이름만** 싣는다. 숫자는 굴리는 쪽 기기에서 그때의 값으로 읽으므로
+         * 서버에 올릴 이유가 없고, 요청 뒤에 값을 고쳐도 최신 값으로 굴러간다.
+         */
+        const val CHARACTERS = "characters"
+    }
+
+    /** [Field.CHARACTERS] 항목의 키 */
+    object Character {
+        const val NAME = "name"
+        const val EMOJI = "emoji"
+        const val NAME_COLOR = "nameColor"
+        const val STATS = "stats"
         const val UPDATED_AT = "updatedAt"
         const val DATA = "data"
         const val ROOM_ID = "roomId"
@@ -75,6 +94,9 @@ object Protocol {
         const val TEXT = "TEXT"
         const val DICE = "DICE"
         const val SYSTEM = "SYSTEM"
+
+        /** GM이 건 자동 판정 요청 — 구버전은 모르는 타입이라 일반 말풍선으로 떨어진다 */
+        const val JUDGE = "JUDGE"
     }
 
     /**

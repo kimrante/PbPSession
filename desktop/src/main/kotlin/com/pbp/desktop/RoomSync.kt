@@ -127,11 +127,15 @@ internal fun messageValues(
     isBot: Boolean = false,
     diceOutcome: String? = null,
     avatarId: String? = null,
+    judgeTarget: String? = null,
+    judgeRef: String? = null,
 ): Map<String, Any?> = mapOf(
     // 폴 커서 전용 필드 — 안드로이드는 서버 타임스탬프로, 데스크톱은 지금 시각으로 쓴다.
     // REST 쓰기는 즉시 커밋이라 둘이 같은 의미다 (V1). 타입은 반드시 타임스탬프.
     "syncAt" to FirestoreRest.ServerTime(System.currentTimeMillis()),
     "type" to type,
+    "judgeTarget" to judgeTarget,
+    "judgeRef" to judgeRef,
     "body" to body,
     "diceExpr" to diceExpr,
     "diceOutcome" to diceOutcome,

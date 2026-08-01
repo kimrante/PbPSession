@@ -1,6 +1,7 @@
 package com.pbp.desktop.data
 
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import java.net.URI
@@ -28,6 +29,10 @@ data class Message(
     val isOoc: Boolean,
     val editedAt: Long?,
     val createdAt: Long,
+    /** JUDGE 요청의 대상 캐릭터 이름 (J1) */
+    val judgeTarget: String?,
+    /** 이 굴림이 응답한 요청의 키 (J1) */
+    val judgeRef: String?,
     /**
      * 서버에 기록된 시각 — 폴 커서 전용. 표시·정렬에는 쓰지 않는다 (V1).
      * 이 필드가 없는 옛 문서는 createdAt으로 떨어진다.
@@ -363,6 +368,52 @@ class FirestoreRest(
         )
     }
 
+    /** 방마다 마지막으로 올린 캐릭터 명단 — 같은 내용을 다시 쓰지 않기 위한 가드 */
+    private val pushedCharacters = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * 이 PC의 캐릭터 명단을 멤버 문서에 올린다 (J0) — 모바일 GM의 요청 대상 목록에 뜬다.
+     * 값은 **이름만** 싣는다. 명단이 그대로면 쓰지 않는다.
+     */
+    fun pushCharacters(remoteRoomId: String, characters: List<Pair<String, List<String>>>) {
+        val signature = characters.joinToString("|") { "${it.first}:${it.second.joinToString(",")}" }
+        if (pushedCharacters[remoteRoomId] == signature) return
+        val memberId = uid ?: return
+        val array = JsonArray()
+        characters.forEach { (name, stats) ->
+            val statValues = JsonArray()
+            stats.forEach { stat -> statValues.add(v(stat)) }
+            val entry = JsonObject()
+            entry.add(Protocol.Character.NAME, v(name))
+            entry.add(Protocol.Character.EMOJI, v(""))
+            val statArray = JsonObject()
+            statArray.add("values", statValues)
+            val statsValue = JsonObject()
+            statsValue.add("arrayValue", statArray)
+            entry.add(Protocol.Character.STATS, statsValue)
+            val fields = JsonObject()
+            fields.add("fields", entry)
+            val mapValue = JsonObject()
+            mapValue.add("mapValue", fields)
+            array.add(mapValue)
+        }
+        val values = JsonArray().also { it.addAll(array) }
+        val arrayField = JsonObject()
+        arrayField.add("values", values)
+        val characterField = JsonObject()
+        characterField.add("arrayValue", arrayField)
+        val fields = JsonObject()
+        fields.add(Protocol.Field.CHARACTERS, characterField)
+        val root = JsonObject()
+        root.add("fields", fields)
+        val ok = patch(
+            "$base/rooms/$remoteRoomId/members/$memberId?key=$apiKey" +
+                "&updateMask.fieldPaths=${Protocol.Field.CHARACTERS}",
+            gson.toJson(root),
+        )
+        if (ok) pushedCharacters[remoteRoomId] = signature
+    }
+
     /** 방마다 마지막으로 올린 입력 중 시각 — 스로틀 기준 */
     private val lastTypingPushAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
@@ -462,6 +513,8 @@ class FirestoreRest(
         isOoc = doc.bool("isOoc"),
         editedAt = doc.long("editedAt"),
         createdAt = doc.long("createdAt") ?: 0L,
+        judgeTarget = doc.str("judgeTarget"),
+        judgeRef = doc.str("judgeRef"),
         // syncAt이 없는 옛 문서는 createdAt으로 — 커서가 뒤로 가지 않게만 하면 된다
         syncAt = doc.timestamp("syncAt") ?: doc.long("createdAt") ?: 0L,
         authorUid = doc.str("authorUid") ?: "",

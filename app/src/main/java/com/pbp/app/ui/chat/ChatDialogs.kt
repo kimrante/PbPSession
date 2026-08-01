@@ -314,3 +314,47 @@ internal fun EditMessageDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
 }
+
+/**
+ * 대상 캐릭터에 그 값이 없을 때 — 값을 받아 프로필에 채우고 바로 굴린다 (J6).
+ * 주사위를 굴려야 하므로 **숫자만** 받는다.
+ */
+@Composable
+internal fun JudgeValueDialog(
+    targetName: String,
+    statName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var input by rememberSaveable(statName) { mutableStateOf("") }
+    val value = input.trim().toIntOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$statName 값이 없습니다") },
+        text = {
+            Column {
+                Text(
+                    "${targetName}의 $statName 값을 정하면 프로필에 저장하고 바로 굴립니다.",
+                    fontSize = 13.sp,
+                    color = Pbp.colors.inkDim,
+                )
+                Spacer(Modifier.height(PbpDimens.gap2))
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { text -> input = text.filter { it.isDigit() }.take(3) },
+                    label = { Text("$statName (숫자)", fontSize = 10.sp) },
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { value?.let(onConfirm) }, enabled = value != null) {
+                Text("저장하고 굴리기")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
+}

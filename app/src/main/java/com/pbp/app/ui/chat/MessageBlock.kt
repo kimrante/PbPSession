@@ -192,6 +192,9 @@ internal fun MessageBlock(
     mark: CaptureMark = CaptureMark.NONE,
     /** 캡처 모드에서 행 전체를 탭했을 때. 평상시에는 빈 람다라 clickable을 붙이지 않는다 */
     onTap: (() -> Unit)? = null,
+    /** 판정 요청의 상태 — 화면에서 한 번 계산해 내려보낸다 (J5) */
+    judgeState: JudgeState = JudgeState.Waiting,
+    onJudgeTap: () -> Unit = {},
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -245,6 +248,10 @@ internal fun MessageBlock(
                     )
                 }
             }
+        }
+        // 판정 요청 — 대상자만 누를 수 있고, 결과가 있으면 완료 (J5)
+        message.type == MessageType.JUDGE -> {
+            JudgeCard(message, judgeState, onJudgeTap)
         }
         message.type == MessageType.DICE -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -602,6 +609,96 @@ internal fun TimeStamp(
                 Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
             }
             Text(formatTime(message.createdAt), fontSize = 10.sp, color = timeColor)
+        }
+    }
+}
+
+/** 판정 요청 카드의 상태 (J5) */
+internal enum class JudgeState {
+    /** 이 캐릭터를 가진 사람 — 눌러서 굴린다 */
+    MyTurn,
+
+    /** 남의 차례 — 값도 모르고 누를 수도 없다 */
+    Waiting,
+
+    /** 이미 굴렸다 */
+    Done,
+}
+
+/**
+ * 판정 요청 카드 — 세 상태의 **크기가 같아야** 목록이 흔들리지 않는다.
+ * 테두리가 2dp인 MyTurn은 패딩에서 1dp를 빼 높이를 맞춘다 (목업 02장).
+ */
+@Composable
+private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
+    val tokens = Pbp.colors
+    val border = if (state == JudgeState.MyTurn) 2.dp else 1.dp
+    val shape = RoundedCornerShape(PbpDimens.rCard)
+    var box = Modifier
+        .clip(shape)
+        .background(tokens.panel)
+        .border(
+            border,
+            if (state == JudgeState.MyTurn) tokens.signature else tokens.line,
+            shape,
+        )
+    // 누를 수 없는 상태에 리플이 생기면 눌러도 되는 것처럼 보인다
+    if (state == JudgeState.MyTurn) box = box.clickable(onClick = onTap)
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            box.padding(
+                horizontal = PbpDimens.gap3 - border + 1.dp,
+                vertical = PbpDimens.gap3 - border + 1.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Avatar(
+                emoji = message.senderEmoji,
+                imagePath = message.senderImagePath,
+                size = PbpDimens.avatarStrip,
+                dimmed = state == JudgeState.Done,
+            )
+            Spacer(Modifier.width(PbpDimens.gap3))
+            Column {
+                Text(
+                    message.body,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (state == JudgeState.Done) tokens.inkDim else tokens.ink,
+                )
+                Text(
+                    when (state) {
+                        // 이 기기에는 값이 있으므로 실제 식을 보여줄 수 있다
+                        JudgeState.MyTurn -> "탭하면 판정을 굴립니다"
+                        JudgeState.Waiting -> "${message.judgeTarget ?: "상대"}의 응답을 기다리는 중"
+                        JudgeState.Done -> "판정 완료"
+                    },
+                    fontSize = 10.sp,
+                    color = tokens.inkDim,
+                )
+            }
+            Spacer(Modifier.width(PbpDimens.gap3))
+            Box(
+                Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (state == JudgeState.MyTurn) tokens.signature
+                        else tokens.ink.copy(alpha = .08f)
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    when (state) {
+                        JudgeState.MyTurn -> "▶"
+                        JudgeState.Waiting -> "⋯"
+                        JudgeState.Done -> "✓"
+                    },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (state == JudgeState.MyTurn) tokens.onSignature else tokens.inkDim,
+                )
+            }
         }
     }
 }

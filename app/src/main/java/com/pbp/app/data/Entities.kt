@@ -7,7 +7,11 @@ import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import com.pbp.app.ui.theme.PbpPalette
 
-enum class MessageType { TEXT, DICE, SYSTEM }
+/**
+ * JUDGE = GM이 건 자동 판정 요청. 구버전은 이 타입을 몰라 평범한 말풍선으로 떨어지므로
+ * (SyncMapping.fromMap의 getOrDefault) body에 사람이 읽을 문구를 담아 둔다 (J1).
+ */
+enum class MessageType { TEXT, DICE, SYSTEM, JUDGE }
 
 @Entity(tableName = "rooms")
 data class ChatRoom(
@@ -112,6 +116,16 @@ data class Message(
     val incoming: Boolean = false,
     /** 서버 반영 확인 여부. 0이면 시작 시 아웃박스가 같은 remoteId로 재전송(멱등) */
     val uploaded: Boolean = false,
+    /** JUDGE 요청의 대상 캐릭터 이름. 그 캐릭터를 가진 사람만 굴릴 수 있다 (J1) */
+    val judgeTarget: String? = null,
+    /**
+     * 이 굴림(DICE)이 응답한 요청의 키 — 요청 메시지의 `remoteId ?: "local-{id}"`.
+     *
+     * 완료 여부를 요청 쪽에 표시하지 않고 **결과 쪽에서 참조**하는 이유: 요청을 나중에
+     * 고치는 방식은 오프라인에서 수정이 못 올라가면 상대 화면이 영원히 "내 차례"로 남는다.
+     * 결과가 존재하는가로 판정하면 수정이 필요 없다 (J1-3).
+     */
+    val judgeRef: String? = null,
 )
 
 class Converters {

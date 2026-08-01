@@ -129,6 +129,25 @@ class PbpRepository(private val db: AppDatabase) {
      * 입력 이벤트가 있을 때만. 스로틀을 **먼저** 확인한다 —
      * 키를 누를 때마다 Room을 조회할 이유가 없다 (P4)
      */
+    /**
+     * 이 기기의 캐릭터 명단을 상대에게 알린다 (J0).
+     *
+     * GM은 빼고(대상이 될 일이 없다), 값은 **숫자만** 이름을 싣는다 — 주사위를 굴릴 수
+     * 있어야 판정 대상이 되기 때문이다(채팅 팔레트와 같은 규칙).
+     */
+    suspend fun pushCharacters(roomId: Long, profiles: List<CharacterProfile>) {
+        val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
+        val payload = profiles.filterNot { it.isGm }.map { profile ->
+            mapOf(
+                com.pbp.shared.Protocol.Character.NAME to profile.name,
+                com.pbp.shared.Protocol.Character.EMOJI to profile.emoji,
+                com.pbp.shared.Protocol.Character.NAME_COLOR to profile.nameColor,
+                com.pbp.shared.Protocol.Character.STATS to numericStatNames(profile),
+            )
+        }
+        syncManager?.pushCharacters(remoteId, payload)
+    }
+
     suspend fun pushTyping(roomId: Long, name: String) {
         val sync = syncManager ?: return
         if (!sync.typingDue(roomId)) return
@@ -197,6 +216,86 @@ class PbpRepository(private val db: AppDatabase) {
             }
         }
         pushIfSynced(roomId, inserted)
+    }
+
+    /**
+     * 판정 요청을 보낸다 (J4). **여기서 굴리지 않는다** — 굴림은 대상 캐릭터를 가진
+     * 기기에서 그때의 값으로 한다.
+     *
+     * `diceExpr`에는 `{값이름}` 플레이스홀더를 **치환하지 않은 채** 넣는다. 보통 발신
+     * 경로(sendMessage)는 보낼 때 치환하지만, 여기서는 굴리는 쪽이 자기 값으로 치환해야
+     * 하므로 반대다. 그래서 요청 뒤에 값을 고쳐도 항상 최신 값으로 굴러간다.
+     */
+    suspend fun sendJudgeRequest(roomId: Long, sender: CharacterProfile, targetName: String, statName: String) {
+        val rule = db.roomDao().get(roomId)?.rule ?: com.pbp.shared.Rules.COC7
+        val message = Message(
+            roomId = roomId,
+            type = MessageType.JUDGE,
+            // 구버전 클라이언트에서는 이 문구가 그대로 말풍선으로 보인다
+            body = "$targetName, $statName 판정",
+            diceExpr = com.pbp.shared.Rules.judgeCommand(rule, statName),
+            judgeTarget = targetName,
+            senderName = sender.name,
+            senderEmoji = sender.emoji,
+            senderImagePath = sender.imagePath,
+            senderIsGm = true,
+            senderNameColor = sender.nameColor,
+            senderBubbleColor = sender.bubbleColor,
+            senderTextColor = sender.textColor,
+            createdAt = System.currentTimeMillis(),
+        )
+        val inserted = message.copy(id = db.messageDao().insert(message))
+        pushIfSynced(roomId, listOf(inserted))
+    }
+
+    /**
+     * 요청을 눌러 굴린다 (J6). 굴림은 **요청이 지목한 캐릭터**로 나간다 —
+     * 지금 활성 프로필이 무엇이든 상관없고, 활성 프로필을 바꾸지도 않는다.
+     *
+     * @return 값이 없어 굴리지 못했으면 그 값 이름 (호출부가 입력 다이얼로그를 띄운다)
+     */
+    suspend fun rollJudge(request: Message): String? {
+        val key = judgeKey(request)
+        // 연타로 두 번 들어와도 결과는 1건 (렌더의 Done 상태와 두 겹)
+        if (db.messageDao().hasJudgeResult(request.roomId, key)) return null
+        val target = request.judgeTarget ?: return null
+        val profile = db.profileDao().forRoom(request.roomId).find { it.name == target } ?: return null
+        val expr = request.diceExpr ?: return null
+        val stats = ProfileStats.decode(profile.stats).toMap()
+        val (plain, _) = ProfileStats.substitute(expr, stats)
+        val command = DiceBot.parse(plain)
+            // 치환이 안 됐다 = 그 캐릭터에 그 값이 없다. 호출부가 값을 받아 채우게 한다
+            ?: return statNameOf(expr)
+        val rule = db.roomDao().get(request.roomId)?.rule ?: com.pbp.shared.Rules.COC7
+        val result = DiceBot.roll(command)
+        val dice = Message(
+            roomId = request.roomId,
+            type = MessageType.DICE,
+            body = result.breakdown,
+            diceExpr = "${profile.name} · ${command.expr}",
+            diceOutcome = com.pbp.shared.Rules.judgeOutcome(rule, result),
+            senderName = "다이스봇",
+            senderEmoji = "🎲",
+            senderIsBot = true,
+            judgeRef = key,
+            createdAt = System.currentTimeMillis(),
+        )
+        val inserted = dice.copy(id = db.messageDao().insert(dice))
+        pushIfSynced(request.roomId, listOf(inserted))
+        return null
+    }
+
+    /** 요청에 값을 채워 넣고 바로 굴린다 — 대상 캐릭터에 그 값이 없었을 때 (J6) */
+    suspend fun addStatAndRoll(request: Message, statName: String, value: Int) {
+        val target = request.judgeTarget ?: return
+        val profile = db.profileDao().forRoom(request.roomId).find { it.name == target } ?: return
+        val stats = ProfileStats.decode(profile.stats).filterNot { it.first == statName }
+        db.profileDao().update(
+            profile.copy(
+                stats = ProfileStats.encode(ProfileStats.sortByName(stats + (statName to value.toString())))
+            )
+        )
+        rollJudge(request)
     }
 
     /** 메시지 수정 — 로컬 갱신 후 공유 방이면 상대에게 전파 */
@@ -274,3 +373,21 @@ class PbpRepository(private val db: AppDatabase) {
         syncManager?.push(remoteId, messages)
     }
 }
+
+/** 주사위를 굴릴 수 있는 값(숫자)만 — 글자 값은 판정 대상이 아니다 */
+fun numericStatNames(profile: CharacterProfile): List<String> =
+    ProfileStats.decode(profile.stats)
+        .filter { it.second.trim().toIntOrNull() != null }
+        .map { it.first }
+        .distinct()
+
+/**
+ * 요청을 가리키는 키 — 굴림 결과의 judgeRef가 이 값을 갖는다.
+ * 공유 방에서는 상대가 요청을 보는 시점에 이미 remoteId가 있고(서버를 거쳐 왔으므로),
+ * 로컬 전용 방은 동기화가 없어 로컬 id로 충분하다.
+ */
+fun judgeKey(request: Message): String = request.remoteId ?: "local-${request.id}"
+
+/** "1d100<={민첩}" → "민첩" */
+fun statNameOf(diceExpr: String): String? =
+    Regex("""\{([^{}]+)\}""").find(diceExpr)?.groupValues?.get(1)

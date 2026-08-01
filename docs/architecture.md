@@ -141,11 +141,12 @@ com.pbp.app
 rooms/{roomId}                    name, icon(폐지·빈값), inviteCode, themeColor, rule
                                   (backgroundKey는 v0.8.0부터 기기 로컬 전용 — 서버에 쓰지 않는다)
 rooms/{roomId}/messages/{msgId}   type, body, diceExpr, diceOutcome, sender*, isOoc,
-                                  createdAt, syncAt, editedAt, authorUid, avatarId
+                                  createdAt, syncAt, editedAt, authorUid, avatarId,
+                                  judgeTarget, judgeRef (자동 판정 요청)
                                   (syncAt = 서버 기록 시각, 타임스탬프 타입.
                                    데스크톱 폴 커서 전용 — 표시·정렬은 createdAt)
 rooms/{roomId}/members/{uid}      joinedAt, fcmToken, updatedAt, platform, lastReadAt,
-                                  typingUntil, typingName
+                                  typingUntil, typingName, characters(판정 요청 대상 명단)
 rooms/{roomId}/avatars/{md5}      data (base64, 긴 변 256px)
 inviteCodes/{code}                roomId
 ```

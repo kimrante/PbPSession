@@ -72,6 +72,11 @@ object LogExport {
                 message.type == Protocol.MessageType.SYSTEM ->
                     body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
 
+                // 판정 요청은 한 줄로만 — 종이 문서에서 버튼은 의미가 없고,
+                // 굴림 결과는 어차피 뒤의 다이스 카드로 남는다 (J7)
+                message.type == Protocol.MessageType.JUDGE ->
+                    body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
+
                 message.type == Protocol.MessageType.DICE -> {
                     val outcome = Rules.outcomeLabel(message.diceOutcome)?.let { label ->
                         val color = if (Rules.isSuccess(message.diceOutcome)) "#2563C9" else "#C0392B"

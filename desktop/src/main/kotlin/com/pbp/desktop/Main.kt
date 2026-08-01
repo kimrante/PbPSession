@@ -284,6 +284,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             }
         }
         messages = session.messages
+        // 이 PC의 캐릭터 명단을 올린다 — 모바일 GM의 요청 대상 목록에 뜬다 (J0).
+        // 명단이 그대로면 쓰지 않으므로 실제 쓰기는 거의 없다
+        withContext(Dispatchers.IO) {
+            firestore.pushCharacters(
+                room.remoteId,
+                profiles.filterNot { it.isGm }.map { profile ->
+                    profile.name to ProfileStats.sanitize(profile.stats.orEmpty())
+                        .filterValues { it.trim().toIntOrNull() != null }
+                        .keys.toList()
+                },
+            )
+        }
         var lastCreatedAt = session.lastCreatedAt
         var lastMetaPollAt = 0L
         var lastActivityAt = System.currentTimeMillis()
@@ -623,6 +635,43 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
     }
 
+    /**
+     * 판정 요청을 눌러 굴린다 (J6) — 요청이 지목한 캐릭터로 나간다. 지금 활성 프로필이
+     * 무엇이든 상관없고, 활성 프로필을 바꾸지도 않는다.
+     */
+    fun rollJudge(request: Message) {
+        val room = selected ?: return
+        val target = request.judgeTarget ?: return
+        val expr = request.diceExpr ?: return
+        // 연타 방지 — 이미 결과가 있으면 아무것도 하지 않는다 (렌더의 Done과 두 겹)
+        if (messages.any { it.judgeRef == request.docId }) return
+        val profile = profiles.find { it.name == target } ?: return
+        val (plain, _) = ProfileStats.substitute(expr, ProfileStats.sanitize(profile.stats.orEmpty()))
+        val command = DiceBot.parse(plain) ?: run {
+            // 그 캐릭터에 그 값이 없다 — PC에서는 프로필 편집으로 값을 넣은 뒤 다시 누른다
+            System.err.println("판정에 쓸 값이 없습니다 — 프로필에 값을 추가한 뒤 다시 눌러 주세요")
+            return
+        }
+        val result = DiceBot.roll(command)
+        lastLocalSendAt.set(System.currentTimeMillis())
+        scope.launch(Dispatchers.IO) {
+            firestore.postMessage(
+                room.remoteId,
+                messageValues(
+                    type = "DICE",
+                    body = result.breakdown,
+                    sender = Profile(name = "다이스봇", emoji = "🎲"),
+                    isOoc = false,
+                    authorUid = authorUid(),
+                    diceExpr = "${profile.name} · ${command.expr}",
+                    isBot = true,
+                    diceOutcome = Rules.judgeOutcome(room.rule ?: Rules.COC7, result),
+                    judgeRef = request.docId,
+                ),
+            )
+        }
+    }
+
     fun exportLogs() {
         val room = selected ?: return
         val snapshot = messages
@@ -774,6 +823,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 captureExcludeOoc = captureExcludeOoc,
                 captureEndPicked = captureEnd != null,
                 captureError = captureError,
+                onJudgeRoll = ::rollJudge,
                 onToggleCaptureExcludeOoc = {
                     captureExcludeOoc = !captureExcludeOoc
                     config.captureExcludeOoc = captureExcludeOoc

@@ -153,6 +153,11 @@ private val escapeHandler =
 @Composable
 internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     val config = remember { runBlockingIo { AppConfig.load() } }
+    // 아무도 가리키지 않는 로컬 이미지 정리 — 교체·방 삭제로 쌓인 고아 (L3).
+    // 시작 시점이라 편집 중인 파일이 있을 수 없다
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) { com.pbp.desktop.data.ImageGc.sweep(config) }
+    }
     val firestore = remember {
         FirestoreRest(
             PROJECT_ID, API_KEY,

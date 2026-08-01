@@ -69,6 +69,9 @@ class PbpApp : Application(), coil3.SingletonImageLoader.Factory {
         // (서술 권한은 마스터 전용, 정리 후 그 프로필을 가리키던 활성 지정도 해제,
         //  발화 프로필이 하나도 안 남은 참여 방에는 기본 캐릭터를 만들어 준다)
         CoroutineScope(Dispatchers.IO).launch {
+            // 아무도 가리키지 않는 로컬 이미지 정리 — 교체·취소·방 삭제로 쌓인 고아 (L3).
+            // 시작 시점이라 편집 중인 파일이 있을 수 없다
+            com.pbp.app.data.ImageGc.sweep(this@PbpApp, database)
             database.profileDao().deleteGmProfilesOfJoinedRooms()
             database.roomDao().clearDanglingActiveProfiles()
             database.roomDao().listJoined().forEach { room ->

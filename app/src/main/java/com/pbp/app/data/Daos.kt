@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RoomDao {
+    /** 커스텀 배경 파일 경로도 여기 들어 있다 — 고아 정리(ImageGc)용 */
+    @Query("SELECT DISTINCT backgroundKey FROM rooms")
+    suspend fun allBackgroundKeys(): List<String>
+
     @Query("SELECT * FROM rooms ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<ChatRoom>>
 
@@ -68,6 +72,10 @@ data class RemoteMessageRow(val remoteId: String, val body: String, val editedAt
 
 @Dao
 interface ProfileDao {
+    /** 아직 가리켜지는 이미지 경로 — 고아 정리(ImageGc)용 */
+    @Query("SELECT DISTINCT imagePath FROM profiles WHERE imagePath IS NOT NULL")
+    suspend fun allImagePaths(): List<String>
+
     /** 프로필 관리 목록 — 전역·방 귀속(GM 포함) 전부 */
     @Query("SELECT * FROM profiles ORDER BY isGm DESC, name")
     fun observeAllProfiles(): Flow<List<CharacterProfile>>
@@ -171,6 +179,10 @@ interface MessageDao {
            GROUP BY m.roomId"""
     )
     fun observeUnreadCounts(): Flow<List<UnreadCount>>
+
+    /** 아직 가리켜지는 이미지 경로 — 고아 정리(ImageGc)가 지우면 안 되는 것들 */
+    @Query("SELECT DISTINCT senderImagePath FROM messages WHERE senderImagePath IS NOT NULL")
+    suspend fun allImagePaths(): List<String>
 
     /** 상대에게서 받은 마지막 메시지 시각 — 읽음 확인으로 올릴 기준값 */
     @Query("SELECT MAX(createdAt) FROM messages WHERE roomId = :roomId AND incoming = 1")

@@ -11,7 +11,7 @@
 > 같고, 낙관을 픽셀로 덧그리지 않아 화면과 결과가 갈라질 여지가 없다.
 >
 > **배포 필요**: B1(messages create 규칙)과 E8(푸시 필터 기준)은 각각
-> `firestore:rules`와 `functions` 배포를 해야 실제로 적용된다.
+> `firestore:rules`와 `functions` 배포를 해야 실제로 적용된다 — 절차는 `docs/deploy.md`.
 
 main 최신(`6215a6a`) 기준으로 **프로젝트 전체**(:shared / :app / :desktop / functions / firestore.rules)를
 4개 영역으로 나눠 점검한 결과. **다른 세션에서 이 문서만 보고 수정 작업을 진행할 수 있도록**

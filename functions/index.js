@@ -5,10 +5,8 @@
  * 데이터 푸시를 보낸다. 채팅 본문은 절대 싣지 않고 보낸 이 이름만 전달 —
  * 알림 문구("~님의 메시지가 도착했습니다.")는 앱(FcmService)이 만든다.
  *
- * 배포:
- *   1) Firebase 콘솔에서 Blaze 요금제 활성화 (Functions 필수, 무료 한도 큼)
- *   2) npx firebase-tools login
- *   3) npx firebase-tools deploy --only functions --project pbp-session-1195c
+ * 배포: docs/deploy.md 참고
+ *   npx firebase-tools deploy --only functions --project pbp-session-1195c
  */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { setGlobalOptions } = require("firebase-functions/v2");

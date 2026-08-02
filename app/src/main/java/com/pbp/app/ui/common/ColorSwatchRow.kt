@@ -25,12 +25,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.RecentColors
+import androidx.compose.material3.minimumInteractiveComponentSize
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 
 /** 스와치 지름 — 프리셋 3 + 커스텀 1 + 최근 5 = 9개가 한 줄에 들어가는 크기 (목업 01장) */
-private val SWATCH = 26.dp
-private val GAP = PbpDimens.gap1
+private val SWATCH = PbpDimens.swatch
+private val GAP = PbpDimens.swatchGap
 
 /**
  * 색 선택 줄 — **프리셋 → 커스텀(＋) → 구분선 → 최근 5개** 순서 (목업 01장).
@@ -61,7 +62,8 @@ fun ColorSwatchRow(
         }
         // 커스텀 — 무지개 스와치
         Box(
-            Modifier
+            // 시각 크기는 26 그대로, 히트박스만 40dp로 넓힌다 (§6, P4)
+            Modifier.minimumInteractiveComponentSize()
                 .size(SWATCH)
                 .clip(CircleShape)
                 .background(customColorBrush)
@@ -143,7 +145,8 @@ private fun Swatch(
     onClick: () -> Unit,
 ) {
     Box(
-        Modifier
+        // 시각 크기는 26 그대로, 히트박스만 40dp로 넓힌다 (§6, P4)
+        Modifier.minimumInteractiveComponentSize()
             .size(SWATCH)
             // 선택 링은 잉크 — 흰 링은 흰 패널·흰 스와치 위에서 보이지 않는다
             .then(if (selected) Modifier.border(2.dp, Pbp.colors.ink, CircleShape) else Modifier)

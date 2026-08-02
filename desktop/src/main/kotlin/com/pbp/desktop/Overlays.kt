@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,15 +62,15 @@ import com.pbp.desktop.ui.DesktopDimens
 @Composable
 internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
     Box(
-        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
+        Modifier.fillMaxSize().background(Tokens.Scrim).clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier.width(DesktopDimens.overlay)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(DesktopDimens.rSheet))
                 .background(Tokens.Panel)
                 .clickable(enabled = false) {}
-                .padding(22.dp)
+                .padding(DesktopDimens.gap5)
                 .verticalScroll(rememberScrollState()),
         ) {
             Box(Modifier.fillMaxWidth()) {
@@ -78,25 +79,29 @@ internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
                     color = Tokens.Ink, modifier = Modifier.align(Alignment.Center),
                 )
                 Box(
-                    Modifier.align(Alignment.CenterEnd).size(28.dp)
+                    Modifier.align(Alignment.CenterEnd).size(DesktopDimens.touchTarget)
                         .clip(CircleShape).clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("✕", fontSize = 14.sp, color = Tokens.InkSub)
+                    Text("✕", fontSize = 13.sp, color = Tokens.InkSub)
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            com.pbp.shared.MarkupHelp.entries.forEach { entry ->
-                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                    Text(
-                        entry.syntax, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace, color = Tokens.SignatureRing,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(entry.summary, fontSize = 12.sp, color = Tokens.Ink)
-                    entry.example?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text(it, fontSize = 11.sp, color = Tokens.InkDim)
+            Spacer(Modifier.height(DesktopDimens.gap4))
+            // 항목 패딩 대신 부모 간격으로 — 항목마다 상하 패딩을 주면 사이가 두 배로 벌어진다
+            Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
+                com.pbp.shared.MarkupHelp.entries.forEach { entry ->
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(
+                            entry.syntax, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            // 링용 골드가 아니라 텍스트용 (P0 1-3)
+                            fontFamily = FontFamily.Monospace, color = Tokens.SignatureInk,
+                        )
+                        Spacer(Modifier.height(DesktopDimens.gap1))
+                        Text(entry.summary, fontSize = 13.sp, color = Tokens.Ink)
+                        entry.example?.let {
+                            Spacer(Modifier.height(DesktopDimens.gap1))
+                            Text(it, fontSize = 11.sp, color = Tokens.InkDim)
+                        }
                     }
                 }
             }
@@ -108,19 +113,23 @@ internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
 internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Box(
         // 라이트 모드 딤 — rgba(30,35,45,.38) (목업 mockup-message-actions)
-        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
+        Modifier.fillMaxSize().background(Tokens.Scrim).clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier.width(DesktopDimens.overlay)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(DesktopDimens.rSheet))
                 .background(Tokens.Panel)
                 .clickable(enabled = false) {}
-                .padding(22.dp)
+                .padding(DesktopDimens.gap5)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
-            Spacer(Modifier.height(14.dp))
+            // 타이틀은 정중앙 — 도움말 오버레이만 센터였던 것을 전 오버레이로 (P1)
+            Text(
+                title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(DesktopDimens.gap4))
             content()
         }
     }
@@ -135,8 +144,8 @@ internal fun OverlayField(value: String, onChange: (String) -> Unit, placeholder
             .clip(RoundedCornerShape(12.dp))
             .background(Tokens.FieldBg)
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-            .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
-        textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
+            .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap3),
+        textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
         cursorBrush = SolidColor(Tokens.SignatureRing),
         singleLine = true,
         decorationBox = { inner ->
@@ -151,24 +160,61 @@ internal fun OverlayField(value: String, onChange: (String) -> Unit, placeholder
 @Composable
 internal fun YellowButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier.clip(RoundedCornerShape(999.dp)).background(Tokens.Signature)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
+        modifier.heightIn(min = DesktopDimens.touchTarget)
+            .clip(RoundedCornerShape(999.dp)).background(Tokens.Signature)
+            .clickable(onClick = onClick)
+            .padding(horizontal = DesktopDimens.gap4, vertical = DesktopDimens.gap2),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.OnSignature)
     }
 }
 
+/**
+ * 파괴적 동작 전용 (P0 1-1) — 되돌릴 수 없는 것을 옐로(=긍정 강조)로 두면
+ * "적용"과 구분이 안 된다. 모바일은 이미 danger를 쓴다.
+ */
 @Composable
-internal fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun DangerButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
-        modifier.clip(RoundedCornerShape(999.dp))
-            .border(1.dp, Color(0x4014191F), RoundedCornerShape(999.dp))
-            .background(Tokens.Panel)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
+        modifier.heightIn(min = DesktopDimens.touchTarget)
+            .clip(RoundedCornerShape(999.dp)).background(Tokens.Danger)
+            .clickable(onClick = onClick)
+            .padding(horizontal = DesktopDimens.gap4, vertical = DesktopDimens.gap2),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.Panel)
+    }
+}
+
+@Composable
+internal fun GhostButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    GhostButtonBase(label, modifier, Tokens.InkDim, onClick)
+}
+
+/** 파괴적 동작의 약한 형태 — 면은 그대로 두고 글자만 danger (P0 1-1) */
+@Composable
+internal fun GhostDangerButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    GhostButtonBase(label, modifier, Tokens.Danger, onClick)
+}
+
+@Composable
+private fun GhostButtonBase(
+    label: String,
+    modifier: Modifier,
+    contentColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier.heightIn(min = DesktopDimens.touchTarget)
+            .clip(RoundedCornerShape(999.dp))
+            .border(1.dp, Tokens.Line, RoundedCornerShape(999.dp))
+            .background(Tokens.Panel)
+            .clickable(onClick = onClick)
+            .padding(horizontal = DesktopDimens.gap4, vertical = DesktopDimens.gap2),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = contentColor)
     }
 }
 
@@ -179,11 +225,11 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
     OverlayScaffold("초대 코드로 참여", onDismiss) {
         OverlayField(code, { code = it; failed = false }, "초대 코드 (6자리)")
         if (failed) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 11.sp, color = Tokens.Danger)
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap4))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("참여", Modifier.weight(1f)) { if (code.isNotBlank()) onJoin(code) { failed = true } }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
@@ -195,13 +241,13 @@ internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     OverlayScaffold("새 세션", onDismiss) {
         OverlayField(name, { name = it }, "방 이름")
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
         // 방 아이콘 폐지 — 배경으로만 구분. TRPG 룰은 크툴루의 부름 7판 고정 (모바일과 동일)
         Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 11.sp, color = Tokens.Ink)
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(DesktopDimens.gap1))
         Text("방을 만들면 마스터 권한과 초대 코드가 부여됩니다.", fontSize = 11.sp, color = Tokens.InkDim)
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap4))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("만들기", Modifier.weight(1f)) { onCreate(name) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
@@ -221,6 +267,7 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
     OverlayScaffold("초대 코드", onDismiss) {
         Text(
             code, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+            letterSpacing = 4.sp, // 모바일과 동일 — 여섯 글자를 한 글자씩 읽게
             textAlign = TextAlign.Center, // 모바일과 동일하게 센터 (CLAUDE.md §0-(a))
             modifier = Modifier
                 .fillMaxWidth()
@@ -243,12 +290,12 @@ internal fun CodeOverlay(code: String, onDismiss: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
         Text(
             "상대가 모바일/PC의 '참여'에서 이 코드를 입력하면 같은 방에 연결됩니다.",
             fontSize = 13.sp, color = Tokens.InkDim,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         YellowButton("닫기", Modifier.fillMaxWidth(), onDismiss)
     }
 }
@@ -271,8 +318,8 @@ internal fun SettingsOverlay(
     }
     OverlayScaffold("방 설정 · ${room.name}", onDismiss) {
         Text("테마 컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(Tokens.themePresets.map { it.first }, theme, recentColors["theme"].orEmpty()) {
                 theme = it
                 hexOpen = false
@@ -283,13 +330,13 @@ internal fun SettingsOverlay(
             }
         }
         if (hexOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(theme) { theme = it; onColorUsed("theme", it) }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("배경", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             Tokens.backgroundPresets.forEach { (key, colors) ->
                 val on = background == key
                 Box(
@@ -307,8 +354,8 @@ internal fun SettingsOverlay(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             // 현재 커스텀 배경 미리보기 (모바일 '커스텀 · 사용 중' 셀과 동일 역할)
             if (Tokens.backgroundPresets[background] == null) {
                 Box(
@@ -338,22 +385,26 @@ internal fun SettingsOverlay(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("파일\n선택", fontSize = 10.sp, color = Tokens.InkDim, lineHeight = 13.sp)
+                Text(
+                    "파일\n선택", fontSize = 10.sp, color = Tokens.InkDim, lineHeight = 13.sp,
+                    textAlign = TextAlign.Center, // 2줄 라벨도 센터 (모바일과 동일)
+                )
             }
         }
+        Spacer(Modifier.height(DesktopDimens.gap2))
         Text(
             "커스텀 배경은 이 PC에서만 보입니다 (모바일과 동일)",
-            fontSize = 10.sp, color = Tokens.InkDim, modifier = Modifier.padding(top = 6.dp),
+            fontSize = 10.sp, color = Tokens.InkDim,
         )
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap3))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("적용", Modifier.weight(1f)) { onApply(theme, background) }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
         // 방 로그 초기화 — 앱 방 설정과 동일 (로컬·서버·상대 로그 전부 삭제)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         var resetConfirm by remember { mutableStateOf(false) }
         var resetting by remember { mutableStateOf(false) }
         var resetResult by remember { mutableStateOf<String?>(null) }
@@ -364,9 +415,9 @@ internal fun SettingsOverlay(
                 "이 방의 모든 메시지가 삭제됩니다. 상대방의 로그도 함께 삭제되며, 되돌릴 수 없습니다.",
                 fontSize = 11.sp, color = Tokens.Danger,
             )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                YellowButton(if (resetting) "삭제 중…" else "전부 삭제", Modifier.weight(1f)) {
+            Spacer(Modifier.height(DesktopDimens.gap2))
+            Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
+                DangerButton(if (resetting) "삭제 중…" else "전부 삭제", Modifier.weight(1f)) {
                     if (!resetting) {
                         resetting = true
                         onResetLogs { ok ->
@@ -381,7 +432,7 @@ internal fun SettingsOverlay(
             }
         }
         resetResult?.let {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             Text(it, fontSize = 11.sp, color = Tokens.InkDim)
         }
     }
@@ -399,13 +450,13 @@ internal fun EditMessageOverlay(initial: String, onDismiss: () -> Unit, onSave: 
                 .clip(RoundedCornerShape(12.dp))
                 .background(Tokens.FieldBg)
                 .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
-                .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
-            textStyle = TextStyle(color = Tokens.Ink, fontSize = 15.sp),
+                .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap3),
+            textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
             cursorBrush = SolidColor(Tokens.SignatureRing),
             maxLines = 8,
         )
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap4))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("저장", Modifier.weight(1f)) {
                 if (body.isNotBlank()) onSave(body)
             }
@@ -452,10 +503,10 @@ internal fun AddProfileChoiceOverlay(
             )
         }
         if (clipboardError) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             Text("클립보드에서 캐릭터 코드를 찾지 못했습니다", fontSize = 11.sp, color = Tokens.Danger)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         GhostButton("취소", Modifier.fillMaxWidth(), onDismiss)
     }
 }
@@ -493,7 +544,7 @@ internal fun FontOverlay(current: String, onDismiss: () -> Unit, onSelect: (Stri
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         GhostButton("닫기", Modifier.fillMaxWidth(), onDismiss)
     }
 }

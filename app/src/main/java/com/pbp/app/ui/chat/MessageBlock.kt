@@ -175,11 +175,11 @@ internal fun MessageBlock(
     when {
         message.type == MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Surface(color = Color.Black.copy(alpha = .35f), shape = RoundedCornerShape(999.dp)) {
+                Surface(color = tokens.scrim, shape = RoundedCornerShape(999.dp)) {
                     Text(
                         message.body,
                         fontSize = 10.sp,
-                        color = Color.White.copy(alpha = .6f),
+                        color = tokens.onScrim,
                         modifier = Modifier.padding(
                             horizontal = PbpDimens.gap3,
                             vertical = PbpDimens.gap1,
@@ -222,7 +222,7 @@ internal fun MessageBlock(
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(PbpDimens.rCell))
-                        .background(Color.Black.copy(alpha = .5f))
+                        .background(tokens.scrim)
                         .border(1.dp, tokens.signature.copy(alpha = .35f), RoundedCornerShape(PbpDimens.rCell))
                         .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
@@ -232,7 +232,7 @@ internal fun MessageBlock(
                     Text(
                         "${message.diceExpr} → ${message.body}",
                         fontSize = 11.sp,
-                        color = Color(0xFFFFE9AE),
+                        color = tokens.signature,
                         fontWeight = FontWeight.Bold,
                     )
                     // 비교식 판정: 성공 계열 = 파랑, 실패 = 빨강
@@ -444,12 +444,12 @@ internal fun BubbleRow(
                     RoundedCornerShape(topStart = PbpDimens.rTail, topEnd = r, bottomEnd = r, bottomStart = r)
                 }
                 val bubbleBase = Modifier
-                    .widthIn(max = 240.dp)
+                    .widthIn(max = PbpDimens.bubbleMaxWidth)
                     .clip(shape)
                     .background(bubbleColor)
                     .then(
                         if (message.isOoc) {
-                            Modifier.dashedBorder(Color.White.copy(alpha = .18f), PbpDimens.rCard)
+                            Modifier.dashedBorder(tokens.line, PbpDimens.rCard)
                         } else Modifier
                     )
                     .then(bodyTap)
@@ -477,16 +477,19 @@ internal fun BubbleRow(
                     }
                 } else {
                     Box(bubbleBase.padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            // 배지 쪽에 한쪽 패딩을 주지 않는다 — 간격은 부모가 (P2)
+                            horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap1),
+                        ) {
                             if (message.isOoc) {
                                 Text(
                                     "잡담",
-                                    fontSize = 9.sp,
+                                    fontSize = 10.sp,
                                     color = inkColor,
                                     modifier = Modifier
-                                        .padding(end = 5.dp)
                                         .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
-                                        .padding(horizontal = 5.dp),
+                                        .padding(horizontal = PbpDimens.gap1),
                                 )
                             }
                             MarkupText(
@@ -580,16 +583,17 @@ internal fun TimeStamp(
  */
 @Composable
 internal fun DayDivider(millis: Long) {
+    val tokens = Pbp.colors
     Box(
         Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(color = Color.Black.copy(alpha = .35f), shape = RoundedCornerShape(999.dp)) {
+        Surface(color = tokens.scrim, shape = RoundedCornerShape(999.dp)) {
             Text(
                 ChatDates.label(millis),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = .78f),
+                color = tokens.onScrim,
                 modifier = Modifier.padding(
                     horizontal = PbpDimens.gap3,
                     vertical = PbpDimens.gap1,
@@ -687,7 +691,7 @@ private fun JudgeCard(
                         JudgeState.Waiting -> "⋯"
                         JudgeState.Done -> "✓"
                     },
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = if (state == JudgeState.MyTurn) tokens.onSignature else tokens.inkDim,
                 )

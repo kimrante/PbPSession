@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -109,11 +110,9 @@ fun OwnerProfileScreen(nav: NavController) {
     Scaffold(containerColor = tokens.bg) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // 상단 바 — 프로필 편집과 같은 규격
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(PbpDimens.appBarHeight)
-                    .padding(horizontal = PbpDimens.gap2),
+            Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
+                Row(
+                Modifier.fillMaxSize().padding(horizontal = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { if (!locked) nav.popBackStack() }, enabled = !locked) {
@@ -122,7 +121,6 @@ fun OwnerProfileScreen(nav: NavController) {
                         modifier = Modifier.alpha(if (locked) 0.28f else 1f),
                     )
                 }
-                Text("오너 프로필", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                 Spacer(Modifier.weight(1f))
                 Box(
                     Modifier
@@ -134,10 +132,21 @@ fun OwnerProfileScreen(nav: NavController) {
                             OwnerProfile.set(context, name, color, imagePath, textColor)
                             nav.popBackStack()
                         }
+                        .heightIn(min = PbpDimens.touchTarget)
                         .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text("저장", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.onSignature)
                 }
+                }
+                // 타이틀은 좌우 인셋을 같게 준 오버레이 — 버튼 개수와 무관하게 정중앙 (P1)
+                Text(
+                    "오너 프로필",
+                    fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center).fillMaxWidth()
+                        .padding(horizontal = PbpDimens.titleInsetWide),
+                )
             }
 
             Column(

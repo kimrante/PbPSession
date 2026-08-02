@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.window.Dialog
 import com.pbp.app.data.Message
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
@@ -86,9 +89,13 @@ internal fun MessageActionDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(PbpDimens.rSheet))
                     .background(tokens.panel)
-                    .padding(PbpDimens.gap4),
+                    .padding(PbpDimens.gap5),
             ) {
-                Text("메시지", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+                Text(
+                    "메시지", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(PbpDimens.gap2))
                 // 순서: 편집 · 복사 · 캡처 · 삭제 — 파괴적인 삭제를 맨 아래로
                 if (canModify) {
@@ -128,16 +135,7 @@ internal fun MessageActionDialog(
                 )
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    Text(
-                        "취소",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = tokens.inkDim,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .clickable(onClick = onDismiss)
-                            .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
-                    )
+                    PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel)
                 }
             }
         }
@@ -192,12 +190,12 @@ internal fun MarkupHelpDialog(onDismiss: () -> Unit) {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(PbpDimens.rSheet))
                 .background(tokens.panel)
-                .padding(PbpDimens.gap4),
+                .padding(PbpDimens.gap5),
         ) {
             Box(Modifier.fillMaxWidth()) {
                 Text(
                     "입력 문법",
-                    fontSize = 15.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = tokens.ink,
                     modifier = Modifier.align(Alignment.Center),
@@ -205,7 +203,7 @@ internal fun MarkupHelpDialog(onDismiss: () -> Unit) {
                 Box(
                     Modifier
                         .align(Alignment.CenterEnd)
-                        .size(28.dp)
+                        .size(PbpDimens.touchTarget)
                         .clip(CircleShape)
                         .clickable(onClick = onDismiss),
                     contentAlignment = Alignment.Center,
@@ -214,22 +212,25 @@ internal fun MarkupHelpDialog(onDismiss: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(PbpDimens.gap3))
+            // 항목마다 상하 패딩을 주면 사이가 두 배(16dp)로 벌어진다 — 부모 간격으로 (P3)
+            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
             com.pbp.shared.MarkupHelp.entries.forEach { entry ->
-                Column(Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap2)) {
+                Column(Modifier.fillMaxWidth()) {
                     Text(
                         entry.syntax,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        color = tokens.signature,
+                        color = tokens.signatureInk,
                     )
                     Spacer(Modifier.height(PbpDimens.gap1))
-                    Text(entry.summary, fontSize = 12.sp, color = tokens.ink)
+                    Text(entry.summary, fontSize = 13.sp, color = tokens.ink)
                     entry.example?.let {
                         Spacer(Modifier.height(PbpDimens.gap1))
                         Text(it, fontSize = 11.sp, color = tokens.inkDim)
                     }
                 }
+            }
             }
         }
     }
@@ -248,14 +249,14 @@ internal fun EditMessageDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("메시지 수정") },
+        title = { PbpDialogTitle("메시지 수정") },
         text = {
             OutlinedTextField(value = body, onValueChange = { body = it }, maxLines = 6)
         },
         confirmButton = {
-            TextButton(onClick = { onSave(body) }, enabled = body.isNotBlank()) { Text("저장") }
+            PbpDialogButton("저장", onClick = { onSave(body) }, enabled = body.isNotBlank())
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }
 
@@ -274,7 +275,7 @@ internal fun JudgeValueDialog(
     val value = input.trim().toIntOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("$statName 값이 없습니다") },
+        title = { PbpDialogTitle("$statName 값이 없습니다") },
         text = {
             Column {
                 Text(
@@ -295,10 +296,12 @@ internal fun JudgeValueDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { value?.let(onConfirm) }, enabled = value != null) {
-                Text("저장하고 굴리기")
-            }
+            PbpDialogButton(
+                "저장하고 굴리기",
+                onClick = { value?.let(onConfirm) },
+                enabled = value != null,
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }

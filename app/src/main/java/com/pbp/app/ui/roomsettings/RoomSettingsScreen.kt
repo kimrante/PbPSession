@@ -54,6 +54,9 @@ import androidx.navigation.NavController
 import com.pbp.app.PbpApp
 import com.pbp.app.data.Images
 import com.pbp.app.ui.common.HexColorDialog
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
@@ -114,12 +117,16 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Row(
-                Modifier.fillMaxWidth().height(PbpDimens.appBarHeight).padding(horizontal = PbpDimens.gap2),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { nav.popBackStack() }) {
-                    Text("←", fontSize = 20.sp, color = tokens.ink)
+            // 타이틀은 버튼 위에 겹쳐 두고 좌우 인셋을 같게 준다 — 버튼 개수와
+            // 무관하게 정중앙 (방 목록과 같은 구조, P1)
+            Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = PbpDimens.gap2),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { nav.popBackStack() }) {
+                        Text("←", fontSize = 20.sp, color = tokens.ink)
+                    }
                 }
                 Text(
                     "방 설정 · ${room?.name ?: ""}",
@@ -127,6 +134,12 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     fontWeight = FontWeight.Bold,
                     color = tokens.ink,
                     maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .padding(horizontal = PbpDimens.titleInsetNarrow),
                 )
             }
 
@@ -280,7 +293,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     if (showResetConfirm) {
         AlertDialog(
             onDismissRequest = { showResetConfirm = false },
-            title = { Text("방 로그 초기화") },
+            title = { PbpDialogTitle("방 로그 초기화") },
             text = {
                 Text(
                     "이 방의 모든 메시지가 삭제됩니다.\n" +
@@ -288,7 +301,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                PbpDialogButton("전부 삭제", kind = PbpButtonKind.Danger, onClick = {
                     showResetConfirm = false
                     vm.resetLogs { ok ->
                         Toast.makeText(
@@ -299,9 +312,11 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                             Toast.LENGTH_SHORT,
                         ).show()
                     }
-                }) { Text("전부 삭제", color = Pbp.colors.danger) }
+                })
             },
-            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text("취소") } },
+            dismissButton = {
+                PbpDialogButton("취소", { showResetConfirm = false }, kind = PbpButtonKind.Cancel)
+            },
         )
     }
 
@@ -324,7 +339,7 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
 private fun UsingBadge(label: String = "사용 중") {
     Text(
         label,
-        fontSize = 9.sp,
+        fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
         color = Pbp.colors.onSignature,
         modifier = Modifier
@@ -347,7 +362,7 @@ private fun ThemeCell(
         Modifier
             .clip(RoundedCornerShape(PbpDimens.rCell))
             // 선택 표시는 배경 그리드와 동일하게 시그니처 옐로로 통일
-            .background(if (selected) tokens.signature.copy(alpha = .12f) else Color(0x08FFFFFF))
+            .background(if (selected) tokens.signature.copy(alpha = .12f) else tokens.panel2)
             .border(
                 1.5.dp,
                 if (selected) tokens.signature else tokens.line,
@@ -367,7 +382,7 @@ private fun ThemeCell(
         Text(
             label,
             fontSize = 10.sp,
-            color = if (selected) tokens.signature else tokens.inkDim,
+            color = if (selected) tokens.signatureInk else tokens.inkDim,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
     }
@@ -375,18 +390,19 @@ private fun ThemeCell(
 
 @Composable
 private fun SectionTitle(text: String) {
-    // 섹션 사이 간격은 제목 앞 여백으로 분리 — 제목의 상하 패딩은 대칭 (CLAUDE.md §0)
-    Spacer(Modifier.height(PbpDimens.gap5))
+    // 섹션 사이 간격은 제목 앞 여백으로 분리 — 제목의 상하 패딩은 대칭 (CLAUDE.md §0).
+    // 앞 여백 16 + 상하 8 = 제목 위 24dp로 규정에 맞춘다 (P3)
+    Spacer(Modifier.height(PbpDimens.gap4))
     Text(
         text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 1.5.sp,
+        letterSpacing = PbpDimens.labelTracking,
         color = Pbp.colors.inkDim,
+        // 좌우 대칭 — start만 주면 오른쪽 끝이 다른 항목과 어긋난다 (P2)
         modifier = Modifier.padding(
-            start = PbpDimens.gap4,
-            top = PbpDimens.gap2,
-            bottom = PbpDimens.gap2,
+            horizontal = PbpDimens.gap4,
+            vertical = PbpDimens.gap2,
         ),
     )
 }

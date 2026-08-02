@@ -67,6 +67,9 @@ import com.pbp.app.ui.common.FontSettingDialog
 import com.pbp.app.ui.profile.ProfileManagerDialog
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
@@ -187,7 +190,7 @@ fun RoomListScreen(nav: NavController) {
                                 .size(PbpDimens.logoTile)
                                 .clip(RoundedCornerShape(7.dp))
                                 .background(
-                                    Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))
+                                    Brush.linearGradient(listOf(tokens.signature, tokens.signatureDeep))
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -324,15 +327,17 @@ fun RoomListScreen(nav: NavController) {
     deleteTarget?.let { room ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("방 삭제") },
+            title = { PbpDialogTitle("방 삭제") },
             text = { Text("'${room.name}' 방과 모든 메시지, GM 프로필이 삭제됩니다.") },
             confirmButton = {
-                TextButton(onClick = {
+                PbpDialogButton("삭제", kind = PbpButtonKind.Danger, onClick = {
                     vm.deleteRoom(room)
                     deleteTarget = null
-                }) { Text("삭제", color = Pbp.colors.danger) }
+                })
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("취소") } },
+            dismissButton = {
+                PbpDialogButton("취소", { deleteTarget = null }, kind = PbpButtonKind.Cancel)
+            },
         )
     }
 }
@@ -479,7 +484,7 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
     var ruleMenuOpen by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("새 세션") },
+        title = { PbpDialogTitle("새 세션") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 OutlinedTextField(
@@ -527,8 +532,8 @@ private fun CreateRoomDialog(onDismiss: () -> Unit, onCreate: (String, String) -
                 )
             }
         },
-        confirmButton = { TextButton(onClick = { onCreate(name, rule) }) { Text("만들기") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        confirmButton = { PbpDialogButton("만들기", { onCreate(name, rule) }) },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }
 
@@ -539,7 +544,7 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String, () -> Unit) -
     var joining by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("초대 코드로 참여") },
+        title = { PbpDialogTitle("초대 코드로 참여") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 OutlinedTextField(
@@ -556,14 +561,15 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String, () -> Unit) -
             }
         },
         confirmButton = {
-            TextButton(
+            PbpDialogButton(
+                if (joining) "참여 중…" else "참여",
                 onClick = {
                     joining = true
                     onJoin(code) { joining = false }
                 },
                 enabled = code.isNotBlank() && !joining,
-            ) { Text(if (joining) "참여 중…" else "참여") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }

@@ -32,16 +32,16 @@ import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 
 /** 캡처 바 높이 — 선택 상태가 바뀌어도 바가 튀지 않도록 고정 (목업 실측 70px) */
-private val CAPTURE_BAR_HEIGHT = 70.dp
+private val CAPTURE_BAR_HEIGHT = PbpDimens.captureBarHeight
 
 /**
  * 캡처 모드 상단 바 — 평상시 바와 같은 56dp 자리에, 배경만 시그니처 톤으로 바꿔
- * 모드 전환을 알린다. 버튼이 왼쪽 하나뿐이라 titleInset(96dp) 대신 gap6를 쓴다.
+ * 모드 전환을 알린다. 버튼이 왼쪽 하나뿐이라 titleInset(96dp) 대신 titleInsetNarrow(56dp).
  */
 @Composable
 internal fun CaptureModeBar(subtitle: String, onClose: () -> Unit) {
     val tokens = Pbp.colors
-    val onBar = Color(0xFF1E1908)
+    val onBar = tokens.onSignature
     Box(
         Modifier
             .fillMaxWidth()
@@ -65,7 +65,7 @@ internal fun CaptureModeBar(subtitle: String, onClose: () -> Unit) {
             Modifier
                 .align(Alignment.TopCenter)
                 .height(PbpDimens.appBarHeight)
-                .padding(horizontal = PbpDimens.gap6),
+                .padding(horizontal = PbpDimens.titleInsetNarrow),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {

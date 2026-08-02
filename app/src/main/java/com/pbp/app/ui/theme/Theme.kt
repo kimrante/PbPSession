@@ -34,7 +34,9 @@ fun PbpTheme(
             outline = tokens.line,
             surfaceContainer = tokens.panel,
             surfaceContainerLow = tokens.panel,
-            surfaceContainerHigh = tokens.panel2,
+            // AlertDialog 기본 면이 여기서 온다 — panel2(베이지)로 새면 다이얼로그만
+            // 다른 면색이 된다. 다이얼로그는 panel 한 가족 (0-3)
+            surfaceContainerHigh = tokens.panel,
             surfaceContainerHighest = tokens.panel2,
         )
     } else {
@@ -51,7 +53,9 @@ fun PbpTheme(
             outline = tokens.line,
             surfaceContainer = tokens.panel,
             surfaceContainerLow = tokens.panel,
-            surfaceContainerHigh = tokens.panel2,
+            // AlertDialog 기본 면이 여기서 온다 — panel2(베이지)로 새면 다이얼로그만
+            // 다른 면색이 된다. 다이얼로그는 panel 한 가족 (0-3)
+            surfaceContainerHigh = tokens.panel,
             surfaceContainerHighest = tokens.panel2,
         )
     }
@@ -68,6 +72,9 @@ fun PbpTheme(
             typography = typographyWith(AppFonts.fontFamily),
             // 스톡 AlertDialog(extraLarge=28dp)를 커스텀 다이얼로그와 같은 반경으로 (P3-2)
             shapes = androidx.compose.material3.Shapes(
+                // OutlinedTextField가 쓰는 4dp 모서리를 필드 반경으로 일괄 교정 (0-3)
+                extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(PbpDimens.rCell),
+                // 스톡 AlertDialog(extraLarge=28dp)를 커스텀 다이얼로그와 같은 반경으로 (P3-2)
                 extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(PbpDimens.rSheet),
             ),
             content = content,

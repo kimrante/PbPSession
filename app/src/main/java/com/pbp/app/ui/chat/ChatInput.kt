@@ -139,7 +139,7 @@ internal fun InputZone(
                     Text(
                         profile.name,
                         fontSize = 10.sp,
-                        color = if (on) tokens.signature else tokens.inkDim,
+                        color = if (on) tokens.signatureInk else tokens.inkDim,
                         fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
                     )
@@ -150,7 +150,7 @@ internal fun InputZone(
                     Box(
                         Modifier
                             .size(PbpDimens.avatarStrip)
-                            .dashedBorder(Color.White.copy(alpha = .3f), PbpDimens.avatarStrip / 2)
+                            .dashedBorder(tokens.line, PbpDimens.avatarStrip / 2)
                             .clip(CircleShape)
                             .clickable(onClick = onAddProfile),
                         contentAlignment = Alignment.Center,
@@ -253,7 +253,7 @@ internal fun InputZone(
                     "잡담",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (oocOn) tokens.signature else tokens.inkDim,
+                    color = if (oocOn) tokens.signatureInk else tokens.inkDim,
                 )
             }
             }
@@ -296,21 +296,31 @@ internal fun InputZone(
                 trailingIcon = {
                     Box(
                         Modifier
-                            .size(24.dp)
+                            .size(PbpDimens.touchTarget)
                             .clip(CircleShape)
                             .background(tokens.chatterBubble)
                             .clickable { helpOpen = true },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("?", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = tokens.inkSub)
+                        Text("?", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkSub)
                     }
                 },
+                // textStyle을 주지 않으면 M3 기본 16sp로 새어, 치기 시작하는 순간
+                // 플레이스홀더(13sp)에서 크기가 점프한다 (8장)
+                textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
+                    fontSize = 13.sp,
+                    color = tokens.ink,
+                ),
                 colors = TextFieldDefaults.colors(
                     // 라이트 입력바 배경이 거의 흰색이라 흰 반투명 컨테이너는 구분되지 않는다
                     focusedContainerColor = tokens.panel2,
                     unfocusedContainerColor = tokens.panel2,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
+                    // 포커스 라벨이 M3 primary(옐로 원색)로 새는 것을 막는다 (P0 1-2)
+                    focusedLabelColor = tokens.signatureInk,
+                    unfocusedLabelColor = tokens.inkDim,
+                    cursorColor = tokens.signatureInk,
                 ),
                 shape = RoundedCornerShape(PbpDimens.rCell),
                 maxLines = 4,

@@ -19,6 +19,7 @@ object DesktopDimens {
     val rCell = 12.dp
     val rCard = 16.dp
     val rSheet = 20.dp
+    val rTail = 4.dp   // 말풍선 꼬리 쪽 모서리 (모바일과 같은 값)
 
     /** 아이콘·전송 버튼 최소 크기 */
     val touchTarget = 40.dp
@@ -43,6 +44,28 @@ object DesktopDimens {
     val overlay = 430.dp
     /** 채팅 영역 가장자리 (모바일 16 → PC 24) */
     val edge = 24.dp
+
+    /**
+     * 상단 바 중앙 타이틀이 좌우 버튼과 겹치지 않게 비워 두는 폭 —
+     * 모바일 titleInset과 같은 역할. 사이드바 쪽 값은 `edge + 로고 + gap2 + 버튼 2개`.
+     */
+    val titleInset = 240.dp
+    val titleInsetSidebar = 88.dp
+
+    /** 캡처 하단 바 — 선택 상태가 바뀌어도 튀지 않게 고정 (모바일과 같은 값) */
+    val captureBar = 70.dp
+
+    /** 색 피커 규격 — 8-그리드 (모바일도 이 값으로 맞춘다) */
+    val pickerBoard = 140.dp
+    val pickerKnob = 16.dp
+    val pickerGap = 8.dp
+
+    /** 프로필 편집 미리보기 아바타 */
+    val avatarPreview = 48.dp
+
+    /** 색 스와치와 그 간격 — 모바일과 같은 값 */
+    val swatch = 26.dp
+    val swatchGap = 4.dp
 
     // ── 이미지 저장 크기(px) — 모바일 ImageSizes와 같은 값 ──
     const val PROFILE_PX = 512

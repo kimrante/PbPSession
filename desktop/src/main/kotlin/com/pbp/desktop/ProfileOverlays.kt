@@ -117,13 +117,13 @@ internal fun ProfileOverlay(
     val overlayScope = rememberCoroutineScope()
     OverlayScaffold(if (editing == null) "새 캐릭터" else "캐릭터 편집", onDismiss) {
         OverlayField(name, { name = it }, "캐릭터 이름")
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         OverlayField(emoji, { emoji = it }, "이모지 아바타 (비우면 🙂)")
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         // 프로필 이미지 — 로컬 512px 축소 저장, 전송 시 256px 축소본이 방에 업로드 (앱과 동일)
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
         ) {
             Box(
                 Modifier.size(44.dp).clip(CircleShape).background(Tokens.Panel2)
@@ -157,7 +157,7 @@ internal fun ProfileOverlay(
                 GhostButton("제거") { imagePath = null }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         // 앱의 '클립보드 코드로 생성'과 동일 — ccfolia 캐릭터 JSON을 붙여넣은 상태로 클릭
         GhostButton("클립보드 캐릭터 코드 불러오기", Modifier.fillMaxWidth()) {
             runCatching {
@@ -170,36 +170,36 @@ internal fun ProfileOverlay(
                 imported.stats.forEach { stats.add(it) }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("이름 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(Tokens.namePresets, nameColor, recentColors["name"].orEmpty()) { nameColor = it; nameCustomOpen = false }
             CustomSwatch(on = nameColor !in Tokens.namePresets) {
                 nameCustomOpen = !nameCustomOpen
             }
         }
         if (nameCustomOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(nameColor) { nameColor = it; onColorUsed("name", it) }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("말풍선 색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(Tokens.bubblePresets, bubbleColor, recentColors["bubble"].orEmpty()) { bubbleColor = it; bubbleCustomOpen = false }
             CustomSwatch(on = bubbleColor !in Tokens.bubblePresets) {
                 bubbleCustomOpen = !bubbleCustomOpen
             }
         }
         if (bubbleCustomOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(bubbleColor) { bubbleColor = it; onColorUsed("bubble", it) }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("말풍선 글씨색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(
                 com.pbp.shared.Palette.textPresets,
                 textColor ?: com.pbp.shared.Palette.textPresets.first(),
@@ -210,23 +210,24 @@ internal fun ProfileOverlay(
             }
         }
         if (textCustomOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(textColor ?: com.pbp.shared.Palette.textPresets.first()) {
                 textColor = it; onColorUsed("text", it)
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("캐릭터 값", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
         Text(
             "메시지의 {값이름}이 값으로 치환되고, 숫자 값은 판정 팔레트에 뜹니다",
             fontSize = 10.sp, color = Tokens.InkDim,
         )
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        // 행마다 아래 패딩을 주면 마지막 행만 여백이 남는다 — 부모 간격으로 (P2)
+        Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
         stats.forEachIndexed { index, (key, value) ->
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 6.dp),
             ) {
                 Box(Modifier.weight(1f)) {
                     OverlayField(key, { stats[index] = it to stats[index].second }, "이름")
@@ -238,13 +239,15 @@ internal fun ProfileOverlay(
                     "✕", fontSize = 13.sp, color = Tokens.InkDim,
                     modifier = Modifier.clip(CircleShape)
                         .clickable { stats.removeAt(index) }
-                        .padding(6.dp),
+                        .padding(DesktopDimens.gap2),
                 )
             }
         }
+        }
+        Spacer(Modifier.height(DesktopDimens.gap2))
         GhostButton("＋ 값 추가", Modifier.fillMaxWidth()) { stats.add("" to "") }
-        Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap4))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("저장", Modifier.weight(1f)) {
                 onSave(
                     Profile(
@@ -262,8 +265,8 @@ internal fun ProfileOverlay(
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
         onDelete?.let { delete ->
-            Spacer(Modifier.height(8.dp))
-            GhostButton("이 캐릭터 삭제", Modifier.fillMaxWidth(), delete)
+            Spacer(Modifier.height(DesktopDimens.gap2))
+            GhostDangerButton("이 캐릭터 삭제", Modifier.fillMaxWidth(), delete)
         }
     }
 }
@@ -277,7 +280,7 @@ internal fun SwatchRow(
     onSelect: (Long) -> Unit,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         presets.forEach { color -> DesktopSwatch(color, selected == color) { onSelect(color) } }
@@ -360,6 +363,8 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
             Modifier.fillMaxWidth().height(140.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(
+                    // 기능 예외(가이드 §2): 색 피커의 그라데이션·무지개는 **고르는 대상**이라
+                    // 테마 토큰으로 대체할 수 없다. 이 함수의 원색 리터럴은 전부 여기에 해당한다
                     Brush.horizontalGradient(listOf(Color.White, Color(hsvToArgb(hue, 1f, 1f))))
                 )
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
@@ -387,7 +392,7 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     .background(Color(current))
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
         var hueSize by remember { mutableStateOf(IntSize.Zero) }
         fun pickHue(x: Float) {
             if (hueSize == IntSize.Zero) return
@@ -426,9 +431,9 @@ internal fun ColorPalettePicker(initial: Long, onChange: (Long) -> Unit) {
                     .background(Color(hsvToArgb(hue, 1f, 1f)))
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -562,10 +567,10 @@ internal fun ProfileManagerOverlay(
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(DesktopDimens.gap2))
         // 프로필 추가하기 — 목록 맨 아래
         GhostButton("＋ 프로필 추가하기", Modifier.fillMaxWidth(), onAdd)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         GhostButton("닫기", Modifier.fillMaxWidth(), onDismiss)
     }
 }
@@ -600,10 +605,10 @@ internal fun OwnerProfileOverlay(
                 "세션 캐릭터 목록에는 나타나지 않습니다.",
             fontSize = 11.sp, color = Tokens.InkDim,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
         ) {
             OwnerAvatar(name, color, imagePath, 48.dp)
             GhostButton(
@@ -626,12 +631,12 @@ internal fun OwnerProfileOverlay(
                 GhostButton("제거") { imagePath = null }
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(DesktopDimens.gap3))
         OverlayField(name, { name = it }, "이름")
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("컬러", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(Tokens.bubblePresets, color, recentColors["owner"].orEmpty()) {
                 color = it
                 customOpen = false
@@ -639,13 +644,13 @@ internal fun OwnerProfileOverlay(
             CustomSwatch(on = color !in Tokens.bubblePresets) { customOpen = !customOpen }
         }
         if (customOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(color) { color = it; onColorUsed("owner", it) }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(DesktopDimens.gap4))
         Text("말풍선 글씨색", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
-        Spacer(Modifier.height(7.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             SwatchRow(
                 com.pbp.shared.Palette.textPresets,
                 textColor ?: com.pbp.shared.Palette.textPresets.first(),
@@ -656,13 +661,13 @@ internal fun OwnerProfileOverlay(
             }
         }
         if (textCustomOpen) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(DesktopDimens.gap2))
             ColorPalettePicker(textColor ?: com.pbp.shared.Palette.textPresets.first()) {
                 textColor = it; onColorUsed("text", it)
             }
         }
-        Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Spacer(Modifier.height(DesktopDimens.gap4))
+        Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("저장", Modifier.weight(1f)) {
                 if (name.isNotBlank()) onSave(name.trim(), color, imagePath, textColor)
             }

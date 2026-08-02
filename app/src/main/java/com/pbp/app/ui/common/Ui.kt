@@ -359,7 +359,7 @@ fun HexColorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { PbpDialogTitle(title) },
         text = {
             Column {
                 // 채도(가로)·명도(세로) 팔레트 — 드래그/탭으로 선택
@@ -370,10 +370,12 @@ fun HexColorDialog(
                     bri = 1f - (y / svSize.height).coerceIn(0f, 1f)
                     syncHex()
                 }
+                // 기능 예외(가이드 §2): 색 피커의 그라데이션·무지개는 **고르는 대상**이라
+                // 테마 토큰으로 대체할 수 없다. 이 파일의 원색 리터럴은 전부 여기에 해당한다
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .height(PbpDimens.pickerBoard)
                         .clip(RoundedCornerShape(10.dp))
                         .background(
                             Brush.horizontalGradient(
@@ -485,9 +487,9 @@ fun HexColorDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onPick(current) }) { Text("적용") }
+            PbpDialogButton("적용", { onPick(current) })
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }
 
@@ -535,7 +537,9 @@ fun OwnerAvatar(
                 name.take(1).ifEmpty { "?" },
                 fontSize = (size.value * 0.42f).sp,
                 fontWeight = FontWeight.Bold,
-                color = Pbp.colors.bubbleInk,
+                // 어두운 오너 컬러 위에서 진한 잉크는 보이지 않는다 — 면 밝기로 뒤집는다 (8장).
+                // 계수는 sRGB 상대 휘도의 통상 근사(0.299/0.587/0.114)
+                color = if (isLightSurface(color)) Pbp.colors.bubbleInk else Pbp.colors.panel,
             )
         }
     }
@@ -577,7 +581,7 @@ fun AddProfileDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("캐릭터 추가") },
+        title = { PbpDialogTitle("캐릭터 추가") },
         text = {
             Column {
                 AddOptionRow(
@@ -592,7 +596,7 @@ fun AddProfileDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        confirmButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
     )
 }
 
@@ -660,4 +664,14 @@ fun relativeTime(millis: Long, now: Long = System.currentTimeMillis()): String {
         diff < 172_800_000 -> "어제"
         else -> "${diff / 86_400_000}일 전"
     }
+}
+
+/**
+ * 이 면 위에 어두운 글자를 얹어도 읽히는가 (8장) — 아바타 이니셜의 색을 뒤집는 기준.
+ */
+private fun isLightSurface(argb: Long): Boolean {
+    val r = (argb shr 16 and 0xFF).toFloat()
+    val g = (argb shr 8 and 0xFF).toFloat()
+    val b = (argb and 0xFF).toFloat()
+    return (0.299f * r + 0.587f * g + 0.114f * b) > 140f
 }

@@ -25,6 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.OwnerProfile
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 
@@ -40,7 +43,7 @@ fun ProfileManagerDialog(
     val tokens = Pbp.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("프로필 관리") },
+        title = { PbpDialogTitle("프로필 관리") },
         text = {
             Column(
                 Modifier
@@ -94,7 +97,7 @@ fun ProfileManagerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+        confirmButton = { PbpDialogButton("닫기", onDismiss) },
     )
 }
 

@@ -71,7 +71,7 @@ fun ImageCropDialog(
     val source = bitmap
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("이미지 조정") },
+        title = { PbpDialogTitle("이미지 조정") },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 if (source == null) {
@@ -88,6 +88,8 @@ fun ImageCropDialog(
                         Modifier
                             .size(cropSizeDp)
                             .clip(CircleShape)
+                            // 기능 예외(가이드 §2): 크롭 레터박스는 사진 밖을 가리는
+                            // 암전이라 테마 면색이 아니다
                             .background(Color.Black)
                             .border(2.dp, tokens.signature, CircleShape)
                             .pointerInput(source) {
@@ -130,10 +132,11 @@ fun ImageCropDialog(
         confirmButton = {
             val scope = androidx.compose.runtime.rememberCoroutineScope()
             var saving by remember { mutableStateOf(false) }
-            TextButton(
+            PbpDialogButton(
+                if (saving) "저장 중…" else "적용",
                 enabled = source != null && !saving,
                 onClick = {
-                    val src = source ?: return@TextButton
+                    val src = source ?: return@PbpDialogButton
                     saving = true
                     // 512px 렌더링+JPEG 압축은 메인 스레드에서 ANR 위험 (P3-5)
                     scope.launch {
@@ -144,9 +147,9 @@ fun ImageCropDialog(
                         if (path != null) onCropped(path) else onDismiss()
                     }
                 },
-            ) { Text(if (saving) "저장 중…" else "적용") }
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = true),
     )
 }

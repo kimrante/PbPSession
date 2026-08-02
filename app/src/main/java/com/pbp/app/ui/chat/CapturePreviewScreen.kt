@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -172,7 +173,8 @@ fun CapturePreviewScreen(nav: NavController) {
                     Modifier
                         .align(Alignment.TopCenter)
                         .height(PbpDimens.appBarHeight)
-                        .padding(horizontal = PbpDimens.gap6),
+                        // 32(gap6)로 두면 부제가 버튼 밑으로 파고든다 (P1)
+                        .padding(horizontal = PbpDimens.titleInsetNarrow),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -205,6 +207,16 @@ fun CapturePreviewScreen(nav: NavController) {
                     .padding(PbpDimens.gap4),
                 verticalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
             ) {
+                // 공백만 남으면 실패인지 로딩인지 알 수 없다 (P1)
+                if (bitmaps.isEmpty()) {
+                    Text(
+                        if (busy) "이미지를 만드는 중…" else "만들어진 이미지가 없습니다",
+                        fontSize = 13.sp,
+                        color = tokens.inkDim,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap6),
+                    )
+                }
                 bitmaps.forEach { bitmap ->
                     Image(
                         bitmap = bitmap.asImageBitmap(),
@@ -246,11 +258,12 @@ fun CapturePreviewScreen(nav: NavController) {
                 }
                 Text(
                     "공유",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = tokens.signatureInk,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
+                        .heightIn(min = PbpDimens.touchTarget)
                         .clickable(enabled = !busy && bitmaps.isNotEmpty()) {
                             // 공유 중에는 토글을 잠근다 — 압축하는 사이 재렌더가 끼면
                             // 쓰던 비트맵이 recycle돼 빈 이미지가 공유된다 (R4)
@@ -274,12 +287,13 @@ fun CapturePreviewScreen(nav: NavController) {
                 Spacer(Modifier.width(PbpDimens.gap2))
                 Text(
                     if (busy) "처리 중…" else "저장",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = tokens.onSignature,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
                         .background(tokens.signature)
+                        .heightIn(min = PbpDimens.touchTarget)
                         .clickable(enabled = !busy && bitmaps.isNotEmpty()) {
                             if (CaptureSaver.needsPermission()) {
                                 permLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)

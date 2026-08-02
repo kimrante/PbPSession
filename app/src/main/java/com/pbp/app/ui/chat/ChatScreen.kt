@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -68,6 +69,9 @@ import com.pbp.app.ui.common.importCharacterFromClipboard
 import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
@@ -406,6 +410,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         bars?.isAppearanceLightStatusBars = false // 검정 위에는 흰 아이콘
         onDispose { if (wasLight != null) bars.isAppearanceLightStatusBars = wasLight }
     }
+    // 기능 예외(가이드 §2): 채팅은 상태 바까지 검정으로 덮어 배경 이미지가
+    // 화면 끝까지 이어지게 한다. 테마 면색이 아니라 '무대의 암전'이라 토큰 밖이다
     Scaffold(containerColor = Color.Black) { padding ->
         // consumeWindowInsets: Scaffold가 이미 적용한 내비게이션 바 패딩을
         // imePadding이 또 더하지 않도록 소비 처리 — 키보드와 입력줄 사이 틈 방지
@@ -428,7 +434,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     Modifier
                         .fillMaxWidth()
                         .height(PbpDimens.appBarHeight)
-                        .background(Color.Black.copy(alpha = if (tokens.isDark) 0.45f else 0.06f))
+                        .background(tokens.barScrim)
                 ) {
                     Row(
                         Modifier
@@ -577,8 +583,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                     color = tokens.inkDim,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(999.dp))
-                                        .background(Color.Black.copy(alpha = .35f))
+                                        .background(tokens.scrim)
                                         .clickable { vm.loadOlder() }
+                                        // 시각 크기는 그대로, 히트만 40dp (§6, P4)
+                                        .heightIn(min = PbpDimens.touchTarget)
                                         .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                                 )
                             }
@@ -751,15 +759,17 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     deleteTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { deleteTargetId = null },
-            title = { Text("메시지 삭제") },
+            title = { PbpDialogTitle("메시지 삭제") },
             text = { Text("이 메시지를 삭제할까요? 공유된 방이면 상대 화면에서도 사라집니다.") },
             confirmButton = {
-                TextButton(onClick = {
+                PbpDialogButton("삭제", kind = PbpButtonKind.Danger, onClick = {
                     vm.delete(target)
                     deleteTargetId = null
-                }) { Text("삭제", color = Pbp.colors.danger) }
+                })
             },
-            dismissButton = { TextButton(onClick = { deleteTargetId = null }) { Text("취소") } },
+            dismissButton = {
+                PbpDialogButton("취소", { deleteTargetId = null }, kind = PbpButtonKind.Cancel)
+            },
         )
     }
 }

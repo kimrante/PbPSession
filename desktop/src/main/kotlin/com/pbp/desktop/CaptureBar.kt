@@ -28,7 +28,7 @@ import com.pbp.desktop.ui.Tokens
 internal const val CAPTURE_MAX = com.pbp.shared.CaptureLayout.MAX_MESSAGES
 
 /** 캡처 바 높이 — 선택 상태가 바뀌어도 튀지 않도록 고정 (모바일과 같은 70dp) */
-private val CAPTURE_BAR_HEIGHT = 70.dp
+private val CAPTURE_BAR_HEIGHT = DesktopDimens.captureBar
 
 /**
  * 하단 캡처 바 — 입력 영역 자리를 대신한다. 모바일 CaptureBar와 같은 규격·같은 문구.
@@ -136,7 +136,7 @@ internal fun CaptureModeBar(subtitle: String, onClose: () -> Unit) {
         }
         Text(
             "✕",
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             color = Tokens.OnSignature.copy(alpha = .72f),
             modifier = Modifier
                 .align(Alignment.CenterStart)

@@ -70,7 +70,7 @@ internal fun LeftPane(
     // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
     Column(
         Modifier.width(DesktopDimens.sidebar).fillMaxHeight()
-            .background(Brush.verticalGradient(listOf(Color(0xFFFBF9F4), Color(0xFFF0EDE5)))),
+            .background(Brush.verticalGradient(listOf(Tokens.SidebarTop, Tokens.SidebarBottom))),
     ) {
         // 헤더 — 로고+워드마크 1행, 부제 2행. 묶음 전체가 정중앙 (목업 mockup-home-header).
         // 버튼은 우측 끝에 겹쳐 두므로 타이틀 중심은 버튼 개수와 무관하다.
@@ -109,7 +109,7 @@ internal fun LeftPane(
                     Box(
                         Modifier.size(22.dp).clip(RoundedCornerShape(7.dp))
                             .background(
-                                Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))
+                                Brush.linearGradient(listOf(Tokens.Signature, Tokens.SignatureDeep))
                             ),
                         contentAlignment = Alignment.Center,
                     ) { D10Mark(Modifier.size(width = 13.dp, height = 14.dp)) }
@@ -132,7 +132,7 @@ internal fun LeftPane(
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = DesktopDimens.gap4),
             verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap3),
-            contentPadding = PaddingValues(vertical = DesktopDimens.gap2),
+            contentPadding = PaddingValues(vertical = DesktopDimens.gap3),
         ) {
             items(rooms, key = { it.remoteId }) { room ->
                 val active = room.remoteId == selected?.remoteId
@@ -141,7 +141,7 @@ internal fun LeftPane(
                         .clip(RoundedCornerShape(16.dp))
                         .background(
                             if (active) Color(room.themeColor).copy(alpha = .14f)
-                            else Color(0x0914191F)
+                            else Tokens.CardBg
                         )
                         .border(
                             1.dp,
@@ -164,7 +164,7 @@ internal fun LeftPane(
                         Box(
                             Modifier.size(14.dp)
                                 .align(Alignment.BottomEnd)
-                                .border(3.dp, Color(0xFFFBF9F4), CircleShape)
+                                .border(3.dp, Tokens.SidebarTop, CircleShape)
                                 .clip(CircleShape)
                                 .background(Color(room.themeColor))
                         )
@@ -228,6 +228,8 @@ internal fun BackgroundLayer(backgroundKey: String, modifier: Modifier = Modifie
 internal fun D10Mark(modifier: Modifier = Modifier) {
     androidx.compose.foundation.Canvas(modifier) {
         val faces = listOf(
+            // 기능 예외(가이드 §2): 앱 아이콘 d10의 면 음영 — 브랜드 자산의 고정 값이라
+            // 테마 스왑 대상이 아니다
             listOf(50f to 6f, 9f to 54f, 33f to 60f) to Color(0xFF23272E),
             listOf(9f to 54f, 50f to 98f, 33f to 60f) to Color(0xFF181C22),
             listOf(50f to 6f, 91f to 54f, 67f to 60f) to Color(0xFF2A2F38),
@@ -246,7 +248,7 @@ internal fun D10Mark(modifier: Modifier = Modifier) {
             drawPath(path, color)
             drawPath(
                 path,
-                Color(0xFFFFD05C),
+                Tokens.Signature,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(
                     width = 2f * sx,
                     join = androidx.compose.ui.graphics.StrokeJoin.Round,

@@ -65,6 +65,36 @@ object Tokens {
     val VeilTop = Color(0x8CF4F2EC)
     val VeilMid = Color(0x40F4F2EC)
 
+    // ── 지시서 0-5: 화면 코드에 복제돼 있던 리터럴을 토큰으로 ──
+
+    /** 채팅 입력 바 면 — 모바일 chatBarBg와 **같은 값**이어야 한다 (0xEB로 드리프트했었다) */
+    val ChatBarBg = Color(0xEDFFFFFF)
+
+    /** 오버레이 딤 — 세 파일에 복제돼 있던 값 */
+    val Scrim = Color(0x611E232D)
+
+    /** 배경 이미지 위 표시용 필·칩의 검정 스크림 (모바일 scrim과 같은 값) */
+    val PillScrim = Color(0x59000000)
+
+    /** 스크림 위 글자 */
+    val OnScrim = Color(0x99FFFFFF)
+
+    /** 왼쪽 방 목록 패널 면 — 위/아래 두 톤 */
+    val SidebarTop = Color(0xFFFAF8F2)
+    val SidebarBottom = Color(0xFFF1EDE3)
+
+    /** 방 목록 카드 면 — 가이드대로 Panel 면 + Line 테두리 */
+    val CardBg = Panel
+
+    /** 잉크의 옅은 면 — 비활성 버튼 배경 */
+    val InkFaint = Color(0x1414191F)
+
+    /** 비활성 버튼 위 글자 */
+    val InkDisabled = Color(0x5714191F)
+
+    /** 시그니처 옐로의 짙은 짝 — 로고 타일 그라데이션 전용 */
+    val SignatureDeep = Color(0xFFEFB945)
+
     // 팔레트 값·변환은 :shared Palette가 단일 출처 (리뷰 A3)
     val themePresets = com.pbp.shared.Palette.themePresets
     val namePresets = com.pbp.shared.Palette.namePresets

@@ -67,7 +67,7 @@ internal fun JudgeRequestOverlay(
     val target = candidates?.find { it.name == targetName }
 
     Box(
-        Modifier.fillMaxSize().background(Color(0x611E232D)).clickable(onClick = onDismiss),
+        Modifier.fillMaxSize().background(Tokens.Scrim).clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -75,7 +75,7 @@ internal fun JudgeRequestOverlay(
                 .clip(RoundedCornerShape(DesktopDimens.rSheet))
                 .background(Tokens.Panel)
                 .clickable(enabled = false) {}
-                .padding(22.dp),
+                .padding(DesktopDimens.gap5),
         ) {
             Text(
                 "판정 요청", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
@@ -130,11 +130,15 @@ internal fun JudgeRequestOverlay(
                     )
                 }
                 Spacer(Modifier.height(DesktopDimens.gap3))
-                Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                Column(
+                    Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState()),
+                    // 행마다 아래 패딩을 주면 마지막 행만 여백이 남는다 (P2)
+                    verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
+                ) {
                     // 두 칸씩 — 모바일 시트와 같은 격자
                     target.stats.chunked(2).forEach { pair ->
                         Row(
-                            Modifier.fillMaxWidth().padding(bottom = DesktopDimens.gap2),
+                            Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2),
                         ) {
                             pair.forEach { name ->
@@ -172,14 +176,16 @@ internal fun JudgeRequestOverlay(
                     } else {
                         // 누를 수 없는 버튼에도 자리는 남겨 둔다 — 버튼이 사라지면 창이 흔들린다
                         Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(999.dp))
-                                .background(Color(0x1414191F))
-                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                            Modifier.weight(1f)
+                                .heightIn(min = DesktopDimens.touchTarget)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(Tokens.InkFaint)
+                                .padding(horizontal = DesktopDimens.gap4, vertical = DesktopDimens.gap2),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 "보내기", fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                color = Color(0x5714191F),
+                                color = Tokens.InkDisabled,
                             )
                         }
                     }
@@ -271,7 +277,7 @@ private fun StatChip(name: String, selected: Boolean, modifier: Modifier, onClic
     Box(
         modifier
             .clip(shape)
-            .background(if (selected) Color(0x29FFD05C) else Tokens.Panel2)
+            .background(if (selected) Tokens.Signature.copy(alpha = .16f) else Tokens.Panel2)
             .border(if (selected) 2.dp else 1.dp, if (selected) Tokens.Signature else Tokens.Line, shape)
             .clickable(onClick = onClick)
             .padding(vertical = DesktopDimens.gap3),

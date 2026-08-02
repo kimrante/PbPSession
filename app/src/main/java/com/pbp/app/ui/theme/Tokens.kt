@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * 디자인 토큰 (docs/PbP-design-spec.md 2장).
@@ -35,6 +36,18 @@ data class PbpColors(
     val veilMid: Color,
     val cardBg: Color,        // 방 목록 카드 면 — 화면 코드의 다크 분기를 없애기 위한 토큰
     val chatBarBg: Color,     // 채팅 입력 바 면 (배경 위에 얹히므로 반투명)
+    /** 배경 이미지 위 표시용 필·칩의 검정 스크림 (시스템 안내, 다이스, '이전 대화') */
+    val scrim: Color,
+    /** 스크림 위 글자 */
+    val onScrim: Color,
+    /** 상단 바가 배경 위에 얹힐 때의 스크림 — 라이트/다크 분기를 화면 코드에서 없앤다 */
+    val barScrim: Color,
+    /** 시그니처 옐로의 짙은 짝 — 로고 타일 그라데이션 전용 */
+    val signatureDeep: Color,
+    /** 잉크의 옅은 면 — 비활성 버튼 배경 */
+    val inkFaint: Color,
+    /** 비활성 버튼 위 글자 */
+    val inkDisabled: Color,
 )
 
 val PbpDarkColors = PbpColors(
@@ -62,6 +75,12 @@ val PbpDarkColors = PbpColors(
     veilMid = Color(0x470A0E14),
     cardBg = Color(0x09FFFFFF),
     chatBarBg = Color(0xE0090C11),
+    scrim = Color(0x59000000),
+    onScrim = Color(0x99FFFFFF),
+    barScrim = Color(0x73000000),
+    signatureDeep = Color(0xFFEFB945),
+    inkFaint = Color(0x14FFFFFF),
+    inkDisabled = Color(0x57FFFFFF),
 )
 
 val PbpLightColors = PbpColors(
@@ -89,6 +108,12 @@ val PbpLightColors = PbpColors(
     veilMid = Color(0x40F4F2EC),
     cardBg = Color(0xFFFFFFFF),
     chatBarBg = Color(0xEDFFFFFF),
+    scrim = Color(0x59000000),
+    onScrim = Color(0x99FFFFFF),
+    barScrim = Color(0x0F000000),
+    signatureDeep = Color(0xFFEFB945),
+    inkFaint = Color(0x1414191F),
+    inkDisabled = Color(0x5714191F),
 )
 
 val LocalPbpColors = staticCompositionLocalOf { PbpDarkColors }
@@ -96,7 +121,7 @@ val LocalPbpColors = staticCompositionLocalOf { PbpDarkColors }
 /**
  * 통일 스페이싱·반경 토큰 (docs/mockups/trpg-app-mockup-v2.html 0장).
  * 여백은 4dp 그리드 6단계, 반경은 4단계만 사용한다 — 이 밖의 매직 넘버 금지.
- * 글자 크기는 18/15/13/11/10sp 5단계(+배지 한정 9sp)를 리터럴로 쓴다.
+ * 글자 크기는 18/15/13/11/10sp **5단계**를 리터럴로 쓴다 (9sp·12sp·14sp는 폐기).
  *
  * **본문 스케일 밖의 글리프**: 텍스트가 아니라 아이콘·장식으로 쓰는 문자는
  * 이 스케일을 따르지 않는다 — 뒤로 '←' 20 · 인용 따옴표 24 · FAB '＋' 24 ·
@@ -134,6 +159,40 @@ object PbpDimens {
      */
     val titleInset = 96.dp      // 아이콘 버튼 2개 기준 — 채팅
     val titleInsetWide = 112.dp // 텍스트 버튼 2개 + 오너 아바타 — 방 목록
+
+    /**
+     * 버튼이 한쪽에 1개뿐인 상단 바용 인셋. 32(gap6)로 두면 부제가 버튼 밑으로
+     * 파고든다 — 버튼 히트박스(40) + 가장자리(16)를 덮는 값.
+     */
+    val titleInsetNarrow = 56.dp
+
+    // 규격 등재 (지시서 0-2) — 화면 코드의 매직 넘버를 여기로 올린다
+    val bubbleMaxWidth = 240.dp // 말풍선 최대 폭
+    val captureBarHeight = 70.dp // 캡처 하단 바 — 선택 상태가 바뀌어도 튀지 않게 고정
+
+    /** 토글 1벌 — 잡담 토글과 캡처 옵션 토글이 같은 치수를 쓴다 */
+    val toggleTrackW = 34.dp
+    val toggleTrackH = 20.dp
+    val toggleKnob = 16.dp
+
+    /**
+     * 인용 말풍선 전용 여백 — 장식 따옴표가 좌우로 튀어나온 만큼 본문을 안으로 민다.
+     * 글리프 보정(9/5/+6)은 사용처 주석 참조.
+     */
+    val quotePadH = 26.dp
+    val quotePadV = 14.dp
+
+    /** 색 스와치와 그 간격 — 데스크톱과 같은 값 (P6) */
+    val swatch = 26.dp
+    val swatchGap = 4.dp
+
+    /** 색 피커 규격 — 데스크톱과 같은 8-그리드 값 (P6) */
+    val pickerBoard = 140.dp
+    val pickerKnob = 16.dp
+    val pickerGap = 8.dp
+
+    /** 라벨 자간 — 대문자·코드성 라벨 1종으로 통일 */
+    val labelTracking = 1.sp
 }
 
 /** 프리셋 팔레트 (목업 03·04 화면) */

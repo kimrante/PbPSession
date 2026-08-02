@@ -33,6 +33,7 @@ object DesktopNotifier {
         val img = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        // 기능 예외: 트레이 아이콘은 AWT Color라 Compose 토큰을 쓸 수 없다
         g.color = Color(0x2A, 0x33, 0x40)
         g.fillRoundRect(0, 0, size, size, 6, 6)
         g.color = Color(0xEF, 0xE8, 0xD6)

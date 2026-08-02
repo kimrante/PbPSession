@@ -221,7 +221,7 @@ private fun CaptureHeader(roomName: String, messages: List<Message>) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = .9f))
+            .background(Tokens.Panel.copy(alpha = .9f))
             .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -229,7 +229,7 @@ private fun CaptureHeader(roomName: String, messages: List<Message>) {
             Modifier
                 .size(22.dp)
                 .clip(RoundedCornerShape(7.dp))
-                .background(Brush.linearGradient(listOf(Color(0xFFFFD05C), Color(0xFFEFB945)))),
+                .background(Brush.linearGradient(listOf(Tokens.Signature, Tokens.SignatureDeep))),
             contentAlignment = Alignment.Center,
         ) {
             Text("◆", fontSize = 11.sp, color = Tokens.Ink)
@@ -240,13 +240,13 @@ private fun CaptureHeader(roomName: String, messages: List<Message>) {
                 roomName,
                 fontFamily = GowunBatang,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 color = Tokens.Ink,
                 maxLines = 1,
             )
             Text(
                 "${formatDateRange(messages.first().createdAt, messages.last().createdAt)} · ${messages.size}개 메시지",
-                fontSize = 9.sp,
+                fontSize = 10.sp,
                 color = Tokens.InkDim,
             )
         }
@@ -258,15 +258,15 @@ private fun CaptureFooter(roomName: String, messages: List<Message>, page: Strin
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Color.White.copy(alpha = .9f))
+            .background(Tokens.Panel.copy(alpha = .9f))
             .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("PbP · $roomName", fontSize = 9.sp, color = Tokens.InkDim)
+        Text("PbP · $roomName", fontSize = 10.sp, color = Tokens.InkDim)
         Spacer(Modifier.weight(1f))
         Text(
             page ?: dateOnly(messages.first().createdAt),
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Black,
             color = Tokens.SignatureInk,
         )

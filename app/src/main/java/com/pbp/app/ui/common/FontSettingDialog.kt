@@ -28,7 +28,7 @@ fun FontSettingDialog(onDismiss: () -> Unit) {
     val tokens = Pbp.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("앱 글꼴") },
+        title = { PbpDialogTitle("앱 글꼴") },
         text = {
             Column {
                 listOf(
@@ -49,7 +49,7 @@ fun FontSettingDialog(onDismiss: () -> Unit) {
                     ) {
                         Text(
                             if (selected) "●" else "○",
-                            color = if (selected) tokens.signature else tokens.inkDim,
+                            color = if (selected) tokens.signatureInk else tokens.inkDim,
                             fontSize = 13.sp,
                         )
                         Spacer(Modifier.width(PbpDimens.gap2))
@@ -67,6 +67,6 @@ fun FontSettingDialog(onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
+        confirmButton = { PbpDialogButton("닫기", onDismiss) },
     )
 }

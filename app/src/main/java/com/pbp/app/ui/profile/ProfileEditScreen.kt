@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -64,6 +65,9 @@ import com.pbp.shared.ProfileStats
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.HexColorDialog
 import com.pbp.app.ui.common.ImageCropDialog
+import com.pbp.app.ui.common.PbpButtonKind
+import com.pbp.app.ui.common.PbpDialogButton
+import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
@@ -191,17 +195,14 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 .consumeWindowInsets(padding)
         ) {
             // 상단 바
+            Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
             Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(PbpDimens.appBarHeight)
-                    .padding(horizontal = PbpDimens.gap2),
+                Modifier.fillMaxSize().padding(horizontal = PbpDimens.gap2),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { nav.popBackStack() }) {
                     Text("←", fontSize = 20.sp, color = tokens.ink)
                 }
-                Text("프로필 편집", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                 Spacer(Modifier.weight(1f))
                 // 기존 프로필이 아직 로드되지 않은 상태로 저장하면 새 프로필이 복제된다 (N9)
                 val canSave = profileId == 0L || existing != null
@@ -219,10 +220,21 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 nav.popBackStack()
                             }
                         }
+                        .heightIn(min = PbpDimens.touchTarget)
                         .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap2),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text("저장", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Pbp.colors.onSignature)
                 }
+            }
+            // 타이틀은 좌우 인셋을 같게 준 오버레이 — 버튼 개수와 무관하게 정중앙 (P1)
+            Text(
+                "프로필 편집",
+                fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center).fillMaxWidth()
+                    .padding(horizontal = PbpDimens.titleInsetWide),
+            )
             }
 
             Column(
@@ -370,7 +382,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                             Spacer(Modifier.width(PbpDimens.gap2))
                             Box(
                                 Modifier
-                                    .size(24.dp)
+                                    // 시각 크기는 그대로, 히트만 40dp (§6, P4)
+                                    .size(PbpDimens.touchTarget)
                                     .clip(CircleShape)
                                     .background(tokens.panel2)
                                     // index 캡처는 연타 시 stale — 항목 자체로 제거 (P3-6)
@@ -414,11 +427,18 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(PbpDimens.rCard))
-                        .background(Brush.linearGradient(listOf(Color(0xFF233248), Color(0xFF141D2B))))
-                        .border(1.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(PbpDimens.rCard))
+                        .background(
+                            // 배경 프리셋과 같은 값 — 미리보기만 제3의 색이 되지 않게
+                            PbpPalette.backgroundPresets.getValue("preset_lighthouse")
+                                .let { Brush.verticalGradient(listOf(Color(it.first), Color(it.second))) }
+                        )
+                        .border(1.dp, tokens.line, RoundedCornerShape(PbpDimens.rCard))
                         .padding(PbpDimens.gap4),
                 ) {
-                    Text("미 리 보 기 — 방 배경 위", fontSize = 10.sp, letterSpacing = 3.sp, color = tokens.inkDim)
+                    Text(
+                        "미 리 보 기 — 방 배경 위", fontSize = 10.sp,
+                        letterSpacing = PbpDimens.labelTracking, color = tokens.inkDim,
+                    )
                     Spacer(Modifier.height(PbpDimens.gap3))
                     Row(
                         Modifier.fillMaxWidth(),
@@ -472,10 +492,12 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 // 삭제 (GM 프로필은 방과 운명을 같이하므로 삭제 불가)
                 if (existing != null && existing?.isGm != true) {
                     Spacer(Modifier.height(PbpDimens.gap4))
-                    TextButton(
+                    PbpDialogButton(
+                        "캐릭터 삭제",
                         onClick = { confirmDelete = true },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
-                    ) { Text("캐릭터 삭제", color = tokens.danger, fontSize = 13.sp) }
+                        kind = PbpButtonKind.Danger,
+                    )
                 }
                 Spacer(Modifier.height(PbpDimens.gap6))
             }
@@ -485,7 +507,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     if (confirmDelete && existing != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("캐릭터 삭제", fontSize = 15.sp, color = tokens.ink) },
+            title = { PbpDialogTitle("캐릭터 삭제") },
             text = {
                 Text(
                     "'${existing?.name}' 캐릭터를 삭제합니다. 되돌릴 수 없습니다.",
@@ -494,15 +516,17 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    existing?.let { target -> vm.delete(target) { nav.popBackStack() } }
-                }) { Text("삭제", color = tokens.danger, fontSize = 13.sp) }
+                PbpDialogButton(
+                    "삭제",
+                    onClick = {
+                        confirmDelete = false
+                        existing?.let { target -> vm.delete(target) { nav.popBackStack() } }
+                    },
+                    kind = PbpButtonKind.Danger,
+                )
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) {
-                    Text("취소", color = tokens.inkDim, fontSize = 13.sp)
-                }
+                PbpDialogButton("취소", { confirmDelete = false }, kind = PbpButtonKind.Cancel)
             },
             containerColor = tokens.panel,
         )
@@ -562,7 +586,7 @@ internal fun FieldLabel(text: String) {
         text,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
-        letterSpacing = 1.sp,
+        letterSpacing = PbpDimens.labelTracking,
         color = Pbp.colors.inkDim,
         modifier = Modifier.padding(bottom = PbpDimens.gap2),
     )
@@ -604,13 +628,9 @@ private fun StatInputRow(
         )
         Spacer(Modifier.width(PbpDimens.gap2))
         Column {
-            TextButton(onClick = onConfirm, enabled = name.isNotBlank()) {
-                Text(confirmLabel, fontSize = 11.sp, color = tokens.signatureInk)
-            }
+            PbpDialogButton(confirmLabel, onConfirm, enabled = name.isNotBlank())
             if (onCancel != null) {
-                TextButton(onClick = onCancel) {
-                    Text("취소", fontSize = 11.sp, color = tokens.inkDim)
-                }
+                PbpDialogButton("취소", onCancel, kind = PbpButtonKind.Cancel)
             }
         }
     }

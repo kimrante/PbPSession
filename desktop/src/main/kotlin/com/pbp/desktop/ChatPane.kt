@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -135,40 +136,48 @@ internal fun ChatPane(
         )
         Column(Modifier.fillMaxSize()) {
             // 상단 바 — 높이 56, 좌우 24(PC 가장자리), 밝은 화이트 그라데이션.
-            // PC는 좌측 정렬 유지 (trpg-app-mockup-pc-light.html) — 넓은 창에서 제목이
-            // 사이드바 쪽 시선 흐름과 이어지고, 부제 규격만 모바일과 공유한다.
+            // 타이틀 묶음은 버튼 개수와 무관하게 **정중앙** — 좌우 인셋을 같게 준다
+            // (가이드 §5. 데스크톱 예외는 사이드바 280·본문 720·가장자리 24뿐, P1)
             if (captureIdx != null) CaptureModeBar(
                 subtitle = if (!captureEndPicked) "끝 메시지를 클릭하세요"
                 else "양 끝을 다시 클릭해 조절할 수 있어요",
                 onClose = onCaptureExit,
             ) else
-            Row(
+            Box(
                 Modifier.fillMaxWidth().height(DesktopDimens.appBar)
                     .background(
-                        Brush.verticalGradient(listOf(Color(0xD9FFFFFF), Color(0x59FFFFFF)))
+                        Brush.verticalGradient(listOf(Tokens.SidebarTop, Tokens.SidebarBottom))
                     )
-                    .padding(horizontal = DesktopDimens.edge),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.weight(1f)) {
+                Row(
+                    Modifier.fillMaxSize().padding(horizontal = DesktopDimens.edge),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    GhostButton("내보내기", Modifier, onExport)
+                    Spacer(Modifier.width(DesktopDimens.gap2))
+                    GhostButton("초대 코드", Modifier, onShowCode)
+                    // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
+                    Spacer(Modifier.width(DesktopDimens.gap2))
+                    GhostButton("방 설정", Modifier, onOpenSettings)
+                }
+                Column(
+                    Modifier.align(Alignment.Center).fillMaxWidth()
+                        .padding(horizontal = DesktopDimens.titleInset),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
                     Text(
                         room.name, fontFamily = GowunBatang, fontWeight = FontWeight.Bold,
                         fontSize = 15.sp, lineHeight = 15.sp, color = Tokens.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(DesktopDimens.gap1))
                     Text(
                         if (room.isMaster) "GM" else "PL",
                         fontSize = 11.sp, lineHeight = 11.sp,
                         fontWeight = FontWeight.Medium, color = Tokens.InkSub,
                     )
                 }
-                GhostButton("내보내기", Modifier, onExport)
-                Spacer(Modifier.width(8.dp))
-                GhostButton("초대 코드", Modifier, onShowCode)
-                // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
-                Spacer(Modifier.width(8.dp))
-                GhostButton("방 설정", Modifier, onOpenSettings)
             }
 
             // 메시지 목록 — 최신 메시지가 바뀔 때만, 바닥 근처를 보고 있을 때만 따라간다
@@ -209,7 +218,7 @@ internal fun ChatPane(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxHeight().widthIn(max = DesktopDimens.contentMax).fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = DesktopDimens.edge, vertical = 16.dp),
+                    contentPadding = PaddingValues(horizontal = DesktopDimens.edge, vertical = DesktopDimens.gap3),
                 ) {
                     // 같은 인물의 연속 메시지는 아바타·이름 생략 + 간격 축소 (모바일과 동일)
                     // 방을 만든 날 — 로그 맨 위 (데스크톱은 전체 히스토리를 들고 있다)
@@ -340,19 +349,19 @@ internal fun MessageBlock(
         message.type == Protocol.MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
-                    Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0xBFFFFFFF))
-                        .border(1.dp, Color(0x1214191F), RoundedCornerShape(999.dp))
+                    Modifier.clip(RoundedCornerShape(999.dp)).background(Tokens.Panel.copy(alpha = .75f))
+                        .border(1.dp, Tokens.Line, RoundedCornerShape(999.dp))
                         .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
-                    Text(message.body, fontSize = 10.sp, color = Color(0x8C23272E))
+                    Text(message.body, fontSize = 10.sp, color = Tokens.InkDim)
                 }
             }
         }
         message.type == Protocol.MessageType.DICE -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Row(
-                    Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD9FFFFFF))
-                        .border(1.dp, Color(0x80C89E34), RoundedCornerShape(12.dp))
+                    Modifier.clip(RoundedCornerShape(DesktopDimens.rCell)).background(Tokens.Panel.copy(alpha = .85f))
+                        .border(1.dp, Tokens.GmRing, RoundedCornerShape(DesktopDimens.rCell))
                         .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -404,7 +413,7 @@ internal fun MessageBlock(
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             // 시각은 마지막 인용에만 — 인용이 여럿이면 중복 표시된다 (모바일 R4와 동일)
             val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
                 parts.forEachIndexed { index, part ->
                     when (part) {
                         is GmSpeech.Part.Narration -> NarrationBlock(
@@ -434,7 +443,7 @@ internal fun MessageBlock(
                     onLongPress = onLongPress,
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
                     parts.forEachIndexed { index, part ->
                         BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -466,10 +475,10 @@ internal fun DayDivider(millis: Long) {
             ChatDates.label(millis),
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = .78f),
+            color = Tokens.OnScrim,
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
-                .background(Color.Black.copy(alpha = .35f))
+                .background(Tokens.PillScrim)
                 .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1),
         )
     }
@@ -537,7 +546,7 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
                         JudgeState.Waiting -> "⋯"
                         JudgeState.Done -> "✓"
                     },
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
                     color = if (state == JudgeState.MyTurn) Tokens.OnSignature else Tokens.InkDim,
                 )
@@ -734,7 +743,7 @@ internal fun BubbleRow(
                         QuoteMark(
                             "”",
                             inkColor,
-                            Modifier.align(Alignment.BottomEnd).padding(end = 9.dp).offset(y = 6.dp),
+                            Modifier.align(Alignment.BottomEnd).padding(end = DesktopDimens.gap2).offset(y = DesktopDimens.gap2),
                         )
                         MarkupText(
                             text = quoteInner, fontSize = 13.sp, color = inkColor,
@@ -752,15 +761,20 @@ internal fun BubbleRow(
                                 onClick = {},
                                 onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
                             )
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2)
                     ) {
-                        Row {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            // 간격은 부모가 — 배지에 top만 주면 위아래가 어긋난다 (P2).
+                            // 값도 모바일과 같은 gap1으로 통일
+                            horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap1),
+                        ) {
                             if (message.isOoc) {
                                 Text(
-                                    "잡담", fontSize = 9.sp, color = inkColor,
-                                    modifier = Modifier.padding(end = 6.dp, top = 2.dp)
+                                    "잡담", fontSize = 10.sp, color = inkColor,
+                                    modifier = Modifier
                                         .border(1.dp, inkColor.copy(alpha = .4f), RoundedCornerShape(999.dp))
-                                        .padding(horizontal = 5.dp),
+                                        .padding(horizontal = DesktopDimens.gap1),
                                 )
                             }
                             MarkupText(
@@ -792,9 +806,13 @@ internal fun BubbleRow(
 internal fun TimeStamp(message: Message, themeColor: Color, modifier: Modifier = Modifier) {
     Column(modifier) {
         if (message.editedAt != null) {
-            Text("(수정됨)", fontSize = 9.sp, color = Tokens.InkDim)
+            Text("(수정됨)", fontSize = 10.sp, color = Tokens.InkDim)
         }
-        Text(formatTime(message.createdAt), fontSize = 10.sp, color = themeColor)
+        // 밝은 배경에서 원색 테마는 읽히지 않는다 — 모바일과 같은 보정 (P6)
+        Text(
+            formatTime(message.createdAt), fontSize = 10.sp,
+            color = Color(Tokens.nameColorForLight(themeColor.toArgb().toLong() and 0xFFFFFFFFL)),
+        )
     }
 }
 
@@ -859,7 +877,7 @@ internal fun MessageAvatar(
     val bitmap = avatarId?.let { avatarCache[it] }
     Box(
         Modifier.size(DesktopDimens.avatarChat)
-            .border(1.5.dp, Color.White.copy(alpha = .85f), CircleShape)
+            .border(1.dp, Tokens.Line, CircleShape)
             .clip(CircleShape)
             .background(Tokens.Panel2)
             .alpha(if (message.isOoc) 0.55f else 1f),
@@ -937,7 +955,7 @@ internal fun InputZone(
         }
     }
 
-    Column(Modifier.fillMaxWidth().background(Color(0xEBFFFFFF))) {
+    Column(Modifier.fillMaxWidth().background(Tokens.ChatBarBg)) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
         // 본문과 같은 720dp 중앙 정렬 (PC 규격)
         Column(
@@ -964,9 +982,9 @@ internal fun InputZone(
                                 .border(
                                     2.dp,
                                     when {
-                                        on -> Tokens.SignatureRing
+                                        on -> Tokens.Signature
                                         profile.isGm -> Tokens.GmRing // GM 금테
-                                        else -> Color(0x2614191F)
+                                        else -> Tokens.Line
                                     },
                                     CircleShape,
                                 )
@@ -1000,7 +1018,7 @@ internal fun InputZone(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             Modifier.size(DesktopDimens.avatarStrip)
-                                .border(1.dp, Color(0x4714191F), CircleShape)
+                                .border(1.dp, Tokens.Line, CircleShape)
                                 .clip(CircleShape)
                                 .clickable(onClick = onAddProfile),
                             contentAlignment = Alignment.Center,
@@ -1020,8 +1038,8 @@ internal fun InputZone(
                     color = Tokens.SignatureInk,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0x2EFFD05C))
-                        .border(1.dp, Color(0x66C89E34), RoundedCornerShape(999.dp))
+                        .background(Tokens.Signature.copy(alpha = .18f))
+                        .border(1.dp, Tokens.GmRing, RoundedCornerShape(999.dp))
                         .clickable(onClick = onJudgeRequest)
                         .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2),
                 )
@@ -1040,8 +1058,8 @@ internal fun InputZone(
                             color = Tokens.SignatureInk,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(999.dp))
-                                .background(Color(0x2EFFD05C))
-                                .border(1.dp, Color(0x66C89E34), RoundedCornerShape(999.dp))
+                                .background(Tokens.Signature.copy(alpha = .18f))
+                                .border(1.dp, Tokens.GmRing, RoundedCornerShape(999.dp))
                                 .clickable {
                                     val command =
                                         Rules.judgeCommand(room.rule ?: Rules.COC7, name)
@@ -1060,10 +1078,10 @@ internal fun InputZone(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     Modifier.clip(RoundedCornerShape(999.dp))
-                        .background(if (oocOn) Color(0x47FFD05C) else Tokens.FieldBg)
+                        .background(if (oocOn) Tokens.Signature.copy(alpha = .28f) else Tokens.FieldBg)
                         .border(
                             1.dp,
-                            if (oocOn) Color(0x8CC89E34) else Tokens.Line,
+                            if (oocOn) Tokens.GmRing else Tokens.Line,
                             RoundedCornerShape(999.dp),
                         )
                         .clickable { oocOn = !oocOn }
@@ -1119,15 +1137,15 @@ internal fun InputZone(
                             }
                             // PC는 Ctrl+Enter 힌트를 상시 노출 (trpg-app-mockup-pc-light.html)
                             Text(
-                                "Ctrl+Enter 전송", fontSize = 10.sp, color = Color(0x5914191F),
+                                "Ctrl+Enter 전송", fontSize = 10.sp, color = Tokens.InkDisabled,
                                 modifier = Modifier.padding(start = 8.dp)
-                                    .border(1.dp, Color(0x2614191F), RoundedCornerShape(4.dp))
+                                    .border(1.dp, Tokens.Line, RoundedCornerShape(DesktopDimens.rTail))
                                     .padding(horizontal = 5.dp, vertical = 1.dp),
                             )
                             // 입력창 오른쪽 끝 "?" — 지원 문법 도움말 (모바일과 동일)
                             Box(
                                 Modifier.padding(start = 8.dp).size(20.dp)
-                                    .clip(CircleShape).background(Color(0x1414191F))
+                                    .clip(CircleShape).background(Tokens.InkFaint)
                                     .clickable(onClick = onShowMarkupHelp),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -1147,12 +1165,8 @@ internal fun InputZone(
                 ) { Text("➤", fontSize = 15.sp, color = Tokens.BubbleInk) }
             }
             errorMessage?.let { message ->
-                Text(
-                    message,
-                    fontSize = 11.sp,
-                    color = Tokens.Danger,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+                Spacer(Modifier.height(DesktopDimens.gap1))
+                Text(message, fontSize = 11.sp, color = Tokens.Danger)
             }
         }
     }

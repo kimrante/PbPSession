@@ -86,7 +86,6 @@ internal fun InputZone(
     // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
     var input by rememberSaveable { mutableStateOf("") }
     var oocOn by rememberSaveable { mutableStateOf(false) }
-    var helpOpen by rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
@@ -160,10 +159,10 @@ internal fun InputZone(
             }
         }
         TypingLine(typingName, typingUntil)
-        Spacer(Modifier.height(PbpDimens.gap2))
         if (gmActive) {
             // 판정 팔레트 칩과 같은 캡슐·같은 자리 — 위 프로필 스트립의 점선 '＋ 추가'와
-            // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2)
+            // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2).
+            // 위 여백은 두지 않는다 — 입력 중 줄이 이미 자리를 차지하고 있어 이중이 된다
             Box(
                 Modifier.heightIn(min = PbpDimens.touchTarget),
                 contentAlignment = Alignment.CenterStart,
@@ -181,7 +180,6 @@ internal fun InputZone(
                         .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 )
             }
-            Spacer(Modifier.height(PbpDimens.gap2))
         }
         if (suggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
@@ -220,42 +218,24 @@ internal fun InputZone(
                 Modifier.heightIn(min = PbpDimens.touchTarget),
                 contentAlignment = Alignment.Center,
             ) {
-            Row(
-                Modifier
+            // 스위치 노브 없이 **색만으로** 켬/끔을 알린다 — 켜지면 면이 옐로로 차고
+            // 글자도 옐로 잉크가 된다. 노브가 빠진 만큼 칩이 좁아진다
+            Text(
+                "잡담",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (oocOn) tokens.onSignature else tokens.inkDim,
+                modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
-                    .background(if (oocOn) tokens.signature.copy(alpha = .16f) else tokens.chatterBubble)
+                    .background(if (oocOn) tokens.signature else tokens.chatterBubble)
                     .border(
                         1.dp,
-                        if (oocOn) tokens.signature.copy(alpha = .4f) else tokens.line,
+                        if (oocOn) tokens.signature else tokens.line,
                         RoundedCornerShape(999.dp),
                     )
                     .clickable(onClick = onOocToggle)
                     .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    Modifier
-                        .size(width = 22.dp, height = 12.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(if (oocOn) tokens.signature else tokens.line),
-                    contentAlignment = if (oocOn) Alignment.CenterEnd else Alignment.CenterStart,
-                ) {
-                    Box(
-                        Modifier
-                            .padding(2.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (oocOn) tokens.onSignature else tokens.panel)
-                    )
-                }
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    "잡담",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (oocOn) tokens.signatureInk else tokens.inkDim,
-                )
-            }
+            )
             }
             val canSend = input.isNotBlank() && activeId != null
             val doSend = {
@@ -292,19 +272,6 @@ internal fun InputZone(
                         color = tokens.inkDim,
                     )
                 },
-                // 입력창 오른쪽 끝 "?" — 지원 문법 도움말
-                trailingIcon = {
-                    Box(
-                        Modifier
-                            .size(PbpDimens.touchTarget)
-                            .clip(CircleShape)
-                            .background(tokens.chatterBubble)
-                            .clickable { helpOpen = true },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("?", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkSub)
-                    }
-                },
                 // textStyle을 주지 않으면 M3 기본 16sp로 새어, 치기 시작하는 순간
                 // 플레이스홀더(13sp)에서 크기가 점프한다 (8장)
                 textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
@@ -336,7 +303,6 @@ internal fun InputZone(
             ) { Text("➤", fontSize = 15.sp, color = tokens.bubbleInk) }
         }
     }
-    if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
 }
 
 /**

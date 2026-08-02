@@ -301,25 +301,38 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     var showAddProfile by rememberSaveable {
         mutableStateOf(false)
     }
+    // 입력 문법 도움말 — 상단 바 "?"로 연다
+    var helpOpen by rememberSaveable { mutableStateOf(false) }
     // 판정 요청 (J3) — 시트와 "값이 없어요" 다이얼로그
     var judgeSheetOpen by rememberSaveable { mutableStateOf(false) }
     var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var needValueName by rememberSaveable { mutableStateOf("") }
-    // 캡처 범위 — (시작 메시지 id, 끝 메시지 id). 끝이 null이면 아직 고르는 중.
-    // 회전에도 유지되도록 다이얼로그 대상들과 같은 rememberSaveable 규칙 (N10)
-    var captureStart by rememberSaveable { mutableStateOf<Long?>(null) }
-    var captureEnd by rememberSaveable { mutableStateOf<Long?>(null) }
+    // 캡처 범위 — (시작 조각 키, 끝 조각 키). 끝이 null이면 아직 고르는 중.
+    // 키는 "<메시지 id>:<조각 번호>" — 한 메시지가 서술·대사로 갈라지면 조각이
+    // 각각 선택 단위다(사용자 요청). 회전에도 유지되도록 rememberSaveable (N10)
+    var captureStart by rememberSaveable { mutableStateOf<String?>(null) }
+    var captureEnd by rememberSaveable { mutableStateOf<String?>(null) }
     var captureRendering by remember { mutableStateOf(false) }
     val capturing = captureStart != null
+    // 화면에 그려지는 순서 그대로 편 조각 목록 — 캡처 인덱스 공간이 된다
+    val pieces = remember(messages) { capturePiecesOf(messages) }
+    val pieceKeys = remember(messages, pieces) {
+        pieces.map { "${messages[it.messageIndex].id}:${it.partIndex}" }
+    }
     // 화면 렌더마다 O(N) 재스캔하지 않도록 인덱스 구간을 캐시한다 (F3과 같은 방식)
-    val captureIdx = remember(messages, captureStart, captureEnd) {
-        val a = messages.indexOfFirst { it.id == captureStart }
-        val b = messages.indexOfFirst { it.id == captureEnd }
+    val captureIdx = remember(pieceKeys, captureStart, captureEnd) {
+        val a = pieceKeys.indexOf(captureStart)
+        val b = pieceKeys.indexOf(captureEnd)
         when {
             a < 0 -> null
             b < 0 -> a..a
             else -> minOf(a, b)..maxOf(a, b)
         }
+    }
+    // 메시지 시작 조각의 전역 인덱스 — 조각 번호를 더하면 그 조각의 인덱스가 된다
+    val pieceBase = remember(messages) {
+        var running = 0
+        messages.map { message -> running.also { running += renderedPartCount(message) } }
     }
     // 범위 안 메시지가 상대에 의해 삭제되면 시작점이 사라질 수 있다 — 모드를 닫는다
     LaunchedEffect(captureIdx == null, capturing) {
@@ -338,8 +351,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val onCaptureTap = { tapped: Int ->
         captureIdx?.let { range ->
             val next = captureRangeAfterTap(range, tapped)
-            captureStart = messages[next.first].id
-            captureEnd = messages[next.last].id
+            captureStart = pieceKeys.getOrNull(next.first)
+            captureEnd = pieceKeys.getOrNull(next.last)
         }
         Unit
     }
@@ -445,6 +458,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         IconButton(onClick = { nav.popBackStack() }) {
                             Text("←", fontSize = 20.sp, color = tokens.ink)
                         }
+                        // 입력 문법 도움말 — 입력줄 끝에 있던 것을 제목 옆으로 옮겼다.
+                        // 입력창은 글을 쓰는 자리고, 도움말은 방 전체에 걸린 안내다.
+                        // 좌우 버튼을 2:2로 맞춰야 titleInset 기준 중심이 흔들리지 않는다
+                        IconButton(onClick = { helpOpen = true }) {
+                            Text("?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
+                        }
                         Spacer(Modifier.weight(1f))
                         IconButton(onClick = {
                             // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
@@ -517,11 +536,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         val showTime = !sharesTimeLabel(message, reversed.getOrNull(revIdx - 1))
                         // messages(오래된 순) 기준 인덱스 — 캡처 범위 판정에 쓴다
                         val idx = messages.size - 1 - revIdx
-                        val mark = captureMarkOf(captureIdx, idx)
+                        val base = pieceBase[idx]
                         // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다 (목업 실측 틈 0px).
-                        // reverseLayout이라 화면에서 '위'는 더 오래된 메시지 = idx - 1
-                        val joinsAbove = captureIdx?.contains(idx) == true &&
-                            captureIdx.contains(idx - 1)
+                        // reverseLayout이라 화면에서 '위'는 더 오래된 메시지 = idx - 1.
+                        // 조각 단위이므로 '이 메시지의 첫 조각'과 '앞 메시지의 마지막 조각'을 본다
+                        val joinsAbove = captureIdx?.contains(base) == true &&
+                            captureIdx.contains(base - 1)
                         val topPad = when {
                             joinsAbove -> 0.dp
                             grouped -> PbpDimens.gap1
@@ -546,7 +566,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                     showTime = showTime,
                                     showRead = message.id == readMarkId,
                                     themeColor = themeColor,
-                                    mark = mark,
+                                    markOf = { part -> captureMarkOf(captureIdx, base + part) },
                                     judgeState = judgeStateOf(message, rolledRefs, myCharacters),
                                     onJudgeTap = {
                                         // 캡처 중에는 굴리지 않는다 — MessageBlock에서도
@@ -556,7 +576,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                             needValueName = statName
                                         }
                                     },
-                                    onTap = if (capturing) ({ onCaptureTap(idx) }) else null,
+                                    onPartTap = if (capturing) ({ part -> onCaptureTap(base + part) }) else null,
                                     // 캡처 모드에서는 편집·삭제 팝업을 잠근다
                                     onLongPress = { if (!capturing) actionTargetId = it.id },
                                 )
@@ -597,21 +617,24 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 // ── 하단: 캡처 모드면 입력줄 자리를 캡처 바가 대신한다
                 if (capturing) {
                     // 최대 200건의 복사와 높이 추정을 매 리컴포지션마다 다시 하지 않는다 (E7)
-                    val picked = remember(messages, captureIdx) {
-                        captureIdx?.let { messages.subList(it.first, it.last + 1).toList() }
-                            .orEmpty()
+                    val pickedPieces = remember(pieces, captureIdx) {
+                        captureIdx?.let { pieces.subList(it.first, it.last + 1) }.orEmpty()
+                    }
+                    // 일부 조각만 고른 메시지는 그 조각들만 남긴 본문으로 복제된다
+                    val picked = remember(messages, pickedPieces) {
+                        messagesForPieces(messages, pickedPieces)
                     }
                     val estimatedPx = remember(picked) {
                         CaptureRenderer.estimateHeightPx(picked)
                     }
                     CaptureBar(
-                        count = picked.size,
+                        count = pickedPieces.size,
                         timeRange = if (captureEnd == null) null else timeRangeLabel(picked),
                         startLabel = picked.firstOrNull()?.let {
                             "시작 " + formatTime(it.createdAt) + " · " + (it.senderName ?: "이름 없음")
                         },
                         estimatedPx = if (captureEnd == null) null else estimatedPx,
-                        overLimit = picked.size > ChatViewModel.PAGE_SIZE,
+                        overLimit = pickedPieces.size > ChatViewModel.PAGE_SIZE,
                         rendering = captureRendering,
                         onMake = {
                             captureRendering = true
@@ -656,6 +679,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
             }
         }
     }
+
+    if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
 
     if (judgeSheetOpen) {
         // 내 캐릭터(GM 제외) + 상대가 올린 명단, 이름으로 중복 제거.
@@ -728,7 +753,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 Toast.makeText(context, "메시지를 복사했습니다", Toast.LENGTH_SHORT).show()
             },
             onCapture = {
-                captureStart = target.id
+                captureStart = "${target.id}:0"
                 captureEnd = null
                 actionTargetId = null
             },

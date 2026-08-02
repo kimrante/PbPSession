@@ -147,10 +147,13 @@ internal fun MessageBlock(
     /** 상대가 여기까지 읽었음 — 내 메시지 중 가장 최신 1건에만 붙는다 */
     showRead: Boolean = false,
     themeColor: Color,
-    /** 캡처 모드의 선택 상태. NONE이면 평상시와 완전히 같다 */
-    mark: CaptureMark = CaptureMark.NONE,
-    /** 캡처 모드에서 행 전체를 탭했을 때. 평상시에는 빈 람다라 clickable을 붙이지 않는다 */
-    onTap: (() -> Unit)? = null,
+    /**
+     * 조각별 선택 상태. 한 메시지가 서술·대사로 갈라지면 조각마다 따로 온다 —
+     * 갈라지지 않는 메시지는 0번 하나뿐이다. 전부 NONE이면 평상시와 완전히 같다
+     */
+    markOf: (Int) -> CaptureMark = { CaptureMark.NONE },
+    /** 캡처 모드에서 그 조각을 탭했을 때. 평상시에는 null이라 clickable을 붙이지 않는다 */
+    onPartTap: ((Int) -> Unit)? = null,
     /** 판정 요청의 상태 — 화면에서 한 번 계산해 내려보낸다 (J5) */
     judgeState: JudgeState = JudgeState.Waiting,
     onJudgeTap: () -> Unit = {},
@@ -160,20 +163,35 @@ internal fun MessageBlock(
     val radiusPx = with(LocalDensity.current) { PbpDimens.rCell.toPx() }
     // 캡처 모드에서는 말풍선이 탭을 삼키면 안 된다 — 행 전체를 탭해 범위를 고르는데
     // 자식 clickable이 먼저 먹어 빈 여백에서만 반응했다 (A1)
-    val capturing = onTap != null
+    val capturing = onPartTap != null
     val bodyTap: Modifier = if (capturing) Modifier else Modifier.combinedClickable(
         onClick = {},
         onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
     )
-    var wrapper = Modifier
-        .fillMaxWidth()
-        .captureBand(mark, tokens.signature, radiusPx)
-    if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
-    if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = PbpDimens.gap2)
-    if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
-    Box(wrapper) {
+
+    /** 조각 하나를 캡처 밴드로 감싼다 — 조각마다 따로 골라야 하므로 부품으로 뽑았다 */
+    @Composable
+    fun Piece(index: Int, content: @Composable () -> Unit) {
+        val mark = markOf(index)
+        var wrapper = Modifier
+            .fillMaxWidth()
+            .captureBand(mark, tokens.signature, radiusPx)
+        onPartTap?.let { tap -> wrapper = wrapper.clickable { tap(index) } }
+        if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = PbpDimens.gap2)
+        if (mark == CaptureMark.OUT) wrapper = wrapper.alpha(.32f)
+        Box(wrapper) { content() }
+    }
+
+    /** 이웃한 두 조각이 모두 범위 안이면 밴드가 맞닿아야 한다 — 그 사이 간격은 0 */
+    fun joins(index: Int): Boolean {
+        val a = markOf(index - 1)
+        val b = markOf(index)
+        fun inRange(m: CaptureMark) = m != CaptureMark.NONE && m != CaptureMark.OUT
+        return inRange(a) && inRange(b)
+    }
+
     when {
-        message.type == MessageType.SYSTEM -> {
+        message.type == MessageType.SYSTEM -> Piece(0) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Surface(color = tokens.scrim, shape = RoundedCornerShape(999.dp)) {
                     Text(
@@ -190,7 +208,7 @@ internal fun MessageBlock(
         }
         // 잡담은 극 밖의 대화 — 시스템 안내처럼 화면 중앙에 작게 '이름 : 내용'.
         // 배경은 그 캐릭터의 말풍선 색을 반투명으로 깔아 누가 말했는지 색으로도 구분한다
-        message.isOoc -> {
+        message.isOoc -> Piece(0) {
             val chatterColor = Color(
                 message.senderBubbleColor ?: PbpPalette.bubblePresets.first()
             ).copy(alpha = .55f)
@@ -214,10 +232,10 @@ internal fun MessageBlock(
         }
         // 판정 요청 — 대상자만 누를 수 있고, 결과가 있으면 완료 (J5).
         // 캡처 중에는 누를 수 없다 — 범위를 고르려던 탭에 주사위가 굴러갔다 (A1)
-        message.type == MessageType.JUDGE -> {
+        message.type == MessageType.JUDGE -> Piece(0) {
             JudgeCard(message, judgeState, onJudgeTap, tappable = !capturing)
         }
-        message.type == MessageType.DICE -> {
+        message.type == MessageType.DICE -> Piece(0) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Row(
                     Modifier
@@ -256,22 +274,28 @@ internal fun MessageBlock(
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             // 배지·시간은 마지막 인용 말풍선에만 — 인용이 여럿이면 중복으로 붙는다 (R4)
             val lastQuote = remember(parts) { parts.indexOfLast { it is GmSpeech.Part.Quote } }
-            Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
+            Column {
                 parts.forEachIndexed { index, part ->
-                    when (part) {
-                        is GmSpeech.Part.Narration ->
-                            NarrationBlock(message, part.text, bodyTap, onLongPress)
-                        is GmSpeech.Part.Quote -> BubbleRow(
-                            message = message,
-                            showTime = showTime && index == lastQuote,
-                            showRead = showRead && index == lastQuote,
-                            overrideBody = part.text,
-                            overrideName = "GM",
-                            overrideBubbleColor = PbpPalette.gmQuoteBubble,
-                            themeColor = themeColor,
-                            bodyTap = bodyTap,
-                            onLongPress = onLongPress,
-                        )
+                    // 밴드가 맞닿아야 하는 구간에서는 간격을 0으로 (밴드 자체가 여백을 갖는다)
+                    if (index > 0) {
+                        Spacer(Modifier.height(if (joins(index)) 0.dp else PbpDimens.gap2))
+                    }
+                    Piece(index) {
+                        when (part) {
+                            is GmSpeech.Part.Narration ->
+                                NarrationBlock(message, part.text, bodyTap, onLongPress)
+                            is GmSpeech.Part.Quote -> BubbleRow(
+                                message = message,
+                                showTime = showTime && index == lastQuote,
+                                showRead = showRead && index == lastQuote,
+                                overrideBody = part.text,
+                                overrideName = "GM",
+                                overrideBubbleColor = PbpPalette.gmQuoteBubble,
+                                themeColor = themeColor,
+                                bodyTap = bodyTap,
+                                onLongPress = onLongPress,
+                            )
+                        }
                     }
                 }
             }
@@ -281,14 +305,20 @@ internal fun MessageBlock(
             // 대사가 없거나 본문 전체가 대사면 말풍선 하나로 그대로 둔다. (F2: remember)
             val parts = remember(message.body) { GmSpeech.split(message.body) }
             if (parts.size <= 1) {
-                BubbleRow(
-                    message = message, showHeader = !grouped, showTime = showTime,
-                    showRead = showRead, themeColor = themeColor, bodyTap = bodyTap,
-                    onLongPress = onLongPress,
-                )
+                Piece(0) {
+                    BubbleRow(
+                        message = message, showHeader = !grouped, showTime = showTime,
+                        showRead = showRead, themeColor = themeColor, bodyTap = bodyTap,
+                        onLongPress = onLongPress,
+                    )
+                }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
+                Column {
                     parts.forEachIndexed { index, part ->
+                        if (index > 0) {
+                            Spacer(Modifier.height(if (joins(index)) 0.dp else PbpDimens.gap2))
+                        }
+                        Piece(index) {
                         BubbleRow(
                             message = message,
                             overrideBody = when (part) {
@@ -303,11 +333,11 @@ internal fun MessageBlock(
                             bodyTap = bodyTap,
                             onLongPress = onLongPress,
                         )
+                        }
                     }
                 }
             }
         }
-    }
     }
 }
 
@@ -565,13 +595,15 @@ internal fun TimeStamp(
         Color(PbpPalette.nameColorForLight(argb))
     }
     Column(modifier, horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+        // 순서: (수정됨) → 읽음 → 시간. 읽음은 **시간 바로 위**여야 한 덩어리로 읽힌다.
+        // 시간이 접힌 줄에서는 읽음이 그대로 시간 자리를 차지한다
+        if (showTime && message.editedAt != null) {
+            Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
+        }
         if (showRead) {
             Text("읽음", fontSize = 10.sp, color = tokens.inkDim)
         }
         if (showTime) {
-            if (message.editedAt != null) {
-                Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
-            }
             Text(formatTime(message.createdAt), fontSize = 10.sp, color = timeColor)
         }
     }
@@ -699,3 +731,46 @@ private fun JudgeCard(
         }
     }
 }
+
+/**
+ * 캡처 선택 단위 (사용자 요청) — 한 메시지가 서술·대사로 갈라져 여러 말풍선으로
+ * 그려지면 **그 조각 하나하나**가 선택 단위다.
+ *
+ * 예전에는 메시지 1건이 단위라, GM 서술 + 대사처럼 갈라진 메시지는 통째로만 담겼다.
+ * 대사 한 줄만 캡처하고 싶어도 서술이 따라왔다.
+ */
+internal data class CapturePiece(val messageIndex: Int, val partIndex: Int)
+
+/** 이 메시지가 화면에서 몇 조각으로 그려지는가 — 캡처 단위 수와 같아야 한다 */
+internal fun renderedPartCount(message: Message): Int {
+    if (message.type != MessageType.TEXT || message.isOoc) return 1
+    return GmSpeech.split(message.body).size.coerceAtLeast(1)
+}
+
+/** 메시지 목록을 화면에 그려지는 순서 그대로 조각 목록으로 편다 */
+internal fun capturePiecesOf(messages: List<Message>): List<CapturePiece> =
+    messages.flatMapIndexed { messageIndex, message ->
+        List(renderedPartCount(message)) { CapturePiece(messageIndex, it) }
+    }
+
+/** 조각을 다시 본문으로 — 대사는 따옴표를 되살려야 같은 모양으로 다시 갈라진다 */
+private fun GmSpeech.Part.toBody(): String = when (this) {
+    is GmSpeech.Part.Narration -> text
+    is GmSpeech.Part.Quote -> "\"$text\""
+}
+
+/**
+ * 고른 조각 구간을 **그릴 메시지 목록**으로 바꾼다.
+ *
+ * 일부 조각만 고른 메시지는 그 조각들만 남긴 본문으로 복제한다 — 이미지 렌더러는
+ * 화면과 같은 [MessageBlock]을 쓰므로, 본문만 줄이면 그 조각들만 그려진다.
+ */
+internal fun messagesForPieces(messages: List<Message>, pieces: List<CapturePiece>): List<Message> =
+    pieces.groupBy { it.messageIndex }.toSortedMap().map { (messageIndex, group) ->
+        val message = messages[messageIndex]
+        val total = renderedPartCount(message)
+        if (group.size == total) return@map message
+        val parts = GmSpeech.split(message.body)
+        val picked = group.map { it.partIndex }.sorted().mapNotNull { parts.getOrNull(it) }
+        message.copy(body = picked.joinToString(" ") { it.toBody() })
+    }

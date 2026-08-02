@@ -19,9 +19,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
@@ -64,6 +67,7 @@ import com.pbp.app.export.LogExporter
 import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
 import com.pbp.shared.ChatDates
+import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.importCharacterFromClipboard
 import com.pbp.app.ui.common.RoomBackdrop
@@ -252,19 +256,6 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         super.onCleared()
     }
 
-    fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
-        val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                val html = LogExporter.buildHtml(
-                    roomName = room.value?.name ?: "PbP",
-                    roomIcon = room.value?.icon ?: "",
-                    messages = repo.allMessages(roomId), // 내보내기는 화면 페이징과 무관하게 전체
-                )
-                app.contentResolver.openOutputStream(uri)!!.use { it.write(html.toByteArray()) }
-            }.isSuccess
-        }
-        onResult(ok)
-    }
 }
 
 @Composable
@@ -303,6 +294,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     }
     // 입력 문법 도움말 — 상단 바 "?"로 연다
     var helpOpen by rememberSaveable { mutableStateOf(false) }
+    // 프로필 전환 사이드바 — 상단 바 아바타로 연다 (시안 ②)
+    var showProfileDrawer by rememberSaveable { mutableStateOf(false) }
     // 판정 요청 (J3) — 시트와 "값이 없어요" 다이얼로그
     var judgeSheetOpen by rememberSaveable { mutableStateOf(false) }
     var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -400,18 +393,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         }
     }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/html")
-    ) { uri ->
-        if (uri != null) vm.exportTo(uri) { ok ->
-            Toast.makeText(
-                context,
-                if (ok) "HTML 로그를 저장했습니다" else "저장에 실패했습니다",
-                Toast.LENGTH_SHORT,
-            ).show()
-        }
-    }
-
     // 시간·배터리가 보이는 시스템 영역을 검정으로. 안드로이드 15부터는 시스템이 상태 바를
     // 칠하지 않아 앱 배경이 그대로 비치는데, 채팅 배경은 어두워서 밝은 띠가 도드라졌다.
     // 이 색은 인셋 영역에서만 보인다 — 본문은 RoomBackdrop이 덮는다.
@@ -465,17 +446,25 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             Text("?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
                         }
                         Spacer(Modifier.weight(1f))
-                        IconButton(onClick = {
-                            // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
-                            runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
-                                .onFailure {
-                                    Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
-                                }
-                        }) {
-                            Text("↓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
-                        }
                         IconButton(onClick = { nav.navigate(com.pbp.app.Routes.settings(roomId)) }) {
                             Text("⚙", fontSize = 18.sp, color = tokens.ink)
+                        }
+                        Spacer(Modifier.width(PbpDimens.gap1))
+                        // 지금 말하고 있는 프로필 — 탭하면 전환 사이드바 (시안 ①).
+                        // 시각 크기는 방 목록 헤더 오너 아바타와 같은 32, 히트는 40
+                        Box(
+                            Modifier
+                                .size(PbpDimens.touchTarget)
+                                .clip(CircleShape)
+                                .clickable { showProfileDrawer = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Avatar(
+                                emoji = active?.emoji ?: "🙂",
+                                imagePath = active?.imagePath,
+                                size = PbpDimens.avatarBar,
+                                ringColor = tokens.signature,
+                            )
                         }
                     }
                     // 타이틀 묶음은 버튼 위에 겹쳐 화면 정중앙 — 좌우 인셋이 같아 중심이 흔들리지 않는다
@@ -681,6 +670,18 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     }
 
     if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
+
+    // 프로필 전환 사이드바 — 입력줄 스트립과 **같은 콜백**을 쓴다 (동작 분기 금지)
+    BackHandler(enabled = showProfileDrawer) { showProfileDrawer = false }
+    ProfileDrawer(
+        visible = showProfileDrawer,
+        profiles = profiles,
+        activeId = room?.activeProfileId,
+        onSwitch = { vm.switchTo(it) },
+        onEditProfile = { nav.navigate(com.pbp.app.Routes.profile(it.id)) },
+        onAddProfile = { showAddProfile = true },
+        onDismiss = { showProfileDrawer = false },
+    )
 
     if (judgeSheetOpen) {
         // 내 캐릭터(GM 제외) + 상대가 올린 명단, 이름으로 중복 제거.

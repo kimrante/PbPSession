@@ -272,13 +272,23 @@ internal fun InputZone(
                     Text(
                         if (oocOn) "잡담으로 보내기…" else "**굵게** · (루비)[문자] · 1d100",
                         fontSize = 13.sp, // 입력줄 플레이스홀더 = 본문과 같은 단(스케일)
+                        lineHeight = 20.sp, // 입력 텍스트와 같은 줄 높이
                         color = tokens.inkDim,
                     )
                 },
                 // textStyle을 주지 않으면 M3 기본 16sp로 새어, 치기 시작하는 순간
-                // 플레이스홀더(13sp)에서 크기가 점프한다 (8장)
+                // 플레이스홀더(13sp)에서 크기가 점프한다 (8장).
+                //
+                // lineHeight·lineHeightStyle을 함께 지정하는 이유: 기본값은 줄 상자를
+                // 글립 크기에 딱 맞춰 잡아, 여러 줄이 되면 **마지막 줄의 내림선(g·y·ㅇ 아래)이
+                // 잘려 보인다**. Trim.None으로 첫 줄·마지막 줄의 여유를 남긴다
                 textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
                     fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                        alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                        trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                    ),
                     color = tokens.ink,
                 ),
                 colors = TextFieldDefaults.colors(

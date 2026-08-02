@@ -64,6 +64,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) : ViewModel() {
     private val repo = app.repository
@@ -83,6 +84,25 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
 
     fun share(onResult: (String?) -> Unit) = viewModelScope.launch {
         onResult(app.syncManager.shareRoom(roomId))
+    }
+
+    /**
+     * HTML 로그 내보내기 (A) — 채팅 상단 바에 있던 것을 여기로 옮겼다.
+     * 매 세션 쓰는 기능이 아니라 상단 바 자리를 차지할 이유가 없다.
+     */
+    fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
+        val ok = withContext(Dispatchers.IO) {
+            runCatching {
+                val html = com.pbp.app.export.LogExporter.buildHtml(
+                    roomName = room.value?.name ?: "PbP",
+                    roomIcon = room.value?.icon ?: "",
+                    // 내보내기는 화면 페이징과 무관하게 전체
+                    messages = repo.allMessages(roomId),
+                )
+                app.contentResolver.openOutputStream(uri)!!.use { it.write(html.toByteArray()) }
+            }.isSuccess
+        }
+        onResult(ok)
     }
 
     /**
@@ -108,6 +128,17 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
 
     val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) vm.importBackground(it)
+    }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/html")
+    ) { uri ->
+        if (uri != null) vm.exportTo(uri) { ok ->
+            Toast.makeText(
+                context,
+                if (ok) "HTML 로그를 저장했습니다" else "저장에 실패했습니다",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
     }
 
     Scaffold(containerColor = tokens.bg) { padding ->
@@ -277,6 +308,16 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                     if (code != null) copyInviteCode(context, code)
                     else Toast.makeText(context, "공유에 실패했습니다. 네트워크를 확인해주세요.", Toast.LENGTH_SHORT).show()
                 }
+            }
+            SettingRow(
+                title = "로그 내보내기 (HTML)",
+                subtitle = "전체 대화를 종이 톤 HTML 파일로 저장합니다",
+            ) {
+                // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
+                runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
+                    .onFailure {
+                        Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
+                    }
             }
             SettingRow(
                 title = "알림",

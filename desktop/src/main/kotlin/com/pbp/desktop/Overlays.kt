@@ -308,6 +308,8 @@ internal fun SettingsOverlay(
     onDismiss: () -> Unit,
     onApply: (Long, String) -> Unit,
     onResetLogs: ((Boolean) -> Unit) -> Unit,
+    /** HTML 로그 내보내기 — 채팅 상단 바에 있던 것을 여기로 옮겼다 (A) */
+    onExport: () -> Unit = {},
 ) {
     if (room == null) return
     val scope = rememberCoroutineScope()
@@ -396,6 +398,17 @@ internal fun SettingsOverlay(
             "커스텀 배경은 이 PC에서만 보입니다 (모바일과 동일)",
             fontSize = 10.sp, color = Tokens.InkDim,
         )
+        Spacer(Modifier.height(DesktopDimens.gap3))
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
+        Spacer(Modifier.height(DesktopDimens.gap3))
+        Text("로그 내보내기 (HTML)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
+        Spacer(Modifier.height(DesktopDimens.gap1))
+        Text(
+            "전체 대화를 종이 톤 HTML 파일로 저장합니다",
+            fontSize = 10.sp, color = Tokens.InkDim,
+        )
+        Spacer(Modifier.height(DesktopDimens.gap2))
+        GhostButton("내보내기", Modifier.fillMaxWidth()) { onExport() }
         Spacer(Modifier.height(DesktopDimens.gap3))
         Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("적용", Modifier.weight(1f)) { onApply(theme, background) }

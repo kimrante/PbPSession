@@ -852,7 +852,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onOpenSettings = { overlay = OverlayKind.RoomSettings },
                 onMessageLongPress = { messageAction = it },
                 onEditProfile = { editProfileIndex = it },
-                onExport = ::exportLogs,
                 onShowMarkupHelp = { overlay = OverlayKind.MarkupHelp },
                 // 데스크톱은 입력 중을 올리기만 한다 — 표시하지 않으므로 읽기가 늘지 않는다
                 onTyping = {
@@ -980,6 +979,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             onColorUsed = ::rememberColor,
             onDismiss = { overlay = null },
             onResetLogs = ::resetRoomLogs,
+            onExport = ::exportLogs,
             onApply = { theme, background ->
                 val room = selected ?: return@SettingsOverlay
                 // 같은 인스턴스의 var를 고치면 Compose가 변화를 모른다 —

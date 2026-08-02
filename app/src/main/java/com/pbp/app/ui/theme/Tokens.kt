@@ -182,6 +182,9 @@ object PbpDimens {
     val quotePadH = 26.dp
     val quotePadV = 14.dp
 
+    /** 우측 프로필 전환 사이드바 폭 — 화면 320 − 스크림 스트립 56 (M3 모달 드로어 관례) */
+    val drawerWidth = 264.dp
+
     /** 색 스와치와 그 간격 — 데스크톱과 같은 값 (P6) */
     val swatch = 26.dp
     val swatchGap = 4.dp

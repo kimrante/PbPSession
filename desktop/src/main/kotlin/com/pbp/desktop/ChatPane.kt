@@ -103,7 +103,6 @@ internal fun ChatPane(
     onOpenSettings: () -> Unit,
     onMessageLongPress: (Message) -> Unit,
     onEditProfile: (Int) -> Unit,
-    onExport: () -> Unit,
     /** 입력창 "?" — 지원 문법 도움말 오버레이 열기 */
     onShowMarkupHelp: () -> Unit,
     onTyping: () -> Unit,
@@ -154,8 +153,6 @@ internal fun ChatPane(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    GhostButton("내보내기", Modifier, onExport)
-                    Spacer(Modifier.width(DesktopDimens.gap2))
                     GhostButton("초대 코드", Modifier, onShowCode)
                     // 테마·배경 변경은 누구나 가능 (모바일과 동일 정책)
                     Spacer(Modifier.width(DesktopDimens.gap2))
@@ -1121,7 +1118,16 @@ internal fun InputZone(
                         .background(Tokens.FieldBg)
                         .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
                         .padding(horizontal = DesktopDimens.gap3, vertical = 11.dp),
-                    textStyle = TextStyle(color = Tokens.Ink, fontSize = 13.sp),
+                    // 줄 높이를 주지 않으면 여러 줄일 때 마지막 줄 내림선이 잘린다 (모바일과 같은 수정)
+                    textStyle = TextStyle(
+                        color = Tokens.Ink,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                        ),
+                    ),
                     cursorBrush = SolidColor(Tokens.SignatureRing),
                     maxLines = 4,
                     decorationBox = { inner ->

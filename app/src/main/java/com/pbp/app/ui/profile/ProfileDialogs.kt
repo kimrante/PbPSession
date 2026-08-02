@@ -28,6 +28,7 @@ import com.pbp.app.data.OwnerProfile
 import com.pbp.app.ui.common.PbpButtonKind
 import com.pbp.app.ui.common.PbpDialogButton
 import com.pbp.app.ui.common.PbpDialogTitle
+import com.pbp.app.ui.common.ManagerRow
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 
@@ -99,29 +100,4 @@ fun ProfileManagerDialog(
         },
         confirmButton = { PbpDialogButton("닫기", onDismiss) },
     )
-}
-
-@Composable
-private fun ManagerRow(
-    label: String,
-    sub: String,
-    onClick: () -> Unit,
-    avatar: @Composable () -> Unit,
-) {
-    val tokens = Pbp.colors
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(PbpDimens.rCell))
-            .combinedClickable(onClick = onClick)
-            .padding(PbpDimens.gap3), // 동류 행(추가하기·AddOptionRow)과 같은 패딩
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        avatar()
-        Spacer(Modifier.width(PbpDimens.gap3))
-        Column {
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
-            Text(sub, fontSize = 11.sp, color = tokens.inkDim)
-        }
-    }
 }

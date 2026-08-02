@@ -158,11 +158,11 @@ internal fun InputZone(
                 }
             }
         }
-        TypingLine(typingName, typingUntil)
         if (gmActive) {
             // 판정 팔레트 칩과 같은 캡슐·같은 자리 — 위 프로필 스트립의 점선 '＋ 추가'와
             // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2).
-            // 위 여백은 두지 않는다 — 입력 중 줄이 이미 자리를 차지하고 있어 이중이 된다
+            // 프로필 스트립 바로 아래에 붙인다 — 입력 중 표시줄이 사이에 끼면
+            // 스트립과 칩 사이가 불필요하게 벌어진다
             Box(
                 Modifier.heightIn(min = PbpDimens.touchTarget),
                 contentAlignment = Alignment.CenterStart,
@@ -181,6 +181,7 @@ internal fun InputZone(
                 )
             }
         }
+        TypingLine(typingName, typingUntil)
         if (suggestions.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 items(suggestions, key = { it }) { name ->

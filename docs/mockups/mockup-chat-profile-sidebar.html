@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 목업 — 채팅 상단 바 프로필 아이콘 + 프로필 전환 사이드바</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════
+   ui-guidelines.md v1.0 토큰만 사용. 신규 수치는 drawerWidth=264 하나
+   (내보내기 ↓ 를 방 설정으로 옮겨 상단 바 인셋은 기존 titleInset(96) 재사용).
+   ═══════════════════════════════════════════════════════ */
+:root{
+  --bg:#f4f2ec; --panel:#ffffff; --panel-2:#f7f4ec;
+  --line:rgba(20,25,32,.08); --ink:#23272e;
+  --ink-sub:rgba(20,25,32,.72); --ink-dim:#6e7683;
+  --postit:#ffd05c; --postit-deep:#efb945;
+  --signature-ink:#a3781a; --on-signature:#1a1a1a;
+  --bubble-me:#ffd9a8; --bubble-you:#bfe3f6; --bubble-ink:#10151c;
+  --narr-bg:rgba(255,255,255,.7); --narr-ink:#3d3628;
+  --bar-scrim:rgba(0,0,0,.06);
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-tail:4px; --r-pill:999px;
+  --appbar-h:56px; --touch:40px; --avatar-chat:38px; --avatar-strip:36px; --avatar-bar:32px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#e9e5db;color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
+  padding:40px;display:flex;justify-content:center;
+}
+.wrap{display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;max-width:1240px}
+
+/* ── 폰 프레임 ── */
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px;position:relative}
+.phone .cap{position:absolute;left:50%;transform:translateX(-50%);bottom:-32px;font-size:11px;color:#8a8577;white-space:nowrap;letter-spacing:.06em}
+.screen{border-radius:29px;overflow:hidden;height:704px;display:flex;flex-direction:column;position:relative;
+  /* 방 배경(프리셋 '등대') + 라이트 베일 */
+  background:linear-gradient(rgba(244,242,236,.55),rgba(244,242,236,.25),rgba(244,242,236,.55)),
+             linear-gradient(178deg,#26374d 0%,#1a2739 42%,#101a28 100%);}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700}
+
+/* ── 채팅 상단 바: 좌 ←·? / 우 ⚙·프로필 — 내보내기 ↓ 는 방 설정으로 이동 ── */
+.appbar{height:var(--appbar-h);flex-shrink:0;position:relative;display:flex;align-items:center;padding:0 var(--sp-2);background:var(--bar-scrim)}
+.icon-btn{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--ink);flex-shrink:0}
+.appbar .grow{flex:1}
+/* 신규: 현재 프로필 아이콘 — 방 설정(⚙) 오른쪽, avatar-bar(32) + 활성 옐로 링 2 */
+.me-avatar{width:var(--avatar-bar);height:var(--avatar-bar);border-radius:var(--r-pill);margin-left:var(--sp-1);flex-shrink:0;
+  background:linear-gradient(150deg,#b46a3c,#7e4526);display:flex;align-items:center;justify-content:center;
+  font-size:14px;border:2px solid var(--postit)}
+.title-lock{position:absolute;left:96px;right:96px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);pointer-events:none}
+.bar-title{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bar-sub{font-size:11px;font-weight:500;color:var(--ink-sub);line-height:1}
+
+/* ── 채팅 본문 (요약 재현) ── */
+.chat{flex:1;overflow:hidden;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.narr{background:var(--narr-bg);border-radius:var(--r-tail) var(--r-card) var(--r-card) var(--r-tail);padding:var(--sp-3) var(--sp-4);font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;color:var(--narr-ink)}
+.mrow{display:flex;gap:var(--sp-2);align-items:flex-start}
+.mrow.me{justify-content:flex-end}
+.m-avatar{width:var(--avatar-chat);height:var(--avatar-chat);border-radius:var(--r-pill);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--panel-2);border:1.5px solid var(--line)}
+.mname{font-size:11px;font-weight:700;margin-bottom:var(--sp-1);color:#33719c}
+.bubble{max-width:240px;padding:var(--sp-2) var(--sp-3);font-size:13px;line-height:1.55;color:var(--bubble-ink)}
+.bubble.you{background:var(--bubble-you);border-radius:var(--r-tail) var(--r-card) var(--r-card) var(--r-card)}
+.bubble.me{background:var(--bubble-me);border-radius:var(--r-card) var(--r-tail) var(--r-card) var(--r-card)}
+.mtime{font-size:10px;color:var(--ink-dim);align-self:flex-end;flex-shrink:0}
+
+/* ── 입력 영역 (요약) ── */
+.inputzone{flex-shrink:0;background:rgba(255,255,255,.93);padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2)}
+.strip{display:flex;gap:var(--sp-3)}
+.strip .p{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--ink-dim)}
+.strip .a{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);background:var(--panel-2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.strip .on .a{border:2px solid var(--postit)}
+.strip .on{color:var(--signature-ink);font-weight:700}
+.inputrow{display:flex;gap:var(--sp-2);align-items:center}
+.ooc{display:flex;align-items:center;gap:var(--sp-2);border:1px solid var(--line);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3);font-size:10px;font-weight:700;color:var(--ink-dim);background:rgba(20,25,32,.06)}
+.field{flex:1;background:var(--panel-2);border-radius:var(--r-cell);padding:var(--sp-3);font-size:13px;color:var(--ink-dim)}
+.send{width:var(--touch);height:var(--touch);border-radius:var(--r-cell);background:#5f9ec7;display:flex;align-items:center;justify-content:center;color:var(--bubble-ink);font-size:15px}
+
+/* ── ② 사이드바 (우측 드로어) ── */
+.dim{position:absolute;inset:0;background:rgba(30,35,45,.38)}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:264px;background:var(--panel);
+  border-radius:var(--r-sheet) 0 0 var(--r-sheet);box-shadow:-16px 0 40px rgba(20,25,32,.25);
+  display:flex;flex-direction:column;padding:var(--sp-5) var(--sp-4)}
+.dr-title{font-size:18px;font-weight:700;text-align:center}
+.dr-sub{font-size:11px;color:var(--ink-dim);text-align:center;margin-top:var(--sp-1)}
+.dr-list{margin-top:var(--sp-4);display:flex;flex-direction:column}
+.dr-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell)}
+.dr-row.on{background:rgba(255,208,92,.14);border:1px solid rgba(255,208,92,.4)}
+.dr-row .a{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);flex-shrink:0;background:var(--panel-2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.dr-row.on .a{border:2px solid var(--postit)}
+.dr-main{flex:1;min-width:0}
+.dr-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dr-row.on .dr-name{color:var(--signature-ink)}
+.dr-tag{font-size:11px;color:var(--ink-dim)}
+.dr-check{font-size:13px;font-weight:900;color:var(--signature-ink)}
+.dr-div{height:1px;background:var(--line);margin:var(--sp-2) 0}
+.dr-add{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell);color:var(--signature-ink);font-size:13px;font-weight:700}
+.dr-add .plus{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-dim);font-size:15px;flex-shrink:0}
+.dr-hint{margin-top:auto;font-size:10px;color:var(--ink-dim);text-align:center;line-height:1.7}
+
+/* ── 주석 카드 ── */
+.notes{flex:1;min-width:280px;max-width:420px;display:flex;flex-direction:column;gap:14px}
+.notes h3{font-family:'Gowun Batang',serif;font-size:20px;line-height:1.4}
+.notes h3 em{font-style:normal;color:var(--signature-ink)}
+.note{border-left:2px solid #5f9ec7;background:#fff;padding:12px 16px;border-radius:0 8px 8px 0;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.note h4{font-size:13px;color:#33719c;margin-bottom:3px;font-weight:700}
+.note p{font-size:12.5px;color:var(--ink-dim);line-height:1.7}
+.note.y{border-left-color:var(--postit-deep)}
+.note.y h4{color:var(--signature-ink)}
+.note code{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11.5px;color:var(--signature-ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ① 채팅방 — 방 설정 오른쪽에 현재 프로필 아이콘 -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar">🦊</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">GM</div>
+        </div>
+      </div>
+
+      <div class="chat">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+        <div class="mrow">
+          <div class="m-avatar">🌊</div>
+          <div>
+            <div class="mname">카야</div>
+            <div class="bubble you">등불이 꺼지기 전에 도착할게. 먼저 올라가 있어.</div>
+          </div>
+          <div class="mtime">16:58</div>
+        </div>
+        <div class="mrow me">
+          <div class="mtime">16:59</div>
+          <div class="bubble me">알겠어. 계단 조심하고 — 세 번째 칸이 젖어 있어.</div>
+        </div>
+      </div>
+
+      <div class="inputzone">
+        <div class="strip">
+          <div class="p on"><div class="a">🦊</div>세이시로</div>
+          <div class="p"><div class="a">🕯️</div>코우</div>
+          <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
+        </div>
+        <div class="inputrow">
+          <div class="ooc">◯ 잡담</div>
+          <div class="field">**굵게** · (등대)[等臺] · 1d100</div>
+          <div class="send">➤</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">① 상단 바 — 내보내기 ↓ 제거, ⚙ 오른쪽 현재 프로필</div>
+  </div>
+
+  <!-- ② 프로필 아이콘 탭 → 우측 사이드바 -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar">🦊</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">GM</div>
+        </div>
+      </div>
+
+      <div class="chat" style="filter:blur(1px)">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+        <div class="mrow">
+          <div class="m-avatar">🌊</div>
+          <div>
+            <div class="mname">카야</div>
+            <div class="bubble you">등불이 꺼지기 전에 도착할게. 먼저 올라가 있어.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dim"></div>
+      <div class="drawer">
+        <div class="dr-title">프로필 전환</div>
+        <div class="dr-sub">지금 말하는 캐릭터를 고르세요</div>
+        <div class="dr-list">
+          <div class="dr-row on">
+            <div class="a">🦊</div>
+            <div class="dr-main">
+              <div class="dr-name">가류 세이시로</div>
+              <div class="dr-tag">캐릭터 · 사용 중</div>
+            </div>
+            <div class="dr-check">✓</div>
+          </div>
+          <div class="dr-row">
+            <div class="a">🕯️</div>
+            <div class="dr-main">
+              <div class="dr-name">코우</div>
+              <div class="dr-tag">캐릭터</div>
+            </div>
+          </div>
+          <div class="dr-row">
+            <div class="a" style="font-family:'Gowun Batang',serif;font-weight:700;color:var(--signature-ink);font-size:13px">GM</div>
+            <div class="dr-main">
+              <div class="dr-name">서술자</div>
+              <div class="dr-tag">GM · 명조 서술</div>
+            </div>
+          </div>
+          <div class="dr-div"></div>
+          <div class="dr-add"><div class="plus">＋</div>프로필 추가</div>
+        </div>
+        <div class="dr-hint">행을 길게 누르면 프로필 편집<br>바깥을 탭하면 닫기</div>
+      </div>
+    </div>
+    <div class="cap">② 아이콘 탭 — 우측 사이드바로 프로필 전환</div>
+  </div>
+
+  <!-- 주석 -->
+  <div class="notes">
+    <h3>채팅방 — <em>현재 프로필 아이콘</em> +<br>프로필 전환 사이드바</h3>
+
+    <div class="note y">
+      <h4>① 상단 바: ⚙ 오른쪽 현재 프로필</h4>
+      <p>아바타 <code>avatarBar(32)</code> + 활성 표시 옐로 링 2dp — 방 목록 헤더의
+      오너 아바타와 같은 규격(원칙 4). 히트 영역은 40dp로 확장. 프로필을 바꾸면
+      이 아이콘이 즉시 바뀌어 "지금 누구로 말하는지"가 화면 밖 스크롤 상태에서도
+      항상 보인다 (입력줄 스트립은 키보드·스크롤에 가려질 수 있음).</p>
+    </div>
+
+    <div class="note y">
+      <h4>내보내기 ↓ 는 방 설정으로 — 인셋 그대로</h4>
+      <p>로그 내보내기는 상단 바에서 빼고 <b>방 설정 '공유·기타' 섹션의 행</b>으로
+      이동. 우측이 2요소(⚙ 40 + 아바타 32 + 간격 = 84dp)가 되어 기존
+      <code>titleInset(96)</code>을 그대로 쓴다 — 신규 인셋 토큰 불필요,
+      타이틀 폭도 종전과 동일(360dp 기기 기준 168dp) 유지.</p>
+    </div>
+
+    <div class="note">
+      <h4>② 사이드바 규격 — 다이얼로그 한 가족</h4>
+      <p><code>panel</code> 면 · 좌측 모서리 <code>rSheet(20)</code> · 내부
+      <code>24×16</code> · 타이틀 18sp 센터 · 행은 탭 행 규격
+      <code>padding(gap3)</code> + <code>rCell</code> (프로필 관리 다이얼로그
+      ManagerRow와 동일 — 원칙 4). 폭 <code>drawerWidth = 264</code>
+      (화면 320 − 스크림 스트립 56 = M3 모달 드로어 관례) 토큰 등재.</p>
+    </div>
+
+    <div class="note">
+      <h4>행 구성</h4>
+      <p>아바타 <code>avatarStrip(36)</code> + 이름 15sp bold + 태그 11sp.
+      활성 행: <code>signature 14%</code> 면 + 40% 테두리 + 이름
+      <code>signatureInk</code> + ✓ — 판정 요청 칩과 같은 강조 문법.
+      GM 행은 명조 "GM" 이니셜. 하단 구분선 뒤 <code>＋ 프로필 추가</code>
+      (signatureInk — 프로필 관리 다이얼로그와 동일). 길게 누르면 편집.</p>
+    </div>
+
+    <div class="note">
+      <h4>기존 스트립과의 관계</h4>
+      <p>입력줄 위 프로필 스트립은 유지 — 사이드바는 <b>같은 전환 동작의 두 번째
+      진입점</b>이다(스트립: 타이핑 중 빠른 전환 / 사이드바: 스크롤 중·프로필이
+      많을 때). 전환 로직·데이터는 InputZone의 onSwitch를 그대로 재사용.</p>
+    </div>
+
+    <div class="note">
+      <h4>동작</h4>
+      <p>아이콘 탭 → 우측에서 슬라이드 인(스크림 38%). 행 탭 = 전환 후 닫힘,
+      바깥 탭·뒤로 = 닫힘. 행 길게 = 프로필 편집 화면. 데스크톱은 이미 우측
+      영역이 넓어 동일 개념을 팝오버로 적용 가능(별도 시안).</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

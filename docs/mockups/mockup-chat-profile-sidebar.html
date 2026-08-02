@@ -8,8 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════════════════
-   ui-guidelines.md v1.0 토큰만 사용. 신규 수치 2개는 주석 카드에
-   등재 제안: titleInsetChat=128 · drawerWidth=264.
+   ui-guidelines.md v1.0 토큰만 사용. 신규 수치는 drawerWidth=264 하나
+   (내보내기 ↓ 를 방 설정으로 옮겨 상단 바 인셋은 기존 titleInset(96) 재사용).
    ═══════════════════════════════════════════════════════ */
 :root{
   --bg:#f4f2ec; --panel:#ffffff; --panel-2:#f7f4ec;
@@ -41,7 +41,7 @@ body{
              linear-gradient(178deg,#26374d 0%,#1a2739 42%,#101a28 100%);}
 .statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700}
 
-/* ── 채팅 상단 바: 좌 ←·? / 우 ↓·⚙·프로필 (신규) — 타이틀 정중앙 ── */
+/* ── 채팅 상단 바: 좌 ←·? / 우 ⚙·프로필 — 내보내기 ↓ 는 방 설정으로 이동 ── */
 .appbar{height:var(--appbar-h);flex-shrink:0;position:relative;display:flex;align-items:center;padding:0 var(--sp-2);background:var(--bar-scrim)}
 .icon-btn{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--ink);flex-shrink:0}
 .appbar .grow{flex:1}
@@ -49,7 +49,7 @@ body{
 .me-avatar{width:var(--avatar-bar);height:var(--avatar-bar);border-radius:var(--r-pill);margin-left:var(--sp-1);flex-shrink:0;
   background:linear-gradient(150deg,#b46a3c,#7e4526);display:flex;align-items:center;justify-content:center;
   font-size:14px;border:2px solid var(--postit)}
-.title-lock{position:absolute;left:128px;right:128px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);pointer-events:none}
+.title-lock{position:absolute;left:96px;right:96px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);pointer-events:none}
 .bar-title{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .bar-sub{font-size:11px;font-weight:500;color:var(--ink-sub);line-height:1}
 
@@ -122,7 +122,6 @@ body{
         <div class="icon-btn" style="font-size:20px">←</div>
         <div class="icon-btn">?</div>
         <div class="grow"></div>
-        <div class="icon-btn">↓</div>
         <div class="icon-btn">⚙</div>
         <div class="me-avatar">🦊</div>
         <div class="title-lock">
@@ -160,7 +159,7 @@ body{
         </div>
       </div>
     </div>
-    <div class="cap">① 상단 바 — ⚙ 오른쪽 현재 프로필(옐로 링)</div>
+    <div class="cap">① 상단 바 — 내보내기 ↓ 제거, ⚙ 오른쪽 현재 프로필</div>
   </div>
 
   <!-- ② 프로필 아이콘 탭 → 우측 사이드바 -->
@@ -171,7 +170,6 @@ body{
         <div class="icon-btn" style="font-size:20px">←</div>
         <div class="icon-btn">?</div>
         <div class="grow"></div>
-        <div class="icon-btn">↓</div>
         <div class="icon-btn">⚙</div>
         <div class="me-avatar">🦊</div>
         <div class="title-lock">
@@ -240,13 +238,11 @@ body{
     </div>
 
     <div class="note y">
-      <h4>타이틀 인셋 확장 — 토큰 등재 필요</h4>
-      <p>우측이 3요소(↓·⚙·아바타)가 되므로 <code>titleInset(96)</code>으로는
-      타이틀이 아바타를 침범. 좌우 대칭 <code>titleInsetChat = 128</code>
-      (= 8 + 40×2 + 4 + 32 + 4) 신설 — 좌측 버튼도 2개뿐이라 양쪽 같은 값으로
-      정중앙 유지 (가이드 §5 "버튼 개수와 무관"). 트레이드오프: 타이틀 폭이
-      360dp 기기에서 104dp — 긴 룸명은 말줄임(위 시안이 실제 상황).
-      부제(GM/PL)는 짧아 영향 없음.</p>
+      <h4>내보내기 ↓ 는 방 설정으로 — 인셋 그대로</h4>
+      <p>로그 내보내기는 상단 바에서 빼고 <b>방 설정 '공유·기타' 섹션의 행</b>으로
+      이동. 우측이 2요소(⚙ 40 + 아바타 32 + 간격 = 84dp)가 되어 기존
+      <code>titleInset(96)</code>을 그대로 쓴다 — 신규 인셋 토큰 불필요,
+      타이틀 폭도 종전과 동일(360dp 기기 기준 168dp) 유지.</p>
     </div>
 
     <div class="note">

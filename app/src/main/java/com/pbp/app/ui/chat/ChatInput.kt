@@ -180,6 +180,8 @@ internal fun InputZone(
                         .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                 )
             }
+            // 칩과 입력줄 사이 여백 — 없애 보니 붙어 보여 원래대로 되돌렸다
+            Spacer(Modifier.height(PbpDimens.gap2))
         }
         TypingLine(typingName, typingUntil)
         if (suggestions.isNotEmpty()) {

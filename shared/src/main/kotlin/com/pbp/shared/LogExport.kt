@@ -45,8 +45,6 @@ object LogExport {
         avatarDataUri: (String) -> String?,
     ): String {
         val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val dayFormat = SimpleDateFormat("yyyy년 M월 d일", Locale.KOREAN)
-        val dayKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val avatarCache = mutableMapOf<String, String?>()
 
         fun avatarHtml(message: ExportMessage, extraStyle: String = ""): String {
@@ -61,9 +59,9 @@ object LogExport {
         val body = StringBuilder()
         var lastDayKey = ""
         for (message in messages) {
-            val dayKey = dayKeyFormat.format(Date(message.createdAt))
+            val dayKey = ChatDates.dayKey(message.createdAt)
             if (dayKey != lastDayKey) {
-                body.append("""<div class="day">${dayFormat.format(Date(message.createdAt))}</div>""").append('\n')
+                body.append("""<div class="day">${ChatDates.label(message.createdAt)}</div>""").append('\n')
                 lastDayKey = dayKey
             }
             val time = timeFormat.format(Date(message.createdAt))

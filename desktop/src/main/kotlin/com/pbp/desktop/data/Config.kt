@@ -36,6 +36,8 @@ data class JoinedRoom(
     val activeProfileIndex: Int = 0,
     /** 방의 TRPG 룰 — 판정 매크로·판정 등급 기준. 구 config에는 없어 null 허용 */
     val rule: String? = null,
+    /** 방이 만들어진 시각 — 로그 맨 위 날짜 구분선용. 구 config에는 없어 null 허용 */
+    val createdAt: Long? = null,
 )
 
 /** ~/.pbp-desktop/config.json — 기기 ID, 프로필, 참여한 방 목록 */

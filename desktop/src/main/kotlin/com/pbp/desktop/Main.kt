@@ -387,12 +387,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
                     // 배경은 읽지 않는다 — 상대가 바꿔도 내 배경은 그대로 (개인 설정)
+                    // createdAt은 바뀌지 않는다 — 구 config에 없던 방을 한 번 메꿀 뿐이다.
+                    // 이미 받아 온 meta를 쓰므로 읽기가 늘지 않는다
+                    val needsCreatedAt = cur?.createdAt == null && meta?.createdAt != null
                     if (meta != null && cur != null &&
-                        (meta.themeColor != cur.themeColor || meta.name != cur.name)
+                        (meta.themeColor != cur.themeColor || meta.name != cur.name || needsCreatedAt)
                     ) {
                         val updated = cur.copy(
                             themeColor = meta.themeColor,
                             name = meta.name,
+                            createdAt = cur.createdAt ?: meta.createdAt,
                         )
                         rooms = rooms.map { if (it.remoteId == cur.remoteId) updated else it }
                         if (selected?.remoteId == cur.remoteId) selected = updated
@@ -919,6 +923,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             // 배경은 공유 대상이 아니다 — 기본으로 시작해 각자 바꾼다
                             backgroundKey = Protocol.DEFAULT_BACKGROUND, isMaster = false,
                             rule = meta.rule,
+                            createdAt = meta.createdAt,
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
                         )
@@ -957,6 +962,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             inviteCode = code, themeColor = meta.themeColor,
                             backgroundKey = Protocol.DEFAULT_BACKGROUND, isMaster = true,
                             rule = meta.rule ?: "coc7",
+                            createdAt = meta.createdAt,
                         )
                         rooms = rooms + joined
                         selected = joined

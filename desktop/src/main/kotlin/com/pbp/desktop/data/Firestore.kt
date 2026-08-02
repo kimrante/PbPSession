@@ -54,6 +54,8 @@ data class RoomMeta(
     /** null = 서버에 배경이 없음(상대가 커스텀 사용 중) — 수신 측은 자기 배경 유지 */
     val backgroundKey: String?,
     val rule: String? = null,
+    /** 방이 만들어진 시각 — 로그 맨 위 날짜 구분선에 쓴다. 아주 옛 방 문서에는 없다 */
+    val createdAt: Long? = null,
 )
 
 /**
@@ -518,6 +520,7 @@ class FirestoreRest(
         themeColor = doc.long("themeColor") ?: Protocol.DEFAULT_THEME_COLOR,
         backgroundKey = doc.str("backgroundKey"),
         rule = doc.str("rule"),
+        createdAt = doc.long("createdAt"),
     )
 
     fun createRoom(name: String, inviteCode: String, rule: String): RoomMeta? {

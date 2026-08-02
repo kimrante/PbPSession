@@ -82,6 +82,7 @@ import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
+import com.pbp.shared.ChatDates
 import com.pbp.shared.GmSpeech
 import com.pbp.shared.ProfileStats
 import com.pbp.app.ui.common.AddProfileDialog
@@ -614,6 +615,31 @@ internal fun TimeStamp(
                 Text("(수정됨)", fontSize = 10.sp, color = tokens.inkDim)
             }
             Text(formatTime(message.createdAt), fontSize = 10.sp, color = timeColor)
+        }
+    }
+}
+
+/**
+ * 날짜 구분선 — 방이 만들어진 날과, 날짜가 바뀐 뒤 첫 메시지 위에 붙는다.
+ * 시스템 안내와 같은 캡슐 규격이되 글씨가 더 또렷하다: 안내가 아니라 눈금이다.
+ */
+@Composable
+internal fun DayDivider(millis: Long) {
+    Box(
+        Modifier.fillMaxWidth().padding(vertical = PbpDimens.gap3),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(color = Color.Black.copy(alpha = .35f), shape = RoundedCornerShape(999.dp)) {
+            Text(
+                ChatDates.label(millis),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White.copy(alpha = .78f),
+                modifier = Modifier.padding(
+                    horizontal = PbpDimens.gap3,
+                    vertical = PbpDimens.gap1,
+                ),
+            )
         }
     }
 }

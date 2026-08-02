@@ -91,6 +91,7 @@ import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
 import com.pbp.desktop.data.RoomCacheStore
+import com.pbp.shared.ChatDates
 import com.pbp.shared.CharacterCodec
 import com.pbp.shared.DiceBot
 import com.pbp.shared.ProfileStats
@@ -241,8 +242,18 @@ internal fun ChatPane(
                     contentPadding = PaddingValues(horizontal = DesktopDimens.edge, vertical = 16.dp),
                 ) {
                     // 같은 인물의 연속 메시지는 아바타·이름 생략 + 간격 축소 (모바일과 동일)
+                    // 방을 만든 날 — 로그 맨 위 (데스크톱은 전체 히스토리를 들고 있다)
+                    room.createdAt?.let { createdAt ->
+                        item(key = "room-created") { DayDivider(createdAt) }
+                    }
                     items(messages.size, key = { messages[it].docId }) { index ->
                         val message = messages[index]
+                        // 바로 위(더 오래된) 항목과 날짜가 다르면 구분선을 얹는다. 가장 오래된
+                        // 항목은 방 생성일과 비교한다 — 같은 날이면 맨 위 구분선이 이미 말했다
+                        val olderNeighbor = messages.getOrNull(index - 1)?.createdAt
+                            ?: room.createdAt
+                        val showDay = olderNeighbor == null ||
+                            !ChatDates.isSameDay(olderNeighbor, message.createdAt)
                         val grouped = isContinuation(messages.getOrNull(index - 1), message)
                         // 목록은 오름차순이라 "다음" 메시지는 index + 1 (모바일과 동일 규칙)
                         val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
@@ -250,29 +261,33 @@ internal fun ChatPane(
                         // 위 항목도 범위 안이면 간격을 없애 밴드가 맞닿게 한다
                         val joinsAbove = captureIdx?.contains(index) == true &&
                             captureIdx.contains(index - 1)
-                        Box(
-                            Modifier.padding(
-                                top = when {
-                                    index == 0 || joinsAbove -> 0.dp
-                                    grouped -> DesktopDimens.gap1 // 모바일과 같은 연속 간격
-                                    else -> DesktopDimens.gap3
-                                }
-                            )
-                        ) {
-                            MessageBlock(
-                                message, myUid, room, avatarCache, firestore, grouped,
-                                showTime = showTime,
-                                mark = mark,
-                                judgeState = when {
-                                    (message.docId in rolledRefs) -> JudgeState.Done
-                                    message.judgeTarget in myCharacters -> JudgeState.MyTurn
-                                    else -> JudgeState.Waiting
-                                },
-                                onJudgeTap = { onJudgeRoll(message) },
-                                onTap = if (captureIdx != null) ({ onCaptureTap(index) }) else null,
-                                // 캡처 모드에서는 편집·삭제 팝업을 잠근다
-                                onLongPress = { if (captureIdx == null) onMessageLongPress(it) },
-                            )
+                        Column {
+                            // 구분선이 이미 위아래 여백을 갖고 있어 말풍선 여백을 또 주면 벌어진다
+                            if (showDay) DayDivider(message.createdAt)
+                            Box(
+                                Modifier.padding(
+                                    top = when {
+                                        index == 0 || joinsAbove || showDay -> 0.dp
+                                        grouped -> DesktopDimens.gap1 // 모바일과 같은 연속 간격
+                                        else -> DesktopDimens.gap3
+                                    }
+                                )
+                            ) {
+                                MessageBlock(
+                                    message, myUid, room, avatarCache, firestore, grouped,
+                                    showTime = showTime,
+                                    mark = mark,
+                                    judgeState = when {
+                                        (message.docId in rolledRefs) -> JudgeState.Done
+                                        message.judgeTarget in myCharacters -> JudgeState.MyTurn
+                                        else -> JudgeState.Waiting
+                                    },
+                                    onJudgeTap = { onJudgeRoll(message) },
+                                    onTap = if (captureIdx != null) ({ onCaptureTap(index) }) else null,
+                                    // 캡처 모드에서는 편집·삭제 팝업을 잠근다
+                                    onLongPress = { if (captureIdx == null) onMessageLongPress(it) },
+                                )
+                            }
                         }
                     }
                 }
@@ -465,6 +480,28 @@ internal fun MessageBlock(
             }
         }
     }
+    }
+}
+
+/**
+ * 날짜 구분선 — 방이 만들어진 날과, 날짜가 바뀐 뒤 첫 메시지 위에 붙는다 (모바일과 같은 규격).
+ */
+@Composable
+internal fun DayDivider(millis: Long) {
+    Box(
+        Modifier.fillMaxWidth().padding(vertical = DesktopDimens.gap3),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            ChatDates.label(millis),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White.copy(alpha = .78f),
+            modifier = Modifier
+                .clip(RoundedCornerShape(999.dp))
+                .background(Color.Black.copy(alpha = .35f))
+                .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1),
+        )
     }
 }
 

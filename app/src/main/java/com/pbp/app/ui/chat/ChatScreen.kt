@@ -81,6 +81,7 @@ import com.pbp.app.export.LogExporter
 import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
 import com.pbp.app.export.findActivity
+import com.pbp.shared.ChatDates
 import com.pbp.shared.GmSpeech
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
@@ -524,6 +525,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 }
                 // 내가 가진 캐릭터 이름 — 이 이름이 대상이면 내가 굴릴 차례다
                 val myCharacters = remember(profiles) { profiles.map { it.name }.toSet() }
+                // 방을 만든 날은 로그 맨 위에만 찍는다 — 아직 못 불러온 옛 대화가 있으면
+                // '이전 대화 불러오기' 위에 생성일이 뜨는 꼴이라 거짓말이 된다
+                val fullyLoaded = messages.size >= totalCount
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -549,27 +553,45 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                             grouped -> PbpDimens.gap1
                             else -> PbpDimens.gap3
                         }
+                        // 이 메시지 바로 위(더 오래된 쪽)와 날짜가 다르면 구분선을 얹는다.
+                        // 가장 오래된 항목은 방 생성일과 비교한다 — 같은 날이면 맨 위
+                        // 생성일 구분선이 이미 그 날을 말하고 있어 두 번 찍지 않는다.
+                        val olderNeighbor = reversed.getOrNull(revIdx + 1)?.createdAt
+                            ?: room?.createdAt?.takeIf { fullyLoaded }
+                        val showDay = olderNeighbor == null ||
+                            !ChatDates.isSameDay(olderNeighbor, message.createdAt)
                         // 말풍선 사이 간격은 위쪽에만 준다 — 아래에도 주면 이중으로 벌어진다.
                         // 상하 대칭 규칙(CLAUDE.md §0)의 의도적 예외
-                        Box(Modifier.padding(top = topPad)) {
-                            MessageBlock(
-                                message = message,
-                                grouped = grouped,
-                                showTime = showTime,
-                                showRead = message.id == readMarkId,
-                                themeColor = themeColor,
-                                mark = mark,
-                                judgeState = judgeStateOf(message, rolledRefs, myCharacters),
-                                onJudgeTap = {
-                                    vm.rollJudge(message) { statName ->
-                                        needValueFor = message.id
-                                        needValueName = statName
-                                    }
-                                },
-                                onTap = if (capturing) ({ onCaptureTap(idx) }) else null,
-                                // 캡처 모드에서는 편집·삭제 팝업을 잠근다
-                                onLongPress = { if (!capturing) actionTargetId = it.id },
-                            )
+                        Column {
+                            // 구분선이 이미 위아래 여백을 갖고 있어 말풍선 여백을 또 주면 벌어진다
+                            if (showDay) DayDivider(message.createdAt)
+                            Box(Modifier.padding(top = if (showDay) 0.dp else topPad)) {
+                                MessageBlock(
+                                    message = message,
+                                    grouped = grouped,
+                                    showTime = showTime,
+                                    showRead = message.id == readMarkId,
+                                    themeColor = themeColor,
+                                    mark = mark,
+                                    judgeState = judgeStateOf(message, rolledRefs, myCharacters),
+                                    onJudgeTap = {
+                                        vm.rollJudge(message) { statName ->
+                                            needValueFor = message.id
+                                            needValueName = statName
+                                        }
+                                    },
+                                    onTap = if (capturing) ({ onCaptureTap(idx) }) else null,
+                                    // 캡처 모드에서는 편집·삭제 팝업을 잠근다
+                                    onLongPress = { if (!capturing) actionTargetId = it.id },
+                                )
+                            }
+                        }
+                    }
+                    // 방을 만든 날 — reverseLayout이라 나중에 선언할수록 위로 간다.
+                    // 옛 대화를 다 불러왔을 때만 (그래야 정말 로그의 맨 위다)
+                    if (fullyLoaded) {
+                        room?.createdAt?.let { createdAt ->
+                            item(key = "room-created") { DayDivider(createdAt) }
                         }
                     }
                     // 실제로 더 오래된 대화가 있을 때만 (총 개수 기준 — 유령 버튼 방지, P3-7)

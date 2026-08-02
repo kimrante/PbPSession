@@ -237,7 +237,12 @@ fun CapturePreviewScreen(nav: NavController) {
                     .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(Modifier.weight(1f)) {
+                // 옵션 토글 2개는 가로 1행 — 세로로 쌓으면 하단 바만 높아진다
+                Row(
+                    Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     CaptureToggle(
                         label = "배경 포함",
                         checked = CaptureSettings.withBackground,
@@ -246,7 +251,6 @@ fun CapturePreviewScreen(nav: NavController) {
                         CaptureSettings.setBackground(context, !CaptureSettings.withBackground)
                         rerender()
                     }
-                    Spacer(Modifier.height(PbpDimens.gap1))
                     CaptureToggle(
                         label = "잡담 제외",
                         checked = CaptureSettings.excludeOoc,
@@ -308,7 +312,7 @@ fun CapturePreviewScreen(nav: NavController) {
     }
 }
 
-/** 캡처 설정 토글 — 두 줄이 같은 모양이어야 해서 부품으로 뺐다 */
+/** 캡처 설정 토글 — 두 개가 같은 모양이어야 해서 부품으로 뺐다 */
 @Composable
 private fun CaptureToggle(
     label: String,

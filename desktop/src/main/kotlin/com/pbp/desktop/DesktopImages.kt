@@ -1,105 +1,16 @@
 package com.pbp.desktop
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.LocalTextStyle
-import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberWindowState
-import com.pbp.desktop.data.AppConfig
 import com.pbp.desktop.data.FirestoreRest
-import com.pbp.desktop.data.JoinedRoom
-import com.pbp.desktop.data.Message
-import com.pbp.desktop.data.Profile
-import com.pbp.desktop.data.RoomCacheStore
-import com.pbp.shared.CharacterCodec
-import com.pbp.shared.DiceBot
-import com.pbp.shared.ProfileStats
-import com.pbp.shared.Rules
-import com.pbp.shared.GmSpeech
-import com.pbp.desktop.notify.DesktopNotifier
-import com.pbp.desktop.ui.GowunBatang
-import com.pbp.desktop.ui.MarkupText
-import com.pbp.desktop.ui.Pretendard
-import com.pbp.desktop.ui.Tokens
-import com.pbp.desktop.ui.appFontFamily
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.pbp.shared.Protocol
 import com.pbp.desktop.data.AppPaths
@@ -107,18 +18,48 @@ import com.pbp.desktop.data.AppPaths
 /** 이미지 선택·축소·아바타 캐시 — Main.kt에서 분리 (리뷰 B1) */
 
 /**
+ * OS 파일 대화상자를 **AWT EDT에서** 띄운다 (E13).
+ *
+ * IO 스레드에서 만들고 보이면 AWT 규칙 위반이라 플랫폼에 따라 교착한다. 표시만
+ * 여기서 하고 실제 파일 읽기·쓰기는 호출부(IO)에 남긴다.
+ *
+ * @return (디렉터리, 파일명). 취소하면 null.
+ */
+internal fun showFileDialog(
+    title: String,
+    mode: Int,
+    defaultName: String? = null,
+    filter: java.io.FilenameFilter? = null,
+): Pair<String, String>? {
+    var picked: Pair<String, String>? = null
+    val show = Runnable {
+        val fd = java.awt.FileDialog(null as java.awt.Frame?, title, mode)
+        if (defaultName != null) fd.file = defaultName
+        if (filter != null) fd.filenameFilter = filter
+        fd.isVisible = true // 고를 때까지 블록
+        val dir = fd.directory
+        val file = fd.file
+        picked = if (dir != null && file != null) dir to file else null
+    }
+    if (java.awt.EventQueue.isDispatchThread()) show.run()
+    else java.awt.EventQueue.invokeAndWait(show)
+    return picked
+}
+
+/**
  * OS 파일 선택창으로 이미지를 골라 설정 폴더(~/.pbp-desktop/<subDir>)에 저장,
  * 저장본 경로를 돌려준다. 원본이 크면 maxSize(긴 변)로 줄여 JPEG로 저장 —
  * 모바일 Images.kt와 동일 정책 (풀사이즈 디코딩으로 인한 메모리·지연 방지).
  */
 internal fun pickAndStoreImage(title: String, subDir: String, maxSize: Int): String? {
-    val fd = java.awt.FileDialog(null as java.awt.Frame?, title, java.awt.FileDialog.LOAD)
-    fd.setFilenameFilter { _, name ->
-        name.lowercase().substringAfterLast('.', "") in setOf("png", "jpg", "jpeg", "webp", "bmp")
-    }
-    fd.isVisible = true // 선택할 때까지 블록
-    val dir = fd.directory ?: return null
-    val file = fd.file ?: return null
+    val (dir, file) = showFileDialog(
+        title = title,
+        mode = java.awt.FileDialog.LOAD,
+        filter = { _, name ->
+            name.lowercase().substringAfterLast('.', "") in
+                setOf("png", "jpg", "jpeg", "webp", "bmp")
+        },
+    ) ?: return null
     val src = java.io.File(dir, file)
     val destDir = AppPaths.dir(subDir)
     return runCatching {

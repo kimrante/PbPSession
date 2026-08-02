@@ -1,9 +1,5 @@
 package com.pbp.app.ui.chat
 
-import android.net.Uri
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,37 +8,23 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -60,40 +42,14 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.navigation.NavController
-import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
-import com.pbp.app.data.Message
-import com.pbp.app.data.MessageType
-import com.pbp.app.export.LogExporter
-import com.pbp.shared.GmSpeech
-import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
-import com.pbp.app.ui.common.importCharacterFromClipboard
-import com.pbp.app.ui.common.MarkupText
-import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.dashedBorder
-import com.pbp.app.ui.common.formatTime
-import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
-import com.pbp.app.ui.theme.PbpPalette
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** 입력 영역 — 프로필 스트립·판정 팔레트·잡담 토글·입력줄 (리뷰 B3) */
 
@@ -116,8 +72,9 @@ internal fun InputZone(
     onAddProfile: () -> Unit,
     onSend: (String, Boolean) -> Unit,
     rule: String,
-    /** "○○님이 입력 중…" — 없으면 자리만 비워 둔다(높이는 늘 같다) */
-    typingLabel: String? = null,
+    /** 상대 이름 — "○○님이 입력 중…". 만료 판정은 [TypingLine]이 스스로 한다 (E2) */
+    typingName: String? = null,
+    typingUntil: Long = 0L,
     /** GM 프로필로 말하는 중에만 보이는 판정 요청 (J2) */
     onJudgeRequest: () -> Unit = {},
     /** 실제로 글자가 바뀔 때만 */
@@ -202,21 +159,7 @@ internal fun InputZone(
                 }
             }
         }
-        // 입력 중 표시 — 자리를 늘 차지해 상대가 치기 시작해도 입력 영역이 튀지 않는다
-        Box(
-            Modifier.fillMaxWidth().height(TYPING_ROW_HEIGHT),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            if (typingLabel != null) {
-                Text(
-                    typingLabel,
-                    fontSize = 10.sp,
-                    color = tokens.inkDim,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                )
-            }
-        }
+        TypingLine(typingName, typingUntil)
         Spacer(Modifier.height(PbpDimens.gap2))
         if (gmActive) {
             // 판정 팔레트 칩과 같은 캡슐·같은 자리 — 위 프로필 스트립의 점선 '＋ 추가'와
@@ -384,4 +327,39 @@ internal fun InputZone(
         }
     }
     if (helpOpen) MarkupHelpDialog(onDismiss = { helpOpen = false })
+}
+
+/**
+ * 입력 중 표시 (E2) — 자리를 늘 차지해 상대가 치기 시작해도 입력 영역이 튀지 않는다.
+ *
+ * 만료 확인용 0.5초 틱을 **여기서만** 돈다. 예전에는 채팅 화면 본체에 있어서
+ * 상대가 타이핑하는 동안 초당 두 번 화면 전체가 리컴포즈됐다.
+ */
+@Composable
+private fun TypingLine(typingName: String?, typingUntil: Long) {
+    val tokens = Pbp.colors
+    var now by remember { mutableStateOf(0L) }
+    LaunchedEffect(typingUntil) {
+        // 상대가 손을 멈추면 아무것도 오지 않는다(그게 설계다) — 스스로 만료를 본다
+        while (typingUntil > System.currentTimeMillis()) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(500)
+        }
+        now = System.currentTimeMillis()
+    }
+    val label = typingName?.takeIf { typingUntil > now }?.let { "${it}님이 입력 중…" }
+    Box(
+        Modifier.fillMaxWidth().height(TYPING_ROW_HEIGHT),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (label != null) {
+            Text(
+                label,
+                fontSize = 10.sp,
+                color = tokens.inkDim,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
+    }
 }

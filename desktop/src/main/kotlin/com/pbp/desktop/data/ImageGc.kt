@@ -1,6 +1,5 @@
 package com.pbp.desktop.data
 
-import java.io.File
 
 /**
  * 쓰이지 않는 로컬 이미지 파일 정리 (리뷰 L3) — 모바일 `ImageGc`와 같은 규칙.
@@ -16,19 +15,26 @@ object ImageGc {
 
     private val DIRS = listOf(AppPaths.BACKGROUNDS, AppPaths.AVATARS_LOCAL, AppPaths.OWNER)
 
+    /** 최근 이만큼 안에 쓰인 파일은 손대지 않는다 — 모바일과 같은 규칙 (A3) */
+    private const val GRACE_MS = 24 * 60 * 60 * 1000L
+
     /** @return 지운 파일 수 */
     fun sweep(config: AppConfig): Int = runCatching {
+        // 라이브 리스트를 그대로 순회하면 저장 스레드의 변경과 겹친다 (E14)
         val referenced = buildSet {
-            config.profiles.forEach { profile -> profile.imagePath?.let { add(it) } }
+            config.profilesCopy().forEach { profile -> profile.imagePath?.let { add(it) } }
             config.ownerImagePath?.let { add(it) }
-            config.rooms.forEach { add(it.backgroundKey) }
+            config.roomsCopy().forEach { add(it.backgroundKey) }
         }
         var removed = 0
+        val cutoff = System.currentTimeMillis() - GRACE_MS
         DIRS.forEach { name ->
             val dir = AppPaths.dir(name)
             if (!dir.isDirectory) return@forEach
             dir.listFiles()?.forEach { file ->
-                if (file.isFile && file.absolutePath !in referenced) {
+                if (file.isFile && file.absolutePath !in referenced &&
+                    file.lastModified() < cutoff
+                ) {
                     if (file.delete()) removed++
                 }
             }

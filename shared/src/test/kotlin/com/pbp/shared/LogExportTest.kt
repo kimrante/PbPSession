@@ -1,0 +1,182 @@
+package com.pbp.shared
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * HTML 로그 내보내기 (F1) — shared 최대 파일인데 테스트가 없었다.
+ * 모바일·PC가 이 한 벌을 함께 쓰므로 여기서 깨지면 양쪽이 같이 깨진다.
+ */
+class LogExportTest {
+
+    private fun msg(
+        body: String = "안녕",
+        type: String = Protocol.MessageType.TEXT,
+        mine: Boolean = false,
+        name: String? = "이단",
+        isGm: Boolean = false,
+        isOoc: Boolean = false,
+        diceExpr: String? = null,
+        diceOutcome: String? = null,
+        editedAt: Long? = null,
+        createdAt: Long = 1_700_000_000_000,
+    ) = LogExport.ExportMessage(
+        type = type,
+        body = body,
+        createdAt = createdAt,
+        mine = mine,
+        senderName = name,
+        senderEmoji = "단",
+        senderIsGm = isGm,
+        isOoc = isOoc,
+        editedAt = editedAt,
+        diceExpr = diceExpr,
+        diceOutcome = diceOutcome,
+    )
+
+    private fun html(vararg messages: LogExport.ExportMessage) =
+        LogExport.buildHtml("테스트 방", "🎲", messages.toList()) { null }
+
+    // ── 이스케이프 ───────────────────────────────────────
+
+    @Test
+    fun `본문의 꺾쇠는 이스케이프된다 — 로그가 HTML을 실행하면 안 된다`() {
+        val out = html(msg(body = "<script>alert(1)</script>"))
+        assertFalse("원문 태그가 그대로 나가면 안 된다", out.contains("<script>alert"))
+        assertTrue(out.contains("&lt;script&gt;"))
+    }
+
+    @Test
+    fun `이름도 이스케이프된다`() {
+        val out = html(msg(name = "<b>이단</b>"))
+        assertTrue(out.contains("&lt;b&gt;이단&lt;/b&gt;"))
+    }
+
+    @Test
+    fun `escape는 다섯 문자를 모두 바꾼다 — 앰퍼샌드가 먼저여야 이중 변환이 없다`() {
+        assertEquals("&amp;&lt;&gt;&quot;&#39;", LogExport.escape("&<>\"'"))
+    }
+
+    // ── 종류별 분기 ──────────────────────────────────────
+
+    @Test
+    fun `GM 서술은 인용만 말풍선으로 갈라진다`() {
+        val out = html(msg(body = "문이 열린다. \"거기 누구냐.\"", isGm = true, name = "GM"))
+        assertTrue("서술 문단이 있어야 한다", out.contains("문이 열린다."))
+        assertTrue("인용도 있어야 한다", out.contains("거기 누구냐."))
+    }
+
+    @Test
+    fun `잡담은 이름 접두를 달고 나간다`() {
+        val out = html(msg(body = "오늘 무서웠어", isOoc = true, name = "이단"))
+        assertTrue(out.contains("이단"))
+        assertTrue(out.contains("오늘 무서웠어"))
+    }
+
+    @Test
+    fun `다이스는 식과 결과와 판정 등급을 함께 찍는다`() {
+        val out = html(
+            msg(
+                body = "76",
+                type = Protocol.MessageType.DICE,
+                diceExpr = "1d100<=50",
+                diceOutcome = Rules.Outcome.FAIL,
+            )
+        )
+        assertTrue(out.contains("1d100&lt;=50"))
+        assertTrue(out.contains("실패"))
+    }
+
+    @Test
+    fun `SYSTEM 안내는 가운데 한 줄로`() {
+        val out = html(msg(body = "방 로그가 초기화되었습니다", type = Protocol.MessageType.SYSTEM))
+        assertTrue(out.contains("class=\"sys\""))
+    }
+
+    @Test
+    fun `수정됨 표시`() {
+        val out = html(msg(editedAt = 1_700_000_100_000))
+        assertTrue(out.contains("수정됨"))
+    }
+
+    // ── 날짜 구분선 ──────────────────────────────────────
+
+    @Test
+    fun `날짜가 바뀌면 구분선이 한 번 더 들어간다`() {
+        val day1 = 1_700_000_000_000
+        val day2 = day1 + 3 * 24 * 60 * 60 * 1000L
+        val out = html(msg(createdAt = day1), msg(createdAt = day1 + 1000), msg(createdAt = day2))
+        assertEquals(
+            "같은 날은 한 번, 다른 날에 한 번 더",
+            2,
+            Regex("class=\"day\"").findAll(out).count(),
+        )
+    }
+
+    @Test
+    fun `구분선 문구는 화면과 같은 규칙을 쓴다`() {
+        val at = 1_700_000_000_000
+        assertTrue(html(msg(createdAt = at)).contains(ChatDates.label(at)))
+    }
+
+    // ── 이미지 MIME 스니핑 ───────────────────────────────
+
+    @Test
+    fun `PNG는 시그니처 전체로 판별한다`() {
+        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00)
+        assertTrue(LogExport.bytesToDataUri(png)!!.startsWith("data:image/png;base64,"))
+    }
+
+    @Test
+    fun `JPEG와 GIF와 WEBP도 판별한다`() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0x00)
+        val gif = "GIF89a".toByteArray() + byteArrayOf(0)
+        val webp = "RIFF".toByteArray() + ByteArray(4) + "WEBP".toByteArray()
+        assertTrue(LogExport.bytesToDataUri(jpeg)!!.startsWith("data:image/jpeg"))
+        assertTrue(LogExport.bytesToDataUri(gif)!!.startsWith("data:image/gif"))
+        assertTrue(LogExport.bytesToDataUri(webp)!!.startsWith("data:image/webp"))
+    }
+
+    @Test
+    fun `알 수 없는 형식은 null — 깨진 img 태그를 만들지 않는다`() {
+        assertNull(LogExport.bytesToDataUri(byteArrayOf(1, 2, 3, 4)))
+        assertNull(LogExport.bytesToDataUri(ByteArray(0)))
+    }
+
+    @Test
+    fun `RIFF지만 WEBP가 아니면 거부한다 — 접두만 보면 오탐한다`() {
+        val wav = "RIFF".toByteArray() + ByteArray(4) + "WAVE".toByteArray()
+        assertNull(LogExport.bytesToDataUri(wav))
+    }
+
+    // ── 색 변환 ──────────────────────────────────────────
+
+    @Test
+    fun `hex는 알파를 떼고 여섯 자리로`() {
+        assertEquals("#FFC46B", LogExport.hex(0xFFFFC46B))
+        assertEquals("#000000", LogExport.hex(0xFF000000))
+    }
+
+    @Test
+    fun `darken은 각 채널에 비율을 곱한다 — 알파는 늘 불투명`() {
+        // 0xFF→127, 0x80→64, 0x40→32 (내림)
+        assertEquals(0xFF7F4020L, Palette.darken(0xFFFF8040, 0.5f))
+        assertEquals(0xFF000000L, Palette.darken(0xFFFFFFFF, 0f))
+    }
+
+    @Test
+    fun `nameColorForLight — 프리셋은 표에서, 나머지는 어둡게`() {
+        // 프리셋은 눈으로 고른 값이라 계산식과 다를 수 있다. 어떤 값이든
+        // 밝은 배경에서 읽히도록 원색보다 어두워야 한다
+        Palette.namePresets.forEach { preset ->
+            val converted = Palette.nameColorForLight(preset)
+            assertTrue(
+                "밝은 배경용 색이 원색보다 밝으면 안 된다",
+                (converted and 0xFFFFFF) <= (preset and 0xFFFFFF),
+            )
+        }
+    }
+}

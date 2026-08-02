@@ -12,7 +12,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.navigation.NavController
 import com.pbp.app.notify.MessageNotifier
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -65,6 +64,9 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         consumeRoomIntent(intent)
+        // 캡처 렌더가 붙을 곳 — 회전으로 액티비티가 새로 만들어지면 여기서 갈아 끼운다.
+        // 진행 중인 렌더가 파괴된 액티비티에 붙는 것을 막는다 (A2)
+        com.pbp.app.export.CaptureHolder.bind(this)
         setContent {
             PbpTheme {
                 AppNav(

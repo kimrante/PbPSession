@@ -56,6 +56,8 @@ data class RoomMeta(
     val rule: String? = null,
     /** 방이 만들어진 시각 — 로그 맨 위 날짜 구분선에 쓴다. 아주 옛 방 문서에는 없다 */
     val createdAt: Long? = null,
+    /** 이 시각 이전 로그는 누군가 초기화했다 (A6) */
+    val logsClearedAt: Long? = null,
 )
 
 /**
@@ -200,10 +202,14 @@ class FirestoreRest(
 
     // ── HTTP ──────────────────────────────────────────────
 
-    /** 401/403이면 토큰을 무효화하고 한 번만 재시도한다 (C15) */
+    /**
+     * 401/403이면 토큰을 무효화하고 한 번만 재시도한다 (C15).
+     * 403 PERMISSION_DENIED도 만료 토큰에서 나온다 — 주석은 둘 다라고 하면서
+     * 실제로는 401만 처리하고 있었다 (E15).
+     */
     private fun sendWithRetry(build: () -> HttpRequest): HttpResponse<String>? = runCatching {
         var res = http.send(build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
-        if (res.statusCode() == 401 && idToken != null) {
+        if (res.statusCode() in setOf(401, 403) && idToken != null) {
             invalidateToken()
             res = http.send(build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
         }
@@ -521,6 +527,17 @@ class FirestoreRest(
         backgroundKey = doc.str("backgroundKey"),
         rule = doc.str("rule"),
         createdAt = doc.long("createdAt"),
+        logsClearedAt = doc.long(Protocol.Field.LOGS_CLEARED_AT),
+    )
+
+    /**
+     * "이 시각 이전 로그를 비웠다"를 방 문서에 남긴다 (A6) — 폴링만 쓰는 상대가
+     * 문서 삭제를 볼 수 없어서 필요한 표식. 이미 받아 오는 방 메타에 얹으므로 읽기가 늘지 않는다.
+     */
+    fun setLogsClearedAt(remoteRoomId: String, millis: Long): Boolean = patch(
+        "$base/rooms/$remoteRoomId?key=$apiKey" +
+            "&updateMask.fieldPaths=${Protocol.Field.LOGS_CLEARED_AT}",
+        gson.toJson(fields(mapOf(Protocol.Field.LOGS_CLEARED_AT to millis))),
     )
 
     fun createRoom(name: String, inviteCode: String, rule: String): RoomMeta? {
@@ -654,8 +671,19 @@ class FirestoreRest(
     fun updateMessage(remoteRoomId: String, docId: String, body: String, editedAt: Long): Boolean =
         patch(
             "$base/rooms/$remoteRoomId/messages/$docId?key=$apiKey" +
-                "&updateMask.fieldPaths=body&updateMask.fieldPaths=editedAt",
-            gson.toJson(fields(mapOf("body" to body, "editedAt" to editedAt))),
+                "&updateMask.fieldPaths=body&updateMask.fieldPaths=editedAt" +
+                "&updateMask.fieldPaths=${Protocol.Field.SYNC_AT}",
+            gson.toJson(
+                fields(
+                    mapOf(
+                        "body" to body,
+                        "editedAt" to editedAt,
+                        // 커서를 함께 밀어야 상대 데스크톱의 증분 질의에 다시 걸린다 (B3).
+                        // 이걸로 architecture.md의 S7("30초 윈도 밖 편집 미반영")이 해소된다
+                        Protocol.Field.SYNC_AT to ServerTime(System.currentTimeMillis()),
+                    )
+                )
+            ),
         )
 
     /** 메시지 삭제 전파 — 모바일 pushDelete와 동일 */

@@ -11,12 +11,23 @@ import java.io.File
  * 지점마다 삭제 코드를 흩어 두면 새 경로가 생길 때마다 빠뜨리므로,
  * **"아무도 가리키지 않는 파일을 지운다"** 한 가지 규칙으로 모았다.
  *
- * 앱이 시작할 때 한 번만 돌린다. 편집 중인 파일이 있을 수 없는 시점이라 안전하다.
+ * 앱이 시작할 때 한 번만 돌린다. 단 **동시에 시작하는 동기화**가 파일을 만들고 있을 수
+ * 있으므로(A3), 갓 만들어진 파일은 손대지 않는다 — 아래 [GRACE_MS] 참조.
  */
 object ImageGc {
 
     /** 정리 대상 디렉터리 — 앱이 직접 만든 이미지만 들어 있는 곳 */
     private val DIRS = listOf("avatars", "owner", "backgrounds")
+
+    /**
+     * 최근 이만큼 안에 쓰인 파일은 건너뛴다 (A3).
+     *
+     * AvatarStore.resolve는 "파일 저장 → DB insert" 순서인데, FCM 콜드 스타트에서는
+     * sweep과 동기화가 같은 시점에 시작한다. 그 틈에 sweep이 끼면 아직 참조가 없는
+     * 새 아바타가 지워지고, resolve는 최초 insert 때만 불려 **영구 소실**이 된다.
+     * 고아는 다음 실행에서 지우면 그만이라 유예를 넉넉히 잡는다.
+     */
+    private const val GRACE_MS = 24 * 60 * 60 * 1000L
 
     /**
      * @return 지운 파일 수 (로그·테스트용)
@@ -33,12 +44,15 @@ object ImageGc {
                 ?.let { add(it) }
         }
         var removed = 0
+        val cutoff = System.currentTimeMillis() - GRACE_MS
         DIRS.forEach { name ->
             val dir = File(context.filesDir, name)
             if (!dir.isDirectory) return@forEach
             dir.listFiles()?.forEach { file ->
                 // 디렉터리·심볼릭 링크는 건드리지 않는다 — 우리가 만든 평범한 파일만
-                if (file.isFile && file.absolutePath !in referenced) {
+                if (file.isFile && file.absolutePath !in referenced &&
+                    file.lastModified() < cutoff
+                ) {
                     if (file.delete()) removed++
                 }
             }

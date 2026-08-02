@@ -1,9 +1,6 @@
 package com.pbp.app.sync
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
 import androidx.room.withTransaction
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
@@ -13,9 +10,6 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.pbp.app.R
 import com.pbp.app.data.AppDatabase
 import com.pbp.app.data.Message
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,9 +50,6 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private val listeners = java.util.concurrent.ConcurrentHashMap<Long, ListenerRegistration>()
     private val roomListeners = java.util.concurrent.ConcurrentHashMap<Long, ListenerRegistration>()
     private val attachedRemotes = java.util.concurrent.ConcurrentHashMap<Long, String>()
-
-    /** 이 원격 방의 리스너가 살아 있는가 — FCM 경로의 이중 알림 판정 (P2-2) */
-    fun isAttached(remoteRoomId: String): Boolean = attachedRemotes.containsValue(remoteRoomId)
 
     /** 계정 없이 발신자를 구분하기 위한 기기 고유 ID (앱 설치당 1개) */
     val deviceId: String by lazy {
@@ -256,7 +247,15 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             val registration = firestore.collection("rooms").document(remoteRoomId)
                 .collection("members")
                 .addSnapshotListener { snapshot, error ->
-                    if (error != null || snapshot == null) {
+                    if (error != null) {
+                        // 예전에는 빈 상태만 흘리고 끝이라 읽음·입력 중이 조용히 죽었다.
+                        // 흐름을 끊어 호출부의 retryWhen이 다시 붙게 한다 (B7)
+                        android.util.Log.w("PbpSync", "멤버 리스너 오류 room=$remoteRoomId", error)
+                        trySend(PeerState())
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    if (snapshot == null) {
                         trySend(PeerState())
                         return@addSnapshotListener
                     }
@@ -323,10 +322,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 명단이 그대로면 쓰지 않는다 — 프로필은 자주 바뀌지 않아 실제 쓰기는 거의 없다.
      */
     suspend fun pushCharacters(remoteRoomId: String, characters: List<Map<String, Any?>>) {
-        val signature = characters.joinToString("|") { entry ->
-            "${entry[Protocol.Character.NAME]}:" +
-                (entry[Protocol.Character.STATS] as? List<*>)?.joinToString(",")
-        }
+        // payload 전체를 그대로 비교한다 — 이름·값만 보다가 emoji·이름색만 바꾸면
+        // 전파되지 않았다 (B4). 필드가 늘어도 여기를 고칠 일이 없다
+        val signature = characters.toString()
         if (pushedCharacters[remoteRoomId] == signature) return
         runCatching {
             ensureAuth()
@@ -423,7 +421,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         ensureAuth()
 
         // 부분 실패 재시도 시 기존 원격 문서를 재사용 — 고아 문서·이중 생성 방지 (P3-3)
-        val code = room.inviteCode ?: randomCode()
+        var code = room.inviteCode ?: randomCode()
         val roomDoc = room.remoteId
             ?.let { firestore.collection("rooms").document(it) }
             ?: firestore.collection("rooms").document()
@@ -446,14 +444,31 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         ensureMembership(roomDoc.id)
         // 초대 코드 → 방 문서 매핑 (규칙이 rooms 컬렉션 쿼리를 막으므로 참가는 이 경로로).
         // 규칙상 update는 금지라 이미 있으면 건드리지 않는다 — 재시도가 여기서 죽지 않게 (R2)
-        val codeDoc = firestore.collection("inviteCodes").document(code)
-        val existingMapping = codeDoc.get().await()
-        if (!existingMapping.exists()) {
-            codeDoc.set(mapOf("roomId" to roomDoc.id, "createdAt" to System.currentTimeMillis()))
-                .await()
-        } else if (existingMapping.getString("roomId") != roomDoc.id) {
-            // 코드 충돌(사실상 없음) — 새 코드로 다시 시도하도록 실패 처리
-            error("초대 코드 $code 가 다른 방에 이미 매핑되어 있습니다")
+        // 충돌하면 **코드를 바꿔 가며** 빈자리를 찾는다. 예전에는 실패로 끝냈는데
+        // 재시도가 room.inviteCode(=충돌한 그 코드)를 그대로 다시 써서 그 방은
+        // 영영 공유할 수 없었다 (A4)
+        var mapped = false
+        repeat(CODE_ATTEMPTS) {
+            if (mapped) return@repeat
+            val codeDoc = firestore.collection("inviteCodes").document(code)
+            val existingMapping = codeDoc.get().await()
+            when {
+                !existingMapping.exists() -> {
+                    codeDoc.set(
+                        mapOf("roomId" to roomDoc.id, "createdAt" to System.currentTimeMillis())
+                    ).await()
+                    mapped = true
+                }
+                // 이전 시도가 여기까지 갔던 경우 — 그대로 쓴다 (멱등)
+                existingMapping.getString("roomId") == roomDoc.id -> mapped = true
+                else -> code = randomCode()
+            }
+        }
+        if (!mapped) error("초대 코드를 발급하지 못했습니다 — 잠시 후 다시 시도해주세요")
+        // 충돌로 코드가 바뀌었으면 방 문서와 로컬을 함께 맞춘다
+        if (code != room.inviteCode) {
+            roomDoc.update("inviteCode", code).await()
+            db.roomDao().setRemote(roomId, roomDoc.id, code)
         }
         // 미업로드분 백필 — WriteBatch로 왕복 최소화 (배치당 최대 450건).
         // remoteId를 커밋 전에 저장해 중간 크래시 시에도 아웃박스가 같은 문서로 재시도(멱등)
@@ -565,6 +580,13 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             chunk.forEach { batch.delete(collection.document(it)) }
             batch.commit().await()
         }
+        // 데스크톱 상대는 폴링이라 '문서가 사라졌다'를 볼 수 없다 — 방 문서에 표식을 남겨
+        // 그쪽 메타 폴이 자기 캐시를 비우게 한다 (A6). 실패해도 삭제 자체는 성공이다
+        runCatching {
+            firestore.collection("rooms").document(remoteRoomId)
+                .update(Protocol.Field.LOGS_CLEARED_AT, System.currentTimeMillis())
+                .await()
+        }
         true
     }.getOrDefault(false)
 
@@ -626,7 +648,16 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 ensureAuth()
                 firestore.collection("rooms").document(remoteRoomId)
                     .collection("messages").document(messageRemoteId)
-                    .update(mapOf("body" to body, "editedAt" to editedAt)).await()
+                    .update(
+                        mapOf(
+                            "body" to body,
+                            "editedAt" to editedAt,
+                            // 커서를 함께 밀어야 상대 데스크톱의 증분 질의에 다시 걸린다.
+                            // 재수신은 editedAt 병합이 이미 멱등이라 안전하다 (B3)
+                            Protocol.Field.SYNC_AT to
+                                com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                        )
+                    ).await()
             }.onFailure {
                 // 구버전 신원(deviceId)으로 올린 메시지는 규칙상 수정 불가 — 조용한 분기 방지 (N6)
                 android.util.Log.w("PbpSync", "메시지 수정 전파 실패 doc=$messageRemoteId", it)
@@ -655,10 +686,21 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private val eventChannels =
         java.util.concurrent.ConcurrentHashMap<Long, kotlinx.coroutines.channels.Channel<SnapshotEvent>>()
 
+    /**
+     * attach 세대 (B2). 등록은 코루틴에서 일어나는데, 그 사이에 detach→reattach가 끼면
+     * attachedRemotes에 키가 **다시** 있어 "취소되지 않았다"고 오판했다. 그러면 구
+     * registration이 살아남고 listeners는 새 attach의 것을 덮어써, 이후 detach가 엉뚱한
+     * 쪽을 제거한다 — 방 전체 스냅샷을 계속 받는 유령 리스너(= read 과금 누수)다.
+     */
+    private val attachSequence = java.util.concurrent.atomic.AtomicLong(0)
+    private val attachGeneration = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+
     private fun attach(localRoomId: Long, remoteRoomId: String) {
         // 확인-후-등록 레이스 방지 — putIfAbsent로 자리를 선점한다 (S4).
-        // isAttached·detach도 이 맵 기준이라 선점 실패 = 이미 attach 진행/완료.
+        // detach도 이 맵 기준이라 선점 실패 = 이미 attach 진행/완료.
         if (attachedRemotes.putIfAbsent(localRoomId, remoteRoomId) != null) return
+        val generation = attachSequence.incrementAndGet()
+        attachGeneration[localRoomId] = generation
         attachRoomDoc(localRoomId, remoteRoomId)
         val channel =
             kotlinx.coroutines.channels.Channel<SnapshotEvent>(kotlinx.coroutines.channels.Channel.UNLIMITED)
@@ -693,8 +735,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                         )
                     )
                 }
-            // 코루틴이 등록하는 사이 detach가 왔으면 즉시 해제 — 리스너 누수 방지 (S4)
-            if (!attachedRemotes.containsKey(localRoomId)) {
+            // 등록하는 사이 detach(또는 detach→reattach)가 왔으면 즉시 해제 (S4·B2).
+            // 키 존재가 아니라 **내 세대가 아직 현역인가**로 판단해야 재attach와 구분된다
+            if (attachGeneration[localRoomId] != generation) {
                 registration.remove()
                 channel.close()
                 return@launch
@@ -855,6 +898,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     }
 
     fun detach(localRoomId: Long) {
+        attachGeneration.remove(localRoomId)
         listeners.remove(localRoomId)?.remove()
         roomListeners.remove(localRoomId)?.remove()
         eventChannels.remove(localRoomId)?.close()
@@ -881,6 +925,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private fun randomCode(): String {
         val alphabet = Protocol.INVITE_ALPHABET
         return (1..6).map { alphabet.random() }.joinToString("")
+    }
+
+    private companion object {
+        /** 초대 코드 자리를 찾는 시도 횟수 (A4). 32^6 공간이라 한 번이면 거의 끝난다 */
+        const val CODE_ATTEMPTS = 5
     }
 
     // ── FCM 백그라운드 푸시 ──────────────────────────────

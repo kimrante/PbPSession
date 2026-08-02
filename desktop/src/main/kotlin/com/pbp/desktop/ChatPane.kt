@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,24 +25,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,53 +56,34 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.application
-import androidx.compose.ui.window.rememberWindowState
-import com.pbp.desktop.data.AppConfig
 import com.pbp.desktop.data.FirestoreRest
 import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.data.Profile
-import com.pbp.desktop.data.RoomCacheStore
 import com.pbp.shared.ChatDates
-import com.pbp.shared.CharacterCodec
-import com.pbp.shared.DiceBot
 import com.pbp.shared.ProfileStats
 import com.pbp.shared.Rules
 import com.pbp.shared.GmSpeech
-import com.pbp.desktop.notify.DesktopNotifier
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.MarkupText
-import com.pbp.desktop.ui.Pretendard
 import com.pbp.desktop.ui.Tokens
-import com.pbp.desktop.ui.appFontFamily
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.pbp.shared.Protocol
 import com.pbp.desktop.ui.DesktopDimens
-import com.pbp.desktop.ui.DesktopTiming
 
 /** 채팅 패널·메시지 렌더·입력 영역 — Main.kt에서 분리 (리뷰 B1) */
 
@@ -366,8 +336,8 @@ internal fun MessageBlock(
     Box(wrapper) {
     when {
         // 판정 요청 — 대상 캐릭터를 가진 쪽만 누를 수 있다 (J5)
-        message.type == "JUDGE" -> JudgeCard(message, judgeState, onJudgeTap)
-        message.type == "SYSTEM" -> {
+        message.type == Protocol.MessageType.JUDGE -> JudgeCard(message, judgeState, onJudgeTap)
+        message.type == Protocol.MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(Color(0xBFFFFFFF))
@@ -378,7 +348,7 @@ internal fun MessageBlock(
                 }
             }
         }
-        message.type == "DICE" -> {
+        message.type == Protocol.MessageType.DICE -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Row(
                     Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xD9FFFFFF))
@@ -635,7 +605,7 @@ internal fun sharesTimeLabel(current: Message, next: Message?): Boolean {
 /** 같은 인물의 연속 말풍선인지 — 아바타·이름 생략과 간격 축소 판정 (모바일과 동일 규칙) */
 internal fun isContinuation(prev: Message?, current: Message): Boolean {
     if (prev == null) return false
-    fun isBubble(m: Message) = m.type == "TEXT" && !m.senderIsGm && !m.isOoc
+    fun isBubble(m: Message) = m.type == Protocol.MessageType.TEXT && !m.senderIsGm && !m.isOoc
     if (!isBubble(prev) || !isBubble(current)) return false
     return prev.senderName == current.senderName && prev.authorUid == current.authorUid
 }
@@ -832,12 +802,7 @@ internal fun TimeStamp(message: Message, themeColor: Color, modifier: Modifier =
  * 본문 전체가 쌍따옴표(" 또는 “ ”)로 감싸인 대사인지 — 감싸였으면 안쪽 내용을 돌려준다.
  * 모바일 ChatScreen의 quoteContent와 동일 규칙.
  */
-internal fun quoteContent(body: String): String? {
-    val trimmed = body.trim()
-    if (trimmed.length < 2) return null
-    if (trimmed.first() !in "\"“" || trimmed.last() !in "\"”") return null
-    return trimmed.substring(1, trimmed.length - 1).trim().ifEmpty { null }
-}
+internal fun quoteContent(body: String): String? = GmSpeech.quoteContent(body)
 
 /** 인용 말풍선의 장식 따옴표 — 명조 볼드, 말풍선 잉크의 옅은 톤 */
 @Composable

@@ -27,7 +27,12 @@ service cloud.firestore {
       allow delete: if false;
 
       match /messages/{messageId} {
-        allow read, create: if isMember(roomId);
+        allow read: if isMember(roomId);
+        // authorUid는 본인 것만 (B1) — 사칭이 되면 "작성자 본인만 수정"이라는
+        // update 규칙의 근거가 통째로 무너지고, 수신 측 '내 발신' 필터와
+        // Functions의 발신자 제외도 우회된다
+        allow create: if isMember(roomId) &&
+          request.resource.data.authorUid == request.auth.uid;
         // 수정은 작성자 본인만
         allow update: if isMember(roomId) && resource.data.authorUid == request.auth.uid;
         // 삭제는 멤버 누구나 — '방 로그 초기화'가 상대 메시지도 지워야 하므로

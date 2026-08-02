@@ -78,6 +78,9 @@ object DiceBot {
         val op = match.groupValues[3].ifEmpty { null }
         val threshold = match.groupValues[4].toIntOrNull()
         if (op != null && threshold == null) return null
+        // d66은 십의 자리를 합성한 값이라 크기 비교가 의미 없다 — 받아 주면
+        // "성공/실패"가 아무 뜻 없이 찍힌다 (E10)
+        if (sides == D66 && op != null) return null
         return Command(count, sides, op, threshold)
     }
 

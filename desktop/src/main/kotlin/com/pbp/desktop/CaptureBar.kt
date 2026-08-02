@@ -24,8 +24,8 @@ import com.pbp.desktop.data.Message
 import com.pbp.desktop.ui.DesktopDimens
 import com.pbp.desktop.ui.Tokens
 
-/** 한 번에 고를 수 있는 최대 개수 — 모바일 ChatViewModel.PAGE_SIZE와 같은 값 */
-internal const val CAPTURE_MAX = 200
+/** 한 번에 고를 수 있는 최대 개수 — :shared가 단일 출처 (C3) */
+internal const val CAPTURE_MAX = com.pbp.shared.CaptureLayout.MAX_MESSAGES
 
 /** 캡처 바 높이 — 선택 상태가 바뀌어도 튀지 않도록 고정 (모바일과 같은 70dp) */
 private val CAPTURE_BAR_HEIGHT = 70.dp
@@ -157,18 +157,6 @@ internal fun timeRangeLabel(messages: List<Message>): String? {
     return if (a == b) a else "$a–$b"
 }
 
-/**
- * 탭 한 번의 결과 구간 — 모바일 captureRangeAfterTap과 **같은 규칙**이어야 한다
- * (목업 03장). 양 끝을 다시 클릭하면 반대쪽을 고정한 채 그 끝만 옮긴다.
- */
-internal fun captureRangeAfterTap(range: IntRange, tapped: Int): IntRange {
-    var first = range.first
-    var last = range.last
-    when {
-        tapped == first && first != last -> first = last
-        tapped == last && first != last -> last = first
-        tapped < first -> first = tapped
-        else -> last = tapped
-    }
-    return minOf(first, last)..maxOf(first, last)
-}
+/** 규칙은 :shared CaptureLayout이 단일 출처 — 모바일과 갈라지지 않게 (C2) */
+internal fun captureRangeAfterTap(range: IntRange, tapped: Int): IntRange =
+    com.pbp.shared.CaptureLayout.rangeAfterTap(range, tapped)

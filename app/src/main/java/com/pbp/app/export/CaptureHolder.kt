@@ -1,6 +1,7 @@
 package com.pbp.app.export
 
 import android.graphics.Bitmap
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -26,11 +27,40 @@ object CaptureHolder {
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
     )
 
+    /**
+     * 지금 화면에 떠 있는 액티비티 (A2).
+     *
+     * 렌더는 액티비티의 decorView에 오프스크린 뷰를 붙여야 컴포지션이 돈다. 클릭 시점의
+     * 액티비티를 붙들고 있으면 도중에 회전했을 때 **파괴된 액티비티의 분리된 decorView**에
+     * 붙어 컴포지션이 시작되지 않고 "높이 0"으로 실패한다. 그래서 붙이기 직전에 여기서
+     * 최신 것을 꺼낸다. 강한 참조로 들면 액티비티가 통째로 샌다 — 약참조로 둔다.
+     */
+    private var activityRef: java.lang.ref.WeakReference<ComponentActivity>? = null
+
+    val activity: ComponentActivity? get() = activityRef?.get()
+
+    fun bind(activity: ComponentActivity) {
+        activityRef = java.lang.ref.WeakReference(activity)
+    }
+
+    /**
+     * 렌더·저장·공유가 진행 중인가 (A2). 화면 로컬 remember에 두면 회전 뒤 false로
+     * 초기화돼 이전 작업이 도는 중에 저장·재렌더가 겹쳤다.
+     */
+    var busy by mutableStateOf(false)
+
     /** 다시 그릴 때 필요한 원본 — 배경 포함 토글이 바뀌면 이걸로 재렌더한다 */
     data class Request(
         val roomName: String,
         val backgroundKey: String,
         val messages: List<Message>,
+        /** 방 테마색 — 이미지의 시간 표기 색이 화면과 같아야 한다 (E6) */
+        val themeColor: Long,
+        /**
+         * 굴림이 끝난 요청 키 (E6) — **고른 범위가 아니라 방 전체** 기준이다.
+         * 굴림 결과는 범위 밖에 있을 수 있는데, 범위 안만 보면 완료된 판정이 ⋯로 찍힌다.
+         */
+        val rolledRefs: Set<String>,
     )
 
     var request by mutableStateOf<Request?>(null)

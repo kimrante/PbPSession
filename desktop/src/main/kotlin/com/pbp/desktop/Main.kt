@@ -1,37 +1,17 @@
 package com.pbp.desktop
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.LocalTextStyle
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -39,38 +19,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
@@ -86,16 +49,9 @@ import com.pbp.shared.CharacterCodec
 import com.pbp.shared.DiceBot
 import com.pbp.shared.ProfileStats
 import com.pbp.shared.Rules
-import com.pbp.shared.GmSpeech
 import com.pbp.desktop.notify.DesktopNotifier
-import com.pbp.desktop.ui.GowunBatang
-import com.pbp.desktop.ui.MarkupText
-import com.pbp.desktop.ui.Pretendard
 import com.pbp.desktop.ui.Tokens
 import com.pbp.desktop.ui.appFontFamily
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -103,7 +59,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.pbp.shared.Protocol
 import com.pbp.desktop.data.AppPaths
-import com.pbp.desktop.ui.DesktopDimens
 import com.pbp.desktop.ui.DesktopTiming
 
 
@@ -328,11 +283,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 // 순간에도 직전 긴 공백을 덮는다
                 // 절전에서 깨면 공백이 몇 시간일 수 있다 — 그만큼 되읽으면 과금만 늘고
                 // 그 구간은 어차피 커서가 뒤에 있어 잡힌다. 상한을 둔다 (V6)
-                val windowMs = (maxOf(interval, now - lastPollAt) * 2)
+                val pollWindowMs = (maxOf(interval, now - lastPollAt) * 2)
                     .coerceAtMost(DesktopTiming.WINDOW_CAP_MS)
                 lastPollAt = now
                 val legacySweep = now - lastLegacySweepAt >= DesktopTiming.LEGACY_SWEEP_MS
                 if (legacySweep) lastLegacySweepAt = now
+                // 스윕은 안전망이라 일반 폴과 같은 윈도(보통 5~60초)를 쓰면 구멍이 남는다 —
+                // syncAt 없는 구버전 메시지가 커서보다 그만큼 과거로 밀리면 영영 못 본다.
+                // 스윕 회차만 주기(10분)만큼 넓게 본다 (B6)
+                val windowMs =
+                    if (legacySweep) DesktopTiming.LEGACY_SWEEP_MS else pollWindowMs
                 val fetched = withContext(Dispatchers.IO) {
                     firestore.listMessagesSince(
                         room.remoteId, lastCreatedAt, windowMs = windowMs,
@@ -348,7 +308,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     // 창이 포커스를 잃었을 때 새 수신 알림 — 모바일과 동일 규칙
                     // (본문 비노출, SYSTEM 제외). 최초 전체 로드(lastCreatedAt=0)는 제외
                     if (lastCreatedAt > 0 && !focusedNow) {
-                        fresh.lastOrNull { it.authorUid != authorUid() && it.type != "SYSTEM" }
+                        fresh.lastOrNull { it.authorUid != authorUid() && it.type != Protocol.MessageType.SYSTEM }
                             ?.let { DesktopNotifier.notifyMessage(it.senderName ?: "상대") }
                     }
                     // 재수신 윈도로 다시 받은 문서 중 편집된 것은 갱신 (C10).
@@ -401,6 +361,17 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         rooms = rooms.map { if (it.remoteId == cur.remoteId) updated else it }
                         if (selected?.remoteId == cur.remoteId) selected = updated
                         persist()
+                    }
+                    // 누군가 로그를 초기화했다 — 폴링은 '문서가 사라졌다'를 볼 수 없어
+                    // 파일 캐시가 유령을 계속 되살렸다 (A6). 그 시각 이전만 비운다
+                    meta?.logsClearedAt?.let { clearedAt ->
+                        val session = sessionFor(room.remoteId)
+                        val kept = session.messages.filter { it.createdAt > clearedAt }
+                        if (kept.size != session.messages.size) {
+                            session.messages = kept
+                            if (selected?.remoteId == room.remoteId) messages = kept
+                            RoomCacheStore.save(room.remoteId, kept, session.lastCreatedAt)
+                        }
                     }
                 }
             }.onFailure { System.err.println("폴링 오류(다음 주기에 재시도): $it") }
@@ -471,7 +442,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             val textOk = firestore.postMessage(
                 room.remoteId,
                 messageValues(
-                    type = "TEXT", body = marked, sender = effectiveSender,
+                    type = Protocol.MessageType.TEXT, body = marked, sender = effectiveSender,
                     isOoc = isOoc, authorUid = authorUid(),
                     avatarId = avatarId,
                 ),
@@ -483,7 +454,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     diceOk = firestore.postMessage(
                         room.remoteId,
                         messageValues(
-                            type = "DICE", body = result.breakdown,
+                            type = Protocol.MessageType.DICE, body = result.breakdown,
                             sender = Profile(name = "다이스봇", emoji = "🎲"),
                             isOoc = false, authorUid = authorUid(),
                             diceExpr = "${sender.name} · ${command.expr}", isBot = true,
@@ -499,7 +470,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     /**
      * 방 로그 리셋 — 서버를 먼저 비우고 성공 시에만 로컬을 비운다 (모바일 N2와 동일 순서).
-     * 문서 삭제가 상대 기기의 REMOVED 리스너로 전파되어 상대 로그도 함께 지워진다.
+     *
+     * 모바일은 문서 삭제를 REMOVED 리스너로 받지만 **데스크톱 폴링은 문서가 사라진 것을
+     * 볼 수 없다.** 그래서 방 문서에 `logsClearedAt`을 남기고, 상대 데스크톱의 60초 메타
+     * 폴이 그것을 보고 자기 로컬·캐시를 비운다 (A6, 추가 읽기 0).
      */
     fun resetRoomLogs(onDone: (Boolean) -> Unit) {
         val room = selected ?: return onDone(false)
@@ -518,6 +492,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     messages = emptyList()
                 }
                 RoomCacheStore.delete(room.remoteId) // 파일 캐시도 초기화
+                // 상대 데스크톱이 초기화를 알아챌 유일한 단서 (A6) — 안내 메시지보다 먼저 찍어
+                // 안내 자체가 걸러지지 않게 한다
+                firestore.setLogsClearedAt(room.remoteId, System.currentTimeMillis())
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
                     room.remoteId,
@@ -584,7 +561,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         ).toList()
         if (picked.isEmpty() || picked.size > CAPTURE_MAX) return
         if (captureExcludeOoc && picked.all { it.isOoc }) {
-            System.err.println("고른 범위가 전부 잡담이라 뺄 수 없습니다")
+            // stderr는 사용자가 볼 수 없다 — 같은 함수 아래쪽의 V3 원칙과 맞춘다 (E9)
+            captureError = "고른 범위가 전부 잡담이라 뺄 수 없습니다"
             return
         }
         captureRendering = true
@@ -629,16 +607,19 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 return@launch
             }
             captureError = null
-            withContext(Dispatchers.IO) {
-                val fd = java.awt.FileDialog(null as java.awt.Frame?, "캡처 이미지 저장", java.awt.FileDialog.SAVE)
-                fd.file = "PbP_${room.name}.png"
-                fd.isVisible = true
-                val dir = fd.directory ?: return@withContext
-                val name = (fd.file ?: return@withContext).removeSuffix(".png")
-                pages.forEachIndexed { index, bytes ->
-                    val suffix = if (pages.size > 1) "_${index + 1}of${pages.size}" else ""
-                    runCatching { java.io.File(dir, "$name$suffix.png").writeBytes(bytes) }
-                        .onFailure { System.err.println("캡처 저장 실패: $it") }
+            // 대화상자는 EDT에서, 파일 쓰기만 IO에서 (E13)
+            val target = showFileDialog(
+                "캡처 이미지 저장", java.awt.FileDialog.SAVE, "PbP_${room.name}.png",
+            )
+            if (target != null) {
+                val (dir, picked) = target
+                val name = picked.removeSuffix(".png")
+                withContext(Dispatchers.IO) {
+                    pages.forEachIndexed { index, bytes ->
+                        val suffix = if (pages.size > 1) "_${index + 1}of${pages.size}" else ""
+                        runCatching { java.io.File(dir, "$name$suffix.png").writeBytes(bytes) }
+                            .onFailure { System.err.println("캡처 저장 실패: $it") }
+                    }
                 }
             }
             exitCapture()
@@ -717,7 +698,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             firestore.postMessage(
                 room.remoteId,
                 messageValues(
-                    type = "DICE",
+                    type = Protocol.MessageType.DICE,
                     body = result.breakdown,
                     sender = Profile(name = "다이스봇", emoji = "🎲"),
                     isOoc = false,
@@ -748,24 +729,25 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     fun exportLogs() {
         val room = selected ?: return
         val snapshot = messages
-        scope.launch(Dispatchers.IO) {
-            val fd = java.awt.FileDialog(null as java.awt.Frame?, "세션 로그 저장", java.awt.FileDialog.SAVE)
-            fd.file = "${room.name}-log.html"
-            fd.isVisible = true
-            val dir = fd.directory ?: return@launch
-            val file = fd.file ?: return@launch
-            runCatching {
-                val html = com.pbp.desktop.export.LogExporter.buildHtml(
-                    roomName = room.name,
-                    messages = snapshot,
-                    myUid = authorUid(),
-                    avatarDataUri = { id ->
-                        fetchAvatarCached(firestore, room.remoteId, id)
-                            ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
-                    },
-                )
-                java.io.File(dir, file).writeText(html, Charsets.UTF_8)
-            }.onFailure { System.err.println("로그 저장 실패: $it") }
+        scope.launch {
+            // 대화상자는 EDT에서, 조립·쓰기만 IO에서 (E13)
+            val (dir, file) = showFileDialog(
+                "세션 로그 저장", java.awt.FileDialog.SAVE, "${room.name}-log.html",
+            ) ?: return@launch
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val html = com.pbp.desktop.export.LogExporter.buildHtml(
+                        roomName = room.name,
+                        messages = snapshot,
+                        myUid = authorUid(),
+                        avatarDataUri = { id ->
+                            fetchAvatarCached(firestore, room.remoteId, id)
+                                ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
+                        },
+                    )
+                    java.io.File(dir, file).writeText(html, Charsets.UTF_8)
+                }.onFailure { System.err.println("로그 저장 실패: $it") }
+            }
         }
     }
 
@@ -928,7 +910,6 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
                         )
                         if (existing == null) {
-                            rooms = rooms + joined
                             // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번, 모바일과 동일)
                             firestore.postMessage(
                                 meta.remoteId,
@@ -938,9 +919,14 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                                 ),
                             )
                         }
-                        selected = joined
-                        persist()
-                        overlay = null
+                        // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
+                        // 겹치면 한쪽 갱신이 통째로 사라진다 (resetRoomLogs의 M2와 같은 이유)
+                        withContext(Dispatchers.Main) {
+                            if (existing == null) rooms = rooms + joined
+                            selected = joined
+                            persist()
+                            overlay = null
+                        }
                     }
                 }
             },
@@ -964,11 +950,13 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             rule = meta.rule ?: "coc7",
                             createdAt = meta.createdAt,
                         )
-                        rooms = rooms + joined
-                        selected = joined
-                        persist()
+                        withContext(Dispatchers.Main) {
+                            rooms = rooms + joined
+                            selected = joined
+                            persist()
+                        }
                     }
-                    overlay = null
+                    withContext(Dispatchers.Main) { overlay = null }
                 }
             },
         )

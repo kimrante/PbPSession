@@ -65,4 +65,17 @@ class RulesTest {
         assertFalse(Rules.isSuccess(Rules.Outcome.FUMBLE))
         assertFalse(Rules.isSuccess(Rules.Outcome.FAIL))
     }
+
+    @Test
+    fun `목표치가 50 미만이면 96 이상이 대실패`() {
+        // 목표치 40 — 룰상 96~100은 모두 대실패 (E5)
+        val fumble = DiceBot.Result(DiceBot.Command(1, 100, "<=", 40), listOf(96))
+        assertEquals(Rules.Outcome.FUMBLE, Rules.judgeOutcome(Rules.COC7, fumble))
+    }
+
+    @Test
+    fun `목표치가 50 이상이면 96은 그냥 실패`() {
+        val fail = DiceBot.Result(DiceBot.Command(1, 100, "<=", 50), listOf(96))
+        assertEquals(Rules.Outcome.FAIL, Rules.judgeOutcome(Rules.COC7, fail))
+    }
 }

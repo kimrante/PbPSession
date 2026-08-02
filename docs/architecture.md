@@ -115,13 +115,15 @@ com.pbp.app
   (`uploaded=0`)로 재전송되지만, 편집·삭제의 원격 전파는 실패 시 재시도하지 않는다
   (로그만 남김). 로컬에는 반영되므로 기기 간 표시가 다를 수 있다. pending-op 재시도
   큐는 복잡도 대비 이득이 작아 보류 — 필요해지면 `pendingOp` 컬럼 + start() 재시도로.
-- **데스크톱은 30초 윈도보다 오래된 메시지의 편집·삭제를 실시간 반영하지 못한다**:
-  편집은 폴링 윈도(30초) 안에서만 업서트되고, 삭제는 방 재입장 시 반영된다.
-  주기적 전체 재조회는 read 과금이 메시지 수에 비례해 보류.
+- **데스크톱은 개별 메시지 삭제를 반영하지 못한다**: 폴링은 "문서가 사라졌다"를
+  볼 수 없다. **로그 초기화는 전파된다** — 방 문서의 `logsClearedAt`을 60초 메타 폴이
+  보고 그 시각 이전 로컬·캐시를 비운다 (A6, 추가 read 0). 개별 삭제까지 전파하려면
+  tombstone이 필요해 보류.
+  편집은 전파된다 — 편집 시 `syncAt`을 함께 밀어 증분 질의에 다시 걸리게 했다 (B3).
 
 ## 검증
 
-- 단위 테스트: **63개** — :shared 6스위트(DiceBot·Rules·PbpMarkup·GmSpeech·CharacterCodec·ProfileStats) + :app 3스위트(LogExporter·SyncMapping·Reconcile)
+- 단위 테스트: :shared 9스위트(DiceBot·Rules·PbpMarkup·GmSpeech·CharacterCodec·ProfileStats·MarkupHelp·**CaptureLayout**·**LogExport**) + :app 4스위트(LogExporter·SyncMapping·Reconcile·CaptureRange·ImageGc)
 - `gradlew assembleDebug testDebugUnitTest`
 
 ## Firestore 스키마 — 3곳 동시 수정 필요 (리뷰 A2)

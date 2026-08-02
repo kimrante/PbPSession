@@ -37,9 +37,7 @@ import com.pbp.desktop.ui.DesktopDimens
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.Tokens
 import androidx.compose.ui.graphics.ImageBitmap
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.pbp.shared.CaptureLayout
 
 /**
  * 데스크톱 캡처 렌더러 — 모바일과 **같은 360dp 폭·같은 부품**으로 그린다.
@@ -48,11 +46,12 @@ import java.util.Locale
  */
 object CaptureRenderer {
 
-    const val SHEET_WIDTH_DP = 360
-    const val RENDER_DENSITY = 2f
-    const val MAX_HEIGHT_PX = 8_000
+    // 크기·분할 규칙은 :shared CaptureLayout이 단일 출처 — 모바일과 갈라지지 않게 (C1)
+    const val SHEET_WIDTH_DP = CaptureLayout.SHEET_WIDTH_DP
+    const val RENDER_DENSITY = CaptureLayout.RENDER_DENSITY
+    const val MAX_HEIGHT_PX = CaptureLayout.MAX_HEIGHT_PX
 
-    val widthPx = (SHEET_WIDTH_DP * RENDER_DENSITY).toInt()
+    val widthPx = CaptureLayout.widthPx
 
     /** @return PNG 바이트 목록. 높이 상한을 넘으면 메시지 경계에서 나눠 여러 장 */
     @OptIn(ExperimentalComposeUiApi::class)
@@ -141,37 +140,10 @@ object CaptureRenderer {
     private inline fun <T> ImageComposeScene.use(block: (ImageComposeScene) -> T): T =
         try { block(this) } finally { close() }
 
-    private fun splitByHeight(messages: List<Message>): List<List<Message>> {
-        val chunks = mutableListOf<List<Message>>()
-        var current = mutableListOf<Message>()
-        var height = CHROME_DP
-        messages.forEach { message ->
-            val h = estimate(message)
-            if (current.isNotEmpty() && height + h > MAX_HEIGHT_PX / RENDER_DENSITY) {
-                chunks += current
-                current = mutableListOf()
-                height = CHROME_DP
-            }
-            current += message
-            height += h
-        }
-        if (current.isNotEmpty()) chunks += current
-        return chunks
-    }
-
-    private const val CHROME_DP = 120f
-
-    /** 모바일 CaptureRenderer.estimate와 같은 규칙이어야 한다 (R1) */
-    private fun estimate(message: Message): Float = when {
-        message.type != "TEXT" || message.isOoc -> 28f
-        message.senderIsGm -> 34f + lines(message.body, perLine = 26) * 20f
-        else -> 30f + lines(message.body, perLine = 17) * 20f
-    }
-
-    private fun lines(body: String, perLine: Int): Int =
-        body.split('\n').sumOf { line ->
-            maxOf(1, (line.length + perLine - 1) / perLine)
-        }.coerceAtLeast(1)
+    /** 분할 — 규칙은 :shared가 갖고 있고 여기서는 인덱스를 메시지로 되돌리기만 한다 (C1) */
+    private fun splitByHeight(messages: List<Message>): List<List<Message>> =
+        CaptureLayout.splitByHeight(messages.map { it.layoutItem() })
+            .map { range -> messages.slice(range) }
 }
 
 @Composable
@@ -301,18 +273,16 @@ private fun CaptureFooter(roomName: String, messages: List<Message>, page: Strin
     }
 }
 
-/** 모바일 CaptureRenderer.formatDateRange와 같은 형식 */
-fun formatDateRange(first: Long, last: Long): String {
-    val day = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val time = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val sameDay = day.format(Date(first)) == day.format(Date(last))
-    return if (sameDay) {
-        "${day.format(Date(first))} ${time.format(Date(first))} – ${time.format(Date(last))}"
-    } else {
-        "${day.format(Date(first))} ${time.format(Date(first))} – " +
-            "${day.format(Date(last))} ${time.format(Date(last))}"
-    }
-}
+/** 형식은 :shared가 단일 출처 (C1) */
+fun formatDateRange(first: Long, last: Long): String =
+    CaptureLayout.formatDateRange(first, last)
 
-private fun dateOnly(millis: Long): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
+private fun dateOnly(millis: Long): String = CaptureLayout.dateOnly(millis)
+
+/** 높이 계산에 필요한 것만 뽑는다 */
+private fun Message.layoutItem() = CaptureLayout.Item(
+    body = body,
+    type = type,
+    isOoc = isOoc,
+    senderIsGm = senderIsGm,
+)

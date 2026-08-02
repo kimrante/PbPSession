@@ -1,8 +1,5 @@
 package com.pbp.app.ui.roomlist
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,15 +14,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -41,8 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,7 +59,6 @@ import androidx.navigation.NavController
 import com.pbp.app.PbpApp
 import com.pbp.app.R
 import com.pbp.app.data.ChatRoom
-import com.pbp.app.data.Images
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
 import com.pbp.app.data.OwnerProfile
@@ -77,7 +70,6 @@ import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -434,8 +426,16 @@ private fun RoomCard(
             )
         }
         Column(horizontalAlignment = Alignment.End) {
+            // 분 단위로 다시 계산한다 — 컴포지션 시점에 한 번만 재면 "방금"이
+            // 한 시간 뒤에도 "방금"으로 남는다 (E12)
+            val now by produceState(System.currentTimeMillis()) {
+                while (true) {
+                    kotlinx.coroutines.delay(60_000)
+                    value = System.currentTimeMillis()
+                }
+            }
             Text(
-                preview?.let { relativeTime(it.createdAt) } ?: "",
+                preview?.let { relativeTime(it.createdAt, now) } ?: "",
                 fontSize = 10.sp,
                 color = tokens.inkDim,
             )

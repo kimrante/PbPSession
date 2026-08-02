@@ -147,14 +147,11 @@ object PbpPalette {
 
     fun nameColorForLight(argb: Long): Long = com.pbp.shared.Palette.nameColorForLight(argb)
 
-    /** 방 배경 프리셋 (key → 세로 그라데이션 색 쌍). 갤러리 이미지는 파일 경로를 key로 쓴다. */
-    val backgroundPresets = linkedMapOf(
-        "preset_lighthouse" to (0xFF26374D to 0xFF101A28),
-        "preset_lilac" to (0xFF33253F to 0xFF141020),
-        "preset_desert" to (0xFF4F4A2C to 0xFF211D12),
-        "preset_forest" to (0xFF173226 to 0xFF0A120E),
-        "preset_ember" to (0xFF3A1F22 to 0xFF140B0C),
-    )
+    /**
+     * 방 배경 프리셋 (key → 세로 그라데이션 색 쌍). 갤러리 이미지는 파일 경로를 key로 쓴다.
+     * 리터럴을 복제해 두면 shared 값이 바뀔 때 모바일만 조용히 갈라진다 (C4).
+     */
+    val backgroundPresets = com.pbp.shared.Palette.backgroundPresets
 
     const val DEFAULT_BACKGROUND = com.pbp.shared.Protocol.DEFAULT_BACKGROUND
     const val DEFAULT_THEME_COLOR = com.pbp.shared.Protocol.DEFAULT_THEME_COLOR

@@ -1,9 +1,5 @@
 package com.pbp.app.ui.chat
 
-import android.net.Uri
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,11 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -24,27 +17,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,13 +34,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -70,38 +42,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import androidx.navigation.NavController
-import com.pbp.app.PbpApp
-import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.Message
 import com.pbp.app.data.MessageType
-import com.pbp.app.export.LogExporter
 import com.pbp.shared.ChatDates
 import com.pbp.shared.GmSpeech
 import com.pbp.shared.ProfileStats
-import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.Avatar
-import com.pbp.app.ui.common.importCharacterFromClipboard
 import com.pbp.app.ui.common.MarkupText
-import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import com.pbp.app.ui.theme.PbpPalette
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** 메시지 렌더링 — 시스템·다이스·잡담·GM 서술·말풍선 (ChatScreen에서 분리, 리뷰 B3) */
 
@@ -205,6 +158,13 @@ internal fun MessageBlock(
 ) {
     val tokens = Pbp.colors
     val radiusPx = with(LocalDensity.current) { PbpDimens.rCell.toPx() }
+    // 캡처 모드에서는 말풍선이 탭을 삼키면 안 된다 — 행 전체를 탭해 범위를 고르는데
+    // 자식 clickable이 먼저 먹어 빈 여백에서만 반응했다 (A1)
+    val capturing = onTap != null
+    val bodyTap: Modifier = if (capturing) Modifier else Modifier.combinedClickable(
+        onClick = {},
+        onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+    )
     var wrapper = Modifier
         .fillMaxWidth()
         .captureBand(mark, tokens.signature, radiusPx)
@@ -238,10 +198,7 @@ internal fun MessageBlock(
                 Surface(
                     color = chatterColor,
                     shape = RoundedCornerShape(999.dp),
-                    modifier = Modifier.combinedClickable(
-                        onClick = {},
-                        onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
-                    ),
+                    modifier = bodyTap,
                 ) {
                     Text(
                         "${message.senderName ?: ""} : ${message.body}",
@@ -255,9 +212,10 @@ internal fun MessageBlock(
                 }
             }
         }
-        // 판정 요청 — 대상자만 누를 수 있고, 결과가 있으면 완료 (J5)
+        // 판정 요청 — 대상자만 누를 수 있고, 결과가 있으면 완료 (J5).
+        // 캡처 중에는 누를 수 없다 — 범위를 고르려던 탭에 주사위가 굴러갔다 (A1)
         message.type == MessageType.JUDGE -> {
-            JudgeCard(message, judgeState, onJudgeTap)
+            JudgeCard(message, judgeState, onJudgeTap, tappable = !capturing)
         }
         message.type == MessageType.DICE -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -301,7 +259,8 @@ internal fun MessageBlock(
             Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
                 parts.forEachIndexed { index, part ->
                     when (part) {
-                        is GmSpeech.Part.Narration -> NarrationBlock(message, part.text, onLongPress)
+                        is GmSpeech.Part.Narration ->
+                            NarrationBlock(message, part.text, bodyTap, onLongPress)
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message,
                             showTime = showTime && index == lastQuote,
@@ -310,6 +269,7 @@ internal fun MessageBlock(
                             overrideName = "GM",
                             overrideBubbleColor = PbpPalette.gmQuoteBubble,
                             themeColor = themeColor,
+                            bodyTap = bodyTap,
                             onLongPress = onLongPress,
                         )
                     }
@@ -323,7 +283,8 @@ internal fun MessageBlock(
             if (parts.size <= 1) {
                 BubbleRow(
                     message = message, showHeader = !grouped, showTime = showTime,
-                    showRead = showRead, themeColor = themeColor, onLongPress = onLongPress,
+                    showRead = showRead, themeColor = themeColor, bodyTap = bodyTap,
+                    onLongPress = onLongPress,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
@@ -339,6 +300,7 @@ internal fun MessageBlock(
                             showTime = showTime && index == parts.lastIndex,
                             showRead = showRead && index == parts.lastIndex,
                             themeColor = themeColor,
+                            bodyTap = bodyTap,
                             onLongPress = onLongPress,
                         )
                     }
@@ -355,6 +317,8 @@ internal fun MessageBlock(
 internal fun NarrationBlock(
     message: Message,
     text: String,
+    /** 본문 탭·길게 누르기. 캡처 모드에서는 빈 Modifier가 온다 (A1) */
+    bodyTap: Modifier,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -372,10 +336,7 @@ internal fun NarrationBlock(
                     )
                 )
                 .background(tokens.narrBg)
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
-                )
+                .then(bodyTap)
                 .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
         ) {
             // 서술은 문단 자체가 화면이 되도록 — 서술자·시간 등 메타 표기는 두지 않는다
@@ -404,6 +365,8 @@ internal fun BubbleRow(
     showTime: Boolean = true, // 한 메시지가 여러 말풍선으로 나뉘면 마지막에만
     showRead: Boolean = false, // 상대가 여기까지 읽었음 (모바일↔모바일)
     themeColor: Color,
+    /** 본문 탭·길게 누르기. 캡처 모드에서는 빈 Modifier가 온다 (A1) */
+    bodyTap: Modifier,
     onLongPress: (Message) -> Unit,
 ) {
     val tokens = Pbp.colors
@@ -489,10 +452,7 @@ internal fun BubbleRow(
                             Modifier.dashedBorder(Color.White.copy(alpha = .18f), PbpDimens.rCard)
                         } else Modifier
                     )
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
-                    )
+                    .then(bodyTap)
                 if (quoteInner != null) {
                     // 여는 “ 좌상단 · 닫는 ” 우하단 — 좌우 여백은 9dp로 같다.
                     // 위아래 값(5dp / +6dp)이 다른 것은 글리프 잉크가 글자 상자 위쪽에
@@ -566,12 +526,7 @@ internal fun BubbleRow(
  * 본문 전체가 쌍따옴표(" 또는 “ ”)로 감싸인 대사인지 — 감싸였으면 안쪽 내용을 돌려준다.
  * 인용 말풍선 판정에 사용한다. 따옴표는 장식으로 다시 그려지므로 본문에서 벗긴다.
  */
-internal fun quoteContent(body: String): String? {
-    val trimmed = body.trim()
-    if (trimmed.length < 2) return null
-    if (trimmed.first() !in "\"“" || trimmed.last() !in "\"”") return null
-    return trimmed.substring(1, trimmed.length - 1).trim().ifEmpty { null }
-}
+internal fun quoteContent(body: String): String? = GmSpeech.quoteContent(body)
 
 /** 인용 말풍선의 장식 따옴표 — 명조 볼드, 말풍선 잉크의 옅은 톤 */
 @Composable
@@ -679,7 +634,13 @@ private fun judgeLabel(message: Message, statColor: Color): AnnotatedString {
  * 테두리가 2dp인 MyTurn은 패딩에서 1dp를 빼 높이를 맞춘다 (목업 02장).
  */
 @Composable
-private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
+private fun JudgeCard(
+    message: Message,
+    state: JudgeState,
+    onTap: () -> Unit,
+    /** 캡처 모드에서는 false — 범위를 고르는 탭이 굴림으로 새면 안 된다 (A1) */
+    tappable: Boolean,
+) {
     val tokens = Pbp.colors
     val border = if (state == JudgeState.MyTurn) 2.dp else 1.dp
     val shape = RoundedCornerShape(PbpDimens.rCard)
@@ -692,7 +653,7 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
             shape,
         )
     // 누를 수 없는 상태에 리플이 생기면 눌러도 되는 것처럼 보인다
-    if (state == JudgeState.MyTurn) box = box.clickable(onClick = onTap)
+    if (state == JudgeState.MyTurn && tappable) box = box.clickable(onClick = onTap)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
             box.padding(

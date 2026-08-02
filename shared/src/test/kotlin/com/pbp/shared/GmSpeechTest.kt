@@ -3,6 +3,7 @@ package com.pbp.shared
 import com.pbp.shared.GmSpeech
 import com.pbp.shared.GmSpeech.Part
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GmSpeechTest {
@@ -52,5 +53,14 @@ class GmSpeechTest {
             listOf(Part.Narration("그가 속삭인다."), Part.Quote("이리 와.")),
             GmSpeech.split("그가 속삭인다. “이리 와.”"),
         )
+    }
+
+    @Test
+    fun `인용은 줄을 넘지 않는다 — 홀수 따옴표가 문단을 삼키지 않게`() {
+        // 두 문단에 각각 따옴표가 하나씩이면 예전에는 문단을 가로지르는 거대 인용이 됐다 (E11)
+        val quote = '"'
+        val parts = GmSpeech.split("첫 문단에 $quote 하나.\n둘째 문단에도 $quote 하나.")
+        assertEquals(1, parts.size)
+        assertTrue(parts.single() is Part.Narration)
     }
 }

@@ -175,21 +175,6 @@ internal fun timeRangeLabel(messages: List<Message>): String? {
     return if (a == b) a else "$a–$b"
 }
 
-/**
- * 탭 한 번의 결과 구간 (목업 03장).
- * ① 시작만 정해진 상태에서 다른 곳을 탭하면 그게 끝점 — 위를 탭하면 위로 뻗는다(자동 정렬).
- * ② 양 끝을 다시 탭하면 **반대쪽 끝을 고정한 채** 그 끝만 그 자리로 옮긴다.
- * ③ 범위 밖을 탭하면 가까운 쪽 끝이 거기까지 늘어난다.
- * 어느 경우에도 범위가 초기화되지 않는다.
- */
-internal fun captureRangeAfterTap(range: IntRange, tapped: Int): IntRange {
-    var first = range.first
-    var last = range.last
-    when {
-        tapped == first && first != last -> first = last
-        tapped == last && first != last -> last = first
-        tapped < first -> first = tapped
-        else -> last = tapped
-    }
-    return minOf(first, last)..maxOf(first, last)
-}
+/** 규칙은 :shared CaptureLayout이 단일 출처 — PC와 갈라지지 않게 (C2) */
+internal fun captureRangeAfterTap(range: IntRange, tapped: Int): IntRange =
+    com.pbp.shared.CaptureLayout.rangeAfterTap(range, tapped)

@@ -99,7 +99,7 @@ object LogExport {
                                     bodyHtml = markupHtml(part.text),
                                     name = "GM",
                                     nameColor = "#8A6D1C",
-                                    bubbleColor = "#EFE9D8",
+                                    bubbleColor = hex(Palette.gmQuoteBubbleForExport),
                                     mine = false,
                                     time = time,
                                     edited = edited,

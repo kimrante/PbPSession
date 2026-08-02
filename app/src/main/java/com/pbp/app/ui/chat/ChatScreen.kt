@@ -5,11 +5,8 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,24 +17,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,18 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -76,19 +59,13 @@ import com.pbp.app.data.CaptureSettings
 import com.pbp.app.data.Message
 import com.pbp.app.data.judgeKey
 import com.pbp.app.data.numericStatNames
-import com.pbp.app.data.MessageType
 import com.pbp.app.export.LogExporter
 import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
-import com.pbp.app.export.findActivity
 import com.pbp.shared.ChatDates
-import com.pbp.shared.GmSpeech
 import com.pbp.app.ui.common.AddProfileDialog
-import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.importCharacterFromClipboard
-import com.pbp.app.ui.common.MarkupText
 import com.pbp.app.ui.common.RoomBackdrop
-import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
@@ -107,7 +84,11 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     private val repo = app.repository
 
     companion object {
-        const val PAGE_SIZE = 200
+        /**
+         * 한 페이지 로드량 — 캡처 최대 선택 수와 **같아야** 한다. 화면에 없는 메시지를
+         * 범위에 넣을 수 없기 때문이다. :shared가 단일 출처 (C3)
+         */
+        const val PAGE_SIZE = com.pbp.shared.CaptureLayout.MAX_MESSAGES
     }
 
     val room = repo.observeRoom(roomId)
@@ -198,15 +179,13 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         picked: List<Message>,
         onDone: (String?) -> Unit,
     ) = viewModelScope.launch {
-        val activity = context.findActivity()
-        if (activity == null) {
-            onDone("액티비티를 찾지 못했습니다")
-            return@launch
-        }
         val request = CaptureHolder.Request(
             roomName = room.value?.name ?: "PbP",
             backgroundKey = room.value?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND,
             messages = picked,
+            themeColor = room.value?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR,
+            // 고른 범위가 아니라 방 전체 — 굴림이 범위 밖에 있어도 완료로 찍힌다 (E6)
+            rolledRefs = messages.value.mapNotNullTo(mutableSetOf()) { it.judgeRef },
         )
         if (CaptureSettings.excludeOoc && picked.all { it.isOoc }) {
             onDone("고른 범위가 전부 잡담입니다")
@@ -214,12 +193,14 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         }
         val result = runCatching {
             CaptureRenderer.render(
-                activity = activity,
+                context = context,
                 roomName = request.roomName,
                 backgroundKey = request.backgroundKey,
                 messages = request.messages,
                 withBackground = CaptureSettings.withBackground,
                 excludeOoc = CaptureSettings.excludeOoc,
+                themeColor = request.themeColor,
+                rolledRefs = request.rolledRefs,
             )
         }.onFailure {
             android.util.Log.w("PbpCapture", "캡처 렌더 실패", it)
@@ -297,19 +278,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
     val peerState by vm.peerState.collectAsStateWithLifecycle()
     val peerReadAt = peerState.readAt
-    // 입력 중 표시는 시간이 지나면 저절로 꺼져야 한다. 상대가 손을 멈추면 아무것도
-    // 오지 않으므로(그게 설계다) 화면이 스스로 만료를 확인한다 — 네트워크는 쓰지 않는다.
-    var typingNow by remember { mutableStateOf(0L) }
-    LaunchedEffect(peerState.typingUntil) {
-        while (peerState.typingUntil > System.currentTimeMillis()) {
-            typingNow = System.currentTimeMillis()
-            kotlinx.coroutines.delay(500)
-        }
-        typingNow = System.currentTimeMillis()
-    }
-    val typingLabel = peerState.typingName
-        ?.takeIf { peerState.typingUntil > typingNow }
-        ?.let { "${it}님이 입력 중…" }
     val active = profiles.find { it.id == room?.activeProfileId }
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
@@ -575,7 +543,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                     mark = mark,
                                     judgeState = judgeStateOf(message, rolledRefs, myCharacters),
                                     onJudgeTap = {
-                                        vm.rollJudge(message) { statName ->
+                                        // 캡처 중에는 굴리지 않는다 — MessageBlock에서도
+                                        // 막지만, 굴림은 되돌릴 수 없어 두 겹으로 (A1)
+                                        if (!capturing) vm.rollJudge(message) { statName ->
                                             needValueFor = message.id
                                             needValueName = statName
                                         }
@@ -618,16 +588,21 @@ fun ChatScreen(nav: NavController, roomId: Long) {
 
                 // ── 하단: 캡처 모드면 입력줄 자리를 캡처 바가 대신한다
                 if (capturing) {
-                    val picked = captureIdx
-                        ?.let { messages.subList(it.first, it.last + 1).toList() }
-                        .orEmpty()
+                    // 최대 200건의 복사와 높이 추정을 매 리컴포지션마다 다시 하지 않는다 (E7)
+                    val picked = remember(messages, captureIdx) {
+                        captureIdx?.let { messages.subList(it.first, it.last + 1).toList() }
+                            .orEmpty()
+                    }
+                    val estimatedPx = remember(picked) {
+                        CaptureRenderer.estimateHeightPx(picked)
+                    }
                     CaptureBar(
                         count = picked.size,
                         timeRange = if (captureEnd == null) null else timeRangeLabel(picked),
                         startLabel = picked.firstOrNull()?.let {
                             "시작 " + formatTime(it.createdAt) + " · " + (it.senderName ?: "이름 없음")
                         },
-                        estimatedPx = if (captureEnd == null) null else CaptureRenderer.estimateHeightPx(picked),
+                        estimatedPx = if (captureEnd == null) null else estimatedPx,
                         overLimit = picked.size > ChatViewModel.PAGE_SIZE,
                         rendering = captureRendering,
                         onMake = {
@@ -663,7 +638,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         vm.notifyTypingStopped()
                         pendingScrollToLatest = true // 내 전송·판정은 항상 최신으로 스크롤
                     },
-                    typingLabel = typingLabel,
+                    typingName = peerState.typingName,
+                    typingUntil = peerState.typingUntil,
                     onJudgeRequest = { judgeSheetOpen = true },
                     onTyping = vm::notifyTyping,
                     onTypingStopped = vm::notifyTypingStopped,

@@ -47,6 +47,15 @@ object Protocol {
          */
         const val SYNC_AT = "syncAt"
         const val EDITED_AT = "editedAt"
+
+        /**
+         * 방 문서에 남기는 "이 시각 이전 로그를 비웠다" 표식 (A6).
+         *
+         * 폴링만 쓰는 데스크톱은 **문서가 사라진 것을 볼 수 없다**. 상대가 로그를
+         * 초기화해도 파일 캐시가 유령을 계속 되살려 두 로그가 조용히 갈라졌다.
+         * 방 메타 폴(60초)이 이 값을 보고 그 이전 로컬 메시지를 비운다 — 추가 읽기 0.
+         */
+        const val LOGS_CLEARED_AT = "logsClearedAt"
         const val AUTHOR_UID = "authorUid"
         const val AVATAR_ID = "avatarId"
 

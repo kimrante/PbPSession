@@ -59,7 +59,10 @@ object Rules {
         if (!coc7Downward) return if (success) Outcome.SUCCESS else Outcome.FAIL
         return when {
             result.total == 1 -> Outcome.CRITICAL
+            // 룰상 목표치가 50 미만이면 96~100이 모두 대실패다. 100만 보던 것은
+            // 단순화가 아니라 누락이었다 (E5)
             result.total == 100 -> Outcome.FUMBLE
+            threshold!! < 50 && result.total >= 96 -> Outcome.FUMBLE
             !success -> Outcome.FAIL
             result.total <= threshold!! / 5 -> Outcome.EXTREME
             result.total <= threshold / 2 -> Outcome.HARD

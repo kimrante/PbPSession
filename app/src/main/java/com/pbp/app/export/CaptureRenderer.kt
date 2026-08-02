@@ -10,7 +10,6 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.request.ImageRequest
 import com.pbp.app.data.Message
+import com.pbp.app.data.judgeKey
+import com.pbp.shared.CaptureLayout
+import com.pbp.app.ui.chat.JudgeState
 import com.pbp.app.ui.chat.MessageBlock
 import com.pbp.app.ui.chat.isContinuation
 import com.pbp.app.ui.chat.sharesTimeLabel
@@ -51,9 +54,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.android.awaitFrame
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** ComposeView를 붙일 Activity 찾기 — Compose의 LocalContext는 ContextWrapper일 수 있다 */
 fun Context.findActivity(): ComponentActivity? {
@@ -75,23 +75,13 @@ fun Context.findActivity(): ComponentActivity? {
  */
 object CaptureRenderer {
 
-    /** 결과 이미지 폭(dp) — 기기 폭과 무관하게 고정 */
-    const val SHEET_WIDTH_DP = 360
+    // 크기·분할 규칙은 :shared CaptureLayout이 단일 출처 — PC와 갈라지지 않게 (C1)
+    const val SHEET_WIDTH_DP = CaptureLayout.SHEET_WIDTH_DP
+    const val RENDER_DENSITY = CaptureLayout.RENDER_DENSITY
+    const val MAX_HEIGHT_PX = CaptureLayout.MAX_HEIGHT_PX
+    const val MAX_TOTAL_HEIGHT_PX = CaptureLayout.MAX_TOTAL_HEIGHT_PX
 
-    /** 고정 렌더 배율. 기기 밀도를 쓰면 고밀도 기기에서만 큰 이미지가 나온다 */
-    const val RENDER_DENSITY = 2f
-
-    /** 한 장 최대 높이(px). 넘으면 메시지 경계에서 나눠 여러 장으로 만든다 */
-    const val MAX_HEIGHT_PX = 8_000
-
-    /**
-     * 한 번에 만들 수 있는 총 높이(px) 상한 — 720×이 높이×4바이트가 한꺼번에 힙에 올라간다.
-     * 32,000px ≈ 4장 ≈ 92MB. 이보다 크면 기기에 따라 OOM으로 죽고, 그때는 이미 만든
-     * 장들까지 함께 잃는다. 개수 제한(200건)과 같은 방식으로 **미리 거절한다** (R2).
-     */
-    const val MAX_TOTAL_HEIGHT_PX = 32_000
-
-    val widthPx = (SHEET_WIDTH_DP * RENDER_DENSITY).toInt()
+    val widthPx = CaptureLayout.widthPx
 
     /**
      * @return 만들어진 비트맵 목록(여러 장이면 순서대로). 실패하면 빈 목록.
@@ -101,12 +91,14 @@ object CaptureRenderer {
      *   거르므로, 머리글의 개수·시각 범위도 걸러낸 뒤 기준이 된다.
      */
     suspend fun render(
-        activity: ComponentActivity,
+        context: Context,
         roomName: String,
         backgroundKey: String,
         messages: List<Message>,
         withBackground: Boolean,
         excludeOoc: Boolean = false,
+        themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
+        rolledRefs: Set<String> = emptySet(),
     ): List<Bitmap> {
         @Suppress("NAME_SHADOWING")
         val messages = if (excludeOoc) messages.filterNot { it.isOoc } else messages
@@ -117,17 +109,24 @@ object CaptureRenderer {
             "범위가 너무 깁니다 (약 ${estimated}px) — 나눠서 만들어 주세요"
         }
         // 아바타는 Coil AsyncImage라 두 프레임만으로는 안 붙는다 — 캐시를 먼저 채운다
-        preloadAvatars(activity, messages, backgroundKey.takeIf { withBackground })
+        preloadAvatars(context, messages, backgroundKey.takeIf { withBackground })
         // 추정으로 1차 분할한 뒤, 실제로 그려 보고 넘치면 그 청크만 쪼개 다시 그린다.
         // 추정은 아무리 다듬어도 어긋나므로 **실측이 최종 판정**이어야 한다 (R1)
-        val pending = ArrayDeque(splitByHeight(messages))
+        val planned = splitByHeight(messages)
+        // 낙관의 n/N은 장수를 알아야 찍는다. 예전에는 전 페이지를 **두 번** 그렸는데
+        // (32,000px 기준 최대 8회·수백 MB), 추정 장수를 낙관으로 먼저 믿고 그린 뒤
+        // 실측 재분할로 장수가 달라졌을 때만 다시 그린다 (E3)
+        val guessedPages = planned.size
+        val pending = ArrayDeque(planned)
         val rendered = mutableListOf<List<Message>>()
         val bitmaps = mutableListOf<Bitmap>()
         while (pending.isNotEmpty()) {
             val chunk = pending.removeFirst()
             val bitmap = try {
-                // 페이지 번호는 장수가 확정된 뒤에 넣어야 해서 여기서는 비워 둔다
-                renderOne(activity, roomName, backgroundKey, chunk, withBackground, page = null)
+                renderOne(
+                    roomName, backgroundKey, chunk, withBackground, themeColor, rolledRefs,
+                    page = if (guessedPages > 1) "${rendered.size + 1}/$guessedPages" else null,
+                )
             } catch (tooTall: TooTallException) {
                 if (chunk.size <= 1) throw tooTall // 한 건이 상한을 넘으면 나눌 수가 없다
                 val half = chunk.size / 2
@@ -138,13 +137,13 @@ object CaptureRenderer {
             rendered += chunk
             bitmaps += bitmap
         }
-        // 장수가 정해졌으니 여러 장이면 낙관에 n/N을 붙여 다시 그린다
-        if (bitmaps.size <= 1) return bitmaps
+        // 추정이 맞았으면 여기서 끝 — 재렌더 없음
+        if (rendered.size == guessedPages) return bitmaps
         bitmaps.forEach { if (!it.isRecycled) it.recycle() }
         return rendered.mapIndexed { index, chunk ->
             renderOne(
-                activity, roomName, backgroundKey, chunk, withBackground,
-                page = "${index + 1}/${rendered.size}",
+                roomName, backgroundKey, chunk, withBackground, themeColor, rolledRefs,
+                page = if (rendered.size > 1) "${index + 1}/${rendered.size}" else null,
             )
         }
     }
@@ -153,59 +152,17 @@ object CaptureRenderer {
     class TooTallException(val heightPx: Int) :
         IllegalStateException("한 장에 담기지 않는 높이(${heightPx}px)")
 
-    /**
-     * 예상 높이를 누적해 상한에 닿기 전에 끊는다. 한 번에 크게 그린 뒤 자르면
-     * 그 큰 비트맵에서 먼저 터지므로 **묶음을 나눠 따로 그린다**.
-     */
-    private fun splitByHeight(messages: List<Message>): List<List<Message>> {
-        val chunks = mutableListOf<List<Message>>()
-        var current = mutableListOf<Message>()
-        var height = CHROME_DP
-        messages.forEach { message ->
-            val h = estimate(message)
-            if (current.isNotEmpty() && height + h > MAX_HEIGHT_PX / RENDER_DENSITY) {
-                chunks += current
-                current = mutableListOf()
-                height = CHROME_DP
-            }
-            current += message
-            height += h
-        }
-        if (current.isNotEmpty()) chunks += current
-        return chunks
-    }
-
-    /** 머리글 + 낙관 + 시트 여백의 어림 합(dp) */
-    private const val CHROME_DP = 120f
+    /** 분할 — 규칙은 :shared가 갖고 있고 여기서는 인덱스를 메시지로 되돌리기만 한다 (C1) */
+    private fun splitByHeight(messages: List<Message>): List<List<Message>> =
+        CaptureLayout.splitByHeight(messages.map { it.layoutItem() })
+            .map { range -> messages.slice(range) }
 
     /**
      * 결과 이미지의 대략 높이(px). 실제 렌더 전이라 정확할 수 없어 화면 문구에 '약'을 붙인다.
      * **분할 판정과 같은 함수를 써야** 하단 바가 말한 높이와 실제 장수가 어긋나지 않는다.
      */
     fun estimateHeightPx(messages: List<Message>): Int =
-        ((CHROME_DP + messages.sumOf { estimate(it).toDouble() }.toFloat()) * RENDER_DENSITY).toInt()
-
-    /**
-     * 메시지 1건의 대략 높이(dp). **길이에 비례해야 한다** — GM 서술을 90dp 고정으로 두면
-     * 긴 서술 하나가 상한을 통째로 넘겨 페이지 하단이 잘려 나갔다 (R1).
-     *
-     * 실측 기준: 폭 360dp에서 말풍선 본문은 240dp 남짓, 13sp 한글이 줄당 17~18자,
-     * 줄 높이 20dp. GM 서술은 폭을 다 쓰므로 줄당 글자가 더 들어간다.
-     * 어디까지나 분할용 어림값이고, 최종 높이는 실측으로 다시 확인한다.
-     */
-    internal fun estimate(message: Message): Float = when {
-        message.type != com.pbp.app.data.MessageType.TEXT || message.isOoc -> 28f
-        // GM 서술: 상하 여백 + 줄 수 × 줄 높이 (줄당 약 26자)
-        message.senderIsGm -> 34f + lines(message.body, perLine = 26) * 20f
-        // 말풍선: 이름·아바타 줄 + 줄 수 × 줄 높이 (줄당 약 17자)
-        else -> 30f + lines(message.body, perLine = 17) * 20f
-    }
-
-    /** 줄바꿈과 자동 줄바꿈을 함께 센다 — 최소 1줄 */
-    private fun lines(body: String, perLine: Int): Int =
-        body.split('\n').sumOf { line ->
-            maxOf(1, (line.length + perLine - 1) / perLine)
-        }.coerceAtLeast(1)
+        CaptureLayout.estimateHeightPx(messages.map { it.layoutItem() })
 
     /** 아바타·배경 이미지를 Coil 캐시에 미리 올린다 — 빈 원으로 찍히는 것을 막는다 */
     private suspend fun preloadAvatars(
@@ -226,13 +183,18 @@ object CaptureRenderer {
     }
 
     private suspend fun renderOne(
-        activity: ComponentActivity,
         roomName: String,
         backgroundKey: String,
         messages: List<Message>,
         withBackground: Boolean,
+        themeColor: Long,
+        rolledRefs: Set<String>,
         page: String?,
     ): Bitmap = withContext(Dispatchers.Main) { // measure/layout/draw는 메인 스레드
+        // 붙이기 **직전에** 최신 액티비티를 꺼낸다 — 클릭 시점 것을 붙들고 있으면
+        // 도중에 회전했을 때 파괴된 decorView에 붙어 "높이 0"으로 실패한다 (A2)
+        val activity = CaptureHolder.activity
+            ?: error("화면이 없어 이미지를 만들 수 없습니다")
         val view = ComposeView(activity).apply {
             setContent {
                 // 밀도를 고정해야 기기와 무관하게 같은 픽셀 크기가 나온다
@@ -242,7 +204,10 @@ object CaptureRenderer {
                     // 캡처 이미지는 항상 라이트 토큰 — 기기 다크 설정에 결과가 끌려가지 않게
                     PbpTheme(darkTheme = false) {
                         CompositionLocalProvider(LocalPbpColors provides PbpLightColors) {
-                            CaptureSheet(roomName, backgroundKey, messages, withBackground, page)
+                            CaptureSheet(
+                                roomName, backgroundKey, messages, withBackground,
+                                themeColor, rolledRefs, page,
+                            )
                         }
                     }
                 }
@@ -295,10 +260,14 @@ private fun CaptureSheet(
     backgroundKey: String,
     messages: List<Message>,
     withBackground: Boolean,
+    themeColorArgb: Long,
+    /** 굴림이 끝난 요청 키 — 방 전체 기준이라 범위 밖 굴림도 반영된다 (E6) */
+    rolledRefs: Set<String>,
     page: String?,
 ) {
     val tokens = PbpLightColors
-    val themeColor = Color(PbpPalette.DEFAULT_THEME_COLOR)
+    // 방 테마를 그대로 쓴다 — 기본색으로 고정하면 시간 표기 색이 화면과 갈라졌다 (E6)
+    val themeColor = Color(themeColorArgb)
     Column(Modifier.fillMaxWidth().background(tokens.panel2)) {
         CaptureHeader(roomName, messages)
         Box(Modifier.fillMaxWidth()) {
@@ -350,6 +319,10 @@ private fun CaptureSheet(
                             grouped = grouped,
                             showTime = showTime,
                             themeColor = themeColor,
+                            // 이미지에는 "내 차례" 같은 것이 없다 — 굴렸으면 완료, 아니면 대기
+                            judgeState = if (judgeKey(message) in rolledRefs) {
+                                JudgeState.Done
+                            } else JudgeState.Waiting,
                             onLongPress = {},
                         )
                     }
@@ -419,18 +392,16 @@ private fun CaptureFooter(roomName: String, messages: List<Message>, page: Strin
     }
 }
 
-/** "2026-07-30 21:03 – 21:14" — 날짜가 다르면 양쪽 모두 날짜를 붙인다 */
-fun formatDateRange(first: Long, last: Long): String {
-    val day = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val time = SimpleDateFormat("HH:mm", Locale.getDefault())
-    val sameDay = day.format(Date(first)) == day.format(Date(last))
-    return if (sameDay) {
-        "${day.format(Date(first))} ${time.format(Date(first))} – ${time.format(Date(last))}"
-    } else {
-        "${day.format(Date(first))} ${time.format(Date(first))} – " +
-            "${day.format(Date(last))} ${time.format(Date(last))}"
-    }
-}
+/** "2026-07-30 21:03 – 21:14" — 형식은 :shared가 단일 출처 (C1) */
+fun formatDateRange(first: Long, last: Long): String =
+    CaptureLayout.formatDateRange(first, last)
 
-private fun dateOnly(millis: Long): String =
-    SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(millis))
+private fun dateOnly(millis: Long): String = CaptureLayout.dateOnly(millis)
+
+/** 높이 계산에 필요한 것만 뽑는다 — :shared는 Room 엔티티를 모른다 */
+private fun Message.layoutItem() = CaptureLayout.Item(
+    body = body,
+    type = type.name,
+    isOoc = isOoc,
+    senderIsGm = senderIsGm,
+)

@@ -6,7 +6,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -156,6 +156,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
     var newStatValue by rememberSaveable { mutableStateOf("") }
     // 꾹 눌러 편집 중인 항목 — 그 줄만 입력 폼으로 바뀐다
     var editingStat by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // 되돌릴 수 없는 데이터 손실 — 방 삭제·메시지 삭제와 같은 위계로 한 번 묻는다 (E1)
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var editName by rememberSaveable { mutableStateOf("") }
     var editValue by rememberSaveable { mutableStateOf("") }
 
@@ -471,13 +473,39 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 if (existing != null && existing?.isGm != true) {
                     Spacer(Modifier.height(PbpDimens.gap4))
                     TextButton(
-                        onClick = { vm.delete(existing!!) { nav.popBackStack() } },
+                        onClick = { confirmDelete = true },
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                     ) { Text("캐릭터 삭제", color = tokens.danger, fontSize = 13.sp) }
                 }
                 Spacer(Modifier.height(PbpDimens.gap6))
             }
         }
+    }
+
+    if (confirmDelete && existing != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("캐릭터 삭제", fontSize = 15.sp, color = tokens.ink) },
+            text = {
+                Text(
+                    "'${existing?.name}' 캐릭터를 삭제합니다. 되돌릴 수 없습니다.",
+                    fontSize = 13.sp,
+                    color = tokens.inkDim,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    existing?.let { target -> vm.delete(target) { nav.popBackStack() } }
+                }) { Text("삭제", color = tokens.danger, fontSize = 13.sp) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text("취소", color = tokens.inkDim, fontSize = 13.sp)
+                }
+            },
+            containerColor = tokens.panel,
+        )
     }
 
     // 갤러리에서 고른 이미지를 원형 프레임에서 이동·확대해 잘라낸다

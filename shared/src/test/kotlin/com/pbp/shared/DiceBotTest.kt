@@ -125,4 +125,12 @@ class DiceBotTest {
         // 표시 형식: 계산식 없이 최종 값만
         assertEquals("35", DiceBot.Result(DiceBot.Command(1, 66), listOf(3, 5)).breakdown)
     }
+
+    @Test
+    fun `d66에는 비교식을 붙일 수 없다`() {
+        // 십의 자리를 합성한 값이라 크기 비교가 의미 없다 (E10)
+        assertNull(DiceBot.parse("1d66<=30"))
+        assertNull(DiceBot.parse("1d66>=30"))
+        assertEquals(DiceBot.Command(1, 66), DiceBot.parse("1d66"))
+    }
 }

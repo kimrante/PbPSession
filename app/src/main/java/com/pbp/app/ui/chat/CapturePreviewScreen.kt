@@ -28,8 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,7 +44,6 @@ import com.pbp.app.data.CaptureSettings
 import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
 import com.pbp.app.export.CaptureSaver
-import com.pbp.app.export.findActivity
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 import kotlinx.coroutines.launch
@@ -65,7 +62,9 @@ fun CapturePreviewScreen(nav: NavController) {
     val bitmaps = CaptureHolder.pages
     val roomName = CaptureHolder.request?.roomName ?: "PbP"
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
+    // 회전해도 이어지도록 홀더에 둔다 — 화면 로컬이면 회전 뒤 false로 초기화돼
+    // 이전 렌더가 도는 중에 저장·재렌더가 겹쳤다 (A2)
+    val busy = CaptureHolder.busy
 
     // 공유용 캐시는 화면을 벗어날 때 비운다
     DisposableEffect(Unit) { onDispose { CaptureSaver.clearShareCache(context) } }
@@ -78,23 +77,24 @@ fun CapturePreviewScreen(nav: NavController) {
     // 배경·잡담 설정은 이미지에 구워져 있어 다시 그리는 것 말고는 방법이 없다
     val rerender = {
         val request = CaptureHolder.request
-        val activity = context.findActivity()
-        if (request != null && activity != null) {
-            busy = true
+        if (request != null && !CaptureHolder.busy) {
+            CaptureHolder.busy = true
             // 회전으로 화면이 재생성돼도 재렌더가 끊기면 안 된다 — 설정만 바뀌고
             // 이미지는 옛 상태로 남는다 (R7)
             CaptureHolder.scope.launch {
                 val result = runCatching {
                     CaptureRenderer.render(
-                        activity = activity,
+                        context = context.applicationContext,
                         roomName = request.roomName,
                         backgroundKey = request.backgroundKey,
                         messages = request.messages,
                         withBackground = CaptureSettings.withBackground,
                         excludeOoc = CaptureSettings.excludeOoc,
+                        themeColor = request.themeColor,
+                        rolledRefs = request.rolledRefs,
                     )
                 }
-                busy = false
+                CaptureHolder.busy = false
                 val pages = result.getOrDefault(emptyList())
                 when {
                     // 고른 범위가 전부 잡담이면 남는 게 없다 — 설정을 되돌려 준다
@@ -121,7 +121,7 @@ fun CapturePreviewScreen(nav: NavController) {
 
     val doSave = {
         if (!busy && bitmaps.isNotEmpty()) {
-            busy = true
+            CaptureHolder.busy = true
             scope.launch {
                 val ok = bitmaps.mapIndexed { index, bitmap ->
                     CaptureSaver.saveToGallery(
@@ -130,7 +130,7 @@ fun CapturePreviewScreen(nav: NavController) {
                         CaptureSaver.fileName(roomName, index, bitmaps.size),
                     ) != null
                 }.all { it }
-                busy = false
+                CaptureHolder.busy = false
                 Toast.makeText(
                     context,
                     if (ok) "갤러리에 저장했습니다" else "저장에 실패했습니다",
@@ -254,10 +254,10 @@ fun CapturePreviewScreen(nav: NavController) {
                         .clickable(enabled = !busy && bitmaps.isNotEmpty()) {
                             // 공유 중에는 토글을 잠근다 — 압축하는 사이 재렌더가 끼면
                             // 쓰던 비트맵이 recycle돼 빈 이미지가 공유된다 (R4)
-                            busy = true
+                            CaptureHolder.busy = true
                             scope.launch {
                                 val intent = CaptureSaver.shareIntent(context, bitmaps, roomName)
-                                busy = false
+                                CaptureHolder.busy = false
                                 if (intent == null) {
                                     Toast.makeText(context, "공유할 이미지가 없습니다", Toast.LENGTH_SHORT)
                                         .show()

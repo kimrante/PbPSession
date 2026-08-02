@@ -26,6 +26,12 @@ object Palette {
     const val gmQuoteBubble = 0xFFE7E2D4
 
     /**
+     * HTML 로그의 GM 인용 말풍선 (F4) — 화면 값보다 살짝 밝은 종이 톤이다.
+     * 의도된 치환이지만 하드코딩이라 왜 다른지 알 수 없었다. 여기 이름을 붙여 둔다.
+     */
+    const val gmQuoteBubbleForExport = 0xFFEFE9D8
+
+    /**
      * 다크 모드용 밝은 이름색 → 화이트 모드(및 종이 톤 로그)용 진한 색 치환.
      * 스펙 명시 매핑 외의 색은 알고리즘으로 어둡게 낮춘다.
      */

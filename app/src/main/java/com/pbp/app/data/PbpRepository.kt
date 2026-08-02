@@ -5,6 +5,7 @@ import com.pbp.shared.ProfileStats
 import com.pbp.shared.DiceBot
 import com.pbp.app.sync.SyncManager
 import com.pbp.app.ui.theme.PbpPalette
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 
 class PbpRepository(private val db: AppDatabase) {
@@ -123,6 +124,12 @@ class PbpRepository(private val db: AppDatabase) {
     fun observePeerState(remoteId: String?) =
         if (remoteId == null) kotlinx.coroutines.flow.flowOf(SyncManager.PeerState())
         else syncManager?.observePeerState(remoteId)
+            // 리스너가 죽으면(권한 만료·네트워크) 흐름이 끊긴다 — 다시 붙는다 (B7).
+            // 즉시 재구독하면 오류 폭주 시 그대로 재시도 폭주가 되므로 5초 간격
+            ?.retryWhen { _, attempt ->
+                kotlinx.coroutines.delay(if (attempt == 0L) 1_000 else 5_000)
+                true
+            }
             ?: kotlinx.coroutines.flow.flowOf(SyncManager.PeerState())
 
     /**
@@ -339,7 +346,7 @@ class PbpRepository(private val db: AppDatabase) {
                 // 내 리스너의 REMOVED가 로컬을 즉시 삭제해 '실패 시 로컬 보존'이 깨진다.
                 syncManager?.detach(roomId)
                 val serverOk = syncManager
-                    ?.wipeMessages(remoteId, db.messageDao().listRemoteIdsForRoom(roomId))
+                    ?.wipeMessages(remoteId, db.messageDao().listRemoteIdsForWipe(roomId))
                     ?: false
                 // 성공/실패와 무관하게 재접속 — 재접속 시 삭제 대조(reconcile)가
                 // 서버 상태 기준으로 수렴한다 (부분 삭제면 남은 것 유지)

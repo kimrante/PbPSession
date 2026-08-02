@@ -15,7 +15,6 @@ import android.graphics.Path
 import androidx.core.app.NotificationCompat
 import com.pbp.app.MainActivity
 import com.pbp.app.R
-import com.pbp.app.data.Message
 
 /**
  * 푸시 알림 (스펙 7장).

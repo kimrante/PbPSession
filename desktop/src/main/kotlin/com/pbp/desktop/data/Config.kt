@@ -169,6 +169,10 @@ class AppConfig private constructor(
     @Synchronized
     fun roomsCopy(): List<JoinedRoom> = rooms.toList()
 
+    /** 같은 이유의 프로필 사본 (E14) */
+    @Synchronized
+    fun profilesCopy(): List<Profile> = profiles.toList()
+
     /** 이미 굳힌 스냅샷을 파일에 쓴다. 실패해도 예외를 밖으로 던지지 않는다 (N8). */
     @Synchronized
     fun writeSnapshot(json: String) {

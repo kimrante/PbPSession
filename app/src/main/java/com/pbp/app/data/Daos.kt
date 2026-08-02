@@ -132,10 +132,6 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE roomId = :roomId ORDER BY createdAt ASC, id ASC")
     suspend fun listForRoom(roomId: Long): List<Message>
 
-    /** 수신 dedup 일괄 조회 — 문서마다 쿼리하지 않도록 */
-    @Query("SELECT remoteId FROM messages WHERE remoteId IN (:ids)")
-    suspend fun existingRemoteIds(ids: List<String>): List<String>
-
     /** 서버 반영이 확인되지 않은 메시지 — 시작 시 재전송용 아웃박스 (멱등: remoteId 고정) */
     @Query("SELECT * FROM messages WHERE roomId = :roomId AND uploaded = 0 ORDER BY createdAt ASC, id ASC")
     suspend fun listUnsent(roomId: Long): List<Message>
@@ -153,6 +149,16 @@ interface MessageDao {
     /** 삭제 동기화 대조용 — 서버에 존재해야 하는(업로드 확인된) remoteId 전체 */
     @Query("SELECT remoteId FROM messages WHERE roomId = :roomId AND remoteId IS NOT NULL AND uploaded = 1")
     suspend fun listRemoteIdsForRoom(roomId: Long): List<String>
+
+    /**
+     * 로그 초기화용 — `uploaded`를 보지 않는다 (B5).
+     *
+     * "set() 성공 직후·setUploaded 직전 크래시"로 남은 문서는 uploaded=0인데 서버에는
+     * 있다. 그걸 빼고 지우면 상대에게만 보이는 고아가 남는다. 삭제는 멱등이라
+     * 서버에 없는 id를 지우려 해도 손해가 없다.
+     */
+    @Query("SELECT remoteId FROM messages WHERE roomId = :roomId AND remoteId IS NOT NULL")
+    suspend fun listRemoteIdsForWipe(roomId: Long): List<String>
 
     /** 수신 dedup + 변경 감지용 — remoteId와 현재 본문·편집시각만 (P4) */
     @Query("SELECT remoteId, body, editedAt FROM messages WHERE remoteId IN (:remoteIds)")

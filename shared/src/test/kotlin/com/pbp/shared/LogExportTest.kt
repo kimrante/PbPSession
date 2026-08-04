@@ -91,8 +91,8 @@ class LogExportTest {
     }
 
     @Test
-    fun `SYSTEM 안내는 가운데 한 줄로`() {
-        val out = html(msg(body = "프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM))
+    fun `판정 요청은 가운데 한 줄로`() {
+        val out = html(msg(body = "이단, DEX 판정", type = Protocol.MessageType.JUDGE))
         assertTrue(out.contains("class=\"sys\""))
     }
 
@@ -127,13 +127,26 @@ class LogExportTest {
     }
 
     @Test
-    fun `로그 초기화 안내는 내보내기에서 빠진다 — 다른 시스템 안내는 남는다`() {
+    fun `운영 안내는 문구를 가리지 않고 전부 빠진다 — 판정 요청은 남는다`() {
         val out = html(
             msg(body = Protocol.Notice.LOGS_RESET, type = Protocol.MessageType.SYSTEM),
             msg(body = "프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM),
+            msg(body = "'이단' 님이 참여하셨습니다.", type = Protocol.MessageType.SYSTEM),
+            msg(body = "이단, DEX 판정", type = Protocol.MessageType.JUDGE),
         )
         assertFalse(out, out.contains(Protocol.Notice.LOGS_RESET))
-        assertTrue(out, out.contains("프로필을 바꿨습니다"))
+        assertFalse(out, out.contains("프로필을 바꿨습니다"))
+        assertFalse(out, out.contains("참여하셨습니다"))
+        assertTrue("판정 요청은 대화의 일부다", out.contains("이단, DEX 판정"))
+    }
+
+    @Test
+    fun `머리글 메시지 수는 걸러낸 뒤 기준이다`() {
+        val out = html(
+            msg(body = "프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM),
+            msg(body = "안녕"),
+        )
+        assertTrue(out, out.contains("메시지 1개"))
     }
 
     // ── 이미지 MIME 스니핑 ───────────────────────────────
@@ -237,24 +250,30 @@ class LogExportTest {
     }
 
     @Test
-    fun `텍스트에서도 로그 초기화 안내는 빠진다`() {
-        val out = LogExport.buildText(
-            "방",
-            listOf(msg(Protocol.Notice.LOGS_RESET, type = Protocol.MessageType.SYSTEM), msg("가")),
-        )
-        assertFalse(out, out.contains(Protocol.Notice.LOGS_RESET))
-    }
-
-    @Test
-    fun `시스템·판정은 대괄호 한 줄, 다이스는 식과 성패까지`() {
+    fun `텍스트에서도 운영 안내는 전부 빠진다`() {
         val out = LogExport.buildText(
             "방",
             listOf(
-                msg("방이 열렸습니다", type = Protocol.MessageType.SYSTEM),
+                msg(Protocol.Notice.LOGS_RESET, type = Protocol.MessageType.SYSTEM),
+                msg("프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM),
+                msg("가"),
+            ),
+        )
+        assertFalse(out, out.contains(Protocol.Notice.LOGS_RESET))
+        assertFalse(out, out.contains("프로필을 바꿨습니다"))
+        assertTrue(out, out.contains("가"))
+    }
+
+    @Test
+    fun `판정은 대괄호 한 줄, 다이스는 식과 성패까지`() {
+        val out = LogExport.buildText(
+            "방",
+            listOf(
+                msg("루나, DEX 판정", type = Protocol.MessageType.JUDGE),
                 msg("7", type = Protocol.MessageType.DICE, diceExpr = "1d20", diceOutcome = "success"),
             ),
         )
-        assertTrue(out, out.contains("[방이 열렸습니다]"))
+        assertTrue(out, out.contains("[루나, DEX 판정]"))
         assertTrue(out, out.contains("1d20 → 7 (성공)"))
     }
 

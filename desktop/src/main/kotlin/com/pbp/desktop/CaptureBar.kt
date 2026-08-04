@@ -37,7 +37,8 @@ private val CAPTURE_BAR_HEIGHT = DesktopDimens.captureBar
 @Composable
 internal fun CaptureBar(
     count: Int,
-    timeRange: String?,
+    /** "2026-07-30 – 2026-08-01" — 끝점이 없으면 null */
+    dateRange: String?,
     startLabel: String?,
     overLimit: Boolean,
     rendering: Boolean,
@@ -50,12 +51,12 @@ internal fun CaptureBar(
     excludeOoc: Boolean,
     onToggleExcludeOoc: () -> Unit,
 ) {
-    val enabled = timeRange != null && !overLimit && !rendering
+    val enabled = dateRange != null && !overLimit && !rendering
     val subtitle = when {
         error != null -> error
         overLimit -> "한 번에 ${CAPTURE_MAX}개까지 고를 수 있어요"
         rendering -> "이미지를 만들고 있어요…"
-        timeRange != null -> timeRange
+        dateRange != null -> dateRange
         else -> startLabel ?: "끝 메시지를 클릭하세요"
     }
     Row(
@@ -148,13 +149,10 @@ internal fun CaptureModeBar(subtitle: String, onClose: () -> Unit) {
     }
 }
 
-/** "21:03–21:14". 한 건뿐이면 그 시각만 (모바일과 같은 표기) */
-internal fun timeRangeLabel(messages: List<Message>): String? {
+/** 고른 범위의 날짜 — 캡처 머리글과 같은 표기를 쓴다 (:shared가 단일 출처) */
+internal fun dateRangeLabel(messages: List<Message>): String? {
     val first = messages.firstOrNull() ?: return null
-    val last = messages.last()
-    val a = formatTime(first.createdAt)
-    val b = formatTime(last.createdAt)
-    return if (a == b) a else "$a–$b"
+    return com.pbp.shared.CaptureLayout.formatDateRange(first.createdAt, messages.last().createdAt)
 }
 
 /** 규칙은 :shared CaptureLayout이 단일 출처 — 모바일과 갈라지지 않게 (C2) */

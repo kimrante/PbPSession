@@ -618,9 +618,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     }
                     CaptureBar(
                         count = pickedPieces.size,
-                        timeRange = if (captureEnd == null) null else timeRangeLabel(picked),
+                        dateRange = if (captureEnd == null) null else dateRangeLabel(picked),
                         startLabel = picked.firstOrNull()?.let {
-                            "시작 " + formatTime(it.createdAt) + " · " + (it.senderName ?: "이름 없음")
+                            "시작 " + com.pbp.shared.CaptureLayout.dateOnly(it.createdAt) +
+                                " · " + (it.senderName ?: "이름 없음")
                         },
                         estimatedPx = if (captureEnd == null) null else estimatedPx,
                         overLimit = pickedPieces.size > ChatViewModel.PAGE_SIZE,

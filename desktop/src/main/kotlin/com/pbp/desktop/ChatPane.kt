@@ -277,9 +277,10 @@ internal fun ChatPane(
                 )
                 CaptureBar(
                     count = picked.size,
-                    timeRange = if (captureEndPicked) timeRangeLabel(picked) else null,
+                    dateRange = if (captureEndPicked) dateRangeLabel(picked) else null,
                     startLabel = picked.firstOrNull()?.let {
-                        "시작 " + formatTime(it.createdAt) + " · " + it.senderName
+                        "시작 " + com.pbp.shared.CaptureLayout.dateOnly(it.createdAt) +
+                            " · " + it.senderName
                     },
                     overLimit = picked.size > CAPTURE_MAX,
                     rendering = captureRendering,

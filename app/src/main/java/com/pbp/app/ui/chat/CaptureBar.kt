@@ -97,8 +97,8 @@ internal fun CaptureModeBar(subtitle: String, onClose: () -> Unit) {
 @Composable
 internal fun CaptureBar(
     count: Int,
-    /** "21:03–21:14" — 끝점이 없으면 null */
-    timeRange: String?,
+    /** "2026-07-30 – 2026-08-01" — 끝점이 없으면 null */
+    dateRange: String?,
     /** 끝점이 없을 때 보여줄 시작점 정보 */
     startLabel: String?,
     estimatedPx: Int?,
@@ -108,12 +108,12 @@ internal fun CaptureBar(
 ) {
     val tokens = Pbp.colors
     val tooTall = (estimatedPx ?: 0) > CaptureRenderer.MAX_TOTAL_HEIGHT_PX
-    val enabled = timeRange != null && !overLimit && !tooTall && !rendering
+    val enabled = dateRange != null && !overLimit && !tooTall && !rendering
     val subtitle = when {
         overLimit -> "한 번에 ${ChatViewModel.PAGE_SIZE}개까지 고를 수 있어요"
         tooTall -> "너무 길어요 — 범위를 나눠서 만들어 주세요"
         rendering -> "이미지를 만들고 있어요…"
-        timeRange != null -> "$timeRange · 약 ${"%,d".format(estimatedPx ?: 0)}px"
+        dateRange != null -> "$dateRange · 약 ${"%,d".format(estimatedPx ?: 0)}px"
         else -> startLabel ?: "끝 메시지를 탭하세요"
     }
     Row(
@@ -166,13 +166,10 @@ internal fun captureMarkOf(range: IntRange?, index: Int): CaptureMark = when {
     else -> CaptureMark.IN
 }
 
-/** "21:03–21:14". 한 건뿐이면 그 시각만 */
-internal fun timeRangeLabel(messages: List<Message>): String? {
+/** 고른 범위의 날짜 — 캡처 머리글과 같은 표기를 쓴다 (:shared가 단일 출처) */
+internal fun dateRangeLabel(messages: List<Message>): String? {
     val first = messages.firstOrNull() ?: return null
-    val last = messages.last()
-    val a = formatTime(first.createdAt)
-    val b = formatTime(last.createdAt)
-    return if (a == b) a else "$a–$b"
+    return com.pbp.shared.CaptureLayout.formatDateRange(first.createdAt, messages.last().createdAt)
 }
 
 /** 규칙은 :shared CaptureLayout이 단일 출처 — PC와 갈라지지 않게 (C2) */

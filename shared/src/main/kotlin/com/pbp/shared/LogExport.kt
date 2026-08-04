@@ -57,9 +57,6 @@ object LogExport {
         for (message in shown) {
             val edited = if (message.editedAt != null) """ <i class="ed">(수정됨)</i>""" else ""
             when {
-                message.type == Protocol.MessageType.SYSTEM ->
-                    body.append("""<div class="sys"><span>${escape(message.body)}</span></div>""")
-
                 // 판정 요청은 한 줄로만 — 종이 문서에서 버튼은 의미가 없고,
                 // 굴림 결과는 어차피 뒤의 다이스 카드로 남는다 (J7)
                 message.type == Protocol.MessageType.JUDGE ->
@@ -270,8 +267,7 @@ $body</div>
             val edited = if (message.editedAt != null) " (수정됨)" else ""
             val name = message.senderName?.takeIf { it.isNotBlank() } ?: "이름 없음"
             when {
-                message.type == Protocol.MessageType.SYSTEM ||
-                    message.type == Protocol.MessageType.JUDGE ->
+                message.type == Protocol.MessageType.JUDGE ->
                     out.appendLine("[${plain(message.body)}]")
 
                 message.type == Protocol.MessageType.DICE -> {
@@ -293,15 +289,13 @@ $body</div>
     }
 
     /**
-     * 내보내기에 실을 메시지 — 로그 초기화 안내는 뺀다.
+     * 내보내기에 실을 메시지 — 운영 안내([Protocol.MessageType.NOTICE])는 뺀다.
      *
-     * 초기화 안내는 대화가 아니라 운영 기록이다. 채팅 화면에는 "여기서 로그가 끊겼다"는
-     * 신호로 쓸모가 있지만, 내보낸 파일에서는 그 위에 아무것도 없으니 잡음만 된다.
+     * 참여 인사도, 프로필 전환도, 로그 초기화도 대화가 아니라 앱이 남긴 기록이다.
+     * 채팅 화면에서는 흐름을 짚어 주지만 내보낸 문서에서는 잡음만 된다.
      */
     private fun visible(messages: List<ExportMessage>): List<ExportMessage> =
-        messages.filterNot {
-            it.type == Protocol.MessageType.SYSTEM && it.body == Protocol.Notice.LOGS_RESET
-        }
+        messages.filterNot { it.type in Protocol.MessageType.NOTICE }
 
     /**
      * 제목 아래 기록 범위 — "2026-07-28 – 2026-08-01 · " (비었으면 빈 문자열).

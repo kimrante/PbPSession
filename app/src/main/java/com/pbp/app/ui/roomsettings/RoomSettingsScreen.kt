@@ -87,7 +87,7 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
     }
 
     /**
-     * HTML 로그 내보내기 (A) — 채팅 상단 바에 있던 것을 여기로 옮겼다.
+     * 로그 내보내기 (A) — 채팅 상단 바에 있던 것을 여기로 옮겼다.
      * 매 세션 쓰는 기능이 아니라 상단 바 자리를 차지할 이유가 없다.
      */
     fun exportTo(uri: Uri, format: ExportFormat, onResult: (Boolean) -> Unit) =

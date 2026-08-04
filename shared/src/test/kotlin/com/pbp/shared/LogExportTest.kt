@@ -179,4 +179,57 @@ class LogExportTest {
             )
         }
     }
+
+    // ── 텍스트 내보내기 ──────────────────────────────────
+
+    /** 2026-08-04 12:34 KST 근처 — 날짜 구분선이 한 번만 나오면 되니 값 자체는 무관 */
+    private fun msg(
+        body: String,
+        type: String = Protocol.MessageType.TEXT,
+        at: Long = 1_754_270_000_000L,
+        name: String? = "루나",
+        ooc: Boolean = false,
+        editedAt: Long? = null,
+        diceExpr: String? = null,
+        diceOutcome: String? = null,
+    ) = LogExport.ExportMessage(
+        type = type, body = body, createdAt = at, mine = false, senderName = name,
+        isOoc = ooc, editedAt = editedAt, diceExpr = diceExpr, diceOutcome = diceOutcome,
+    )
+
+    @Test
+    fun `텍스트는 마크업을 벗기고 루비는 괄호로 편다`() {
+        val out = LogExport.buildText("방", listOf(msg("**굵게** 그리고 (한글)[한자]")))
+        assertTrue(out, out.contains("루나: 굵게 그리고 한자(한글)"))
+        assertTrue("서식 문자가 남았다", !out.contains("**"))
+    }
+
+    @Test
+    fun `날짜가 바뀌면 구분선이 하나 더 — 같은 날이면 한 번뿐`() {
+        val day = 24 * 60 * 60 * 1000L
+        val one = LogExport.buildText("방", listOf(msg("가"), msg("나")))
+        val two = LogExport.buildText("방", listOf(msg("가"), msg("나", at = 1_754_270_000_000L + day)))
+        assertEquals(1, one.lines().count { it.startsWith("── ") })
+        assertEquals(2, two.lines().count { it.startsWith("── ") })
+    }
+
+    @Test
+    fun `시스템·판정은 대괄호 한 줄, 다이스는 식과 성패까지`() {
+        val out = LogExport.buildText(
+            "방",
+            listOf(
+                msg("방이 열렸습니다", type = Protocol.MessageType.SYSTEM),
+                msg("7", type = Protocol.MessageType.DICE, diceExpr = "1d20", diceOutcome = "success"),
+            ),
+        )
+        assertTrue(out, out.contains("[방이 열렸습니다]"))
+        assertTrue(out, out.contains("1d20 → 7 (성공)"))
+    }
+
+    @Test
+    fun `잡담과 수정됨은 본문 옆에 표시된다`() {
+        val out = LogExport.buildText("방", listOf(msg("딴소리", ooc = true), msg("고쳤다", editedAt = 1L)))
+        assertTrue(out, out.contains("(루나 · 잡담) 딴소리"))
+        assertTrue(out, out.contains("고쳤다 (수정됨)"))
+    }
 }

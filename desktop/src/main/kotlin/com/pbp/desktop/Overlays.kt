@@ -401,10 +401,10 @@ internal fun SettingsOverlay(
         Spacer(Modifier.height(DesktopDimens.gap3))
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.Line))
         Spacer(Modifier.height(DesktopDimens.gap3))
-        Text("로그 내보내기 (HTML)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
+        Text("로그 내보내기", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink)
         Spacer(Modifier.height(DesktopDimens.gap1))
         Text(
-            "전체 대화를 종이 톤 HTML 파일로 저장합니다",
+            "전체 대화를 저장합니다 · 파일 이름을 .txt로 바꾸면 서식 없는 원문",
             fontSize = 10.sp, color = Tokens.InkDim,
         )
         Spacer(Modifier.height(DesktopDimens.gap2))

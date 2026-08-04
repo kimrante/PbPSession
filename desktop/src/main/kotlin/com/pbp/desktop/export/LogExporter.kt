@@ -22,6 +22,10 @@ object LogExporter {
         avatarDataUri = avatarDataUri,
     )
 
+    /** 서식 없는 원문 — 규칙은 :shared가 단일 출처 (모바일과 같은 파일이 나온다) */
+    fun buildText(roomName: String, messages: List<Message>, myUid: String): String =
+        LogExport.buildText(roomName, messages.map { it.toExport(myUid) })
+
     private fun Message.toExport(myUid: String) = LogExport.ExportMessage(
         type = type,
         body = body,

@@ -90,20 +90,51 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
      * HTML 로그 내보내기 (A) — 채팅 상단 바에 있던 것을 여기로 옮겼다.
      * 매 세션 쓰는 기능이 아니라 상단 바 자리를 차지할 이유가 없다.
      */
-    fun exportTo(uri: Uri, onResult: (Boolean) -> Unit) = viewModelScope.launch {
-        val ok = withContext(Dispatchers.IO) {
-            runCatching {
-                val html = com.pbp.app.export.LogExporter.buildHtml(
-                    roomName = room.value?.name ?: "PbP",
-                    roomIcon = room.value?.icon ?: "",
-                    // 내보내기는 화면 페이징과 무관하게 전체
-                    messages = repo.allMessages(roomId),
-                )
-                app.contentResolver.openOutputStream(uri)!!.use { it.write(html.toByteArray()) }
-            }.isSuccess
+    fun exportTo(uri: Uri, format: ExportFormat, onResult: (Boolean) -> Unit) =
+        viewModelScope.launch {
+            val name = room.value?.name ?: "PbP"
+            // 내보내기는 화면 페이징과 무관하게 전체
+            val messages = withContext(Dispatchers.IO) { repo.allMessages(roomId) }
+            val ok = when (format) {
+                ExportFormat.Text -> withContext(Dispatchers.IO) {
+                    val text = com.pbp.app.export.LogExporter.buildText(name, messages)
+                    runCatching {
+                        app.contentResolver.openOutputStream(uri)!!
+                            .use { it.write(text.toByteArray()) }
+                    }.isSuccess
+                }
+
+                ExportFormat.Html -> withContext(Dispatchers.IO) {
+                    val html = com.pbp.app.export.LogExporter.buildHtml(
+                        roomName = name,
+                        roomIcon = room.value?.icon ?: "",
+                        messages = messages,
+                    )
+                    runCatching {
+                        app.contentResolver.openOutputStream(uri)!!
+                            .use { it.write(html.toByteArray()) }
+                    }.isSuccess
+                }
+
+                // PDF는 같은 HTML을 WebView 인쇄 경로로 뽑는다 — 서식이 그대로 남는다.
+                // WebView는 메인 스레드 전용이라 조립(IO)과 쓰기(Main)를 나눈다
+                ExportFormat.Pdf -> {
+                    val html = withContext(Dispatchers.IO) {
+                        com.pbp.app.export.LogExporter.buildHtml(
+                            roomName = name,
+                            roomIcon = room.value?.icon ?: "",
+                            messages = messages,
+                        )
+                    }
+                    runCatching {
+                        app.contentResolver.openFileDescriptor(uri, "w")!!.use { pfd ->
+                            com.pbp.app.export.PdfExporter.write(app, html, name, pfd) == null
+                        }
+                    }.getOrDefault(false)
+                }
+            }
+            onResult(ok)
         }
-        onResult(ok)
-    }
 
     /**
      * 방 로그 전체 리셋 — 로컬·서버·상대 로그까지 삭제.
@@ -129,16 +160,32 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) {
         if (it != null) vm.importBackground(it)
     }
+    // 어떤 형식으로 저장할지 — 파일 선택창을 열기 전에 정한다
+    var exportFormat by remember { mutableStateOf(ExportFormat.Html) }
+    var showExportPicker by remember { mutableStateOf(false) }
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/html")
+        // MIME은 형식마다 다르지만 CreateDocument는 생성 시점에 고정된다 —
+        // 어느 형식이든 열리도록 임의 바이너리로 두고 확장자로 구분한다
+        ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
-        if (uri != null) vm.exportTo(uri) { ok ->
+        if (uri != null) vm.exportTo(uri, exportFormat) { ok ->
             Toast.makeText(
                 context,
-                if (ok) "HTML 로그를 저장했습니다" else "저장에 실패했습니다",
+                if (ok) "${exportFormat.label} 로그를 저장했습니다" else "저장에 실패했습니다",
                 Toast.LENGTH_SHORT,
             ).show()
         }
+    }
+    val startExport = { format: ExportFormat ->
+        exportFormat = format
+        showExportPicker = false
+        // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
+        runCatching {
+            exportLauncher.launch("${room?.name ?: "PbP"}_log.${format.extension}")
+        }.onFailure {
+            Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
+        }
+        Unit
     }
 
     Scaffold(containerColor = tokens.bg) { padding ->
@@ -310,15 +357,9 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
                 }
             }
             SettingRow(
-                title = "로그 내보내기 (HTML)",
-                subtitle = "전체 대화를 종이 톤 HTML 파일로 저장합니다",
-            ) {
-                // 문서 프로바이더가 없는 기기에서 ActivityNotFoundException 방지 (C3)
-                runCatching { exportLauncher.launch("${room?.name ?: "PbP"}_log.html") }
-                    .onFailure {
-                        Toast.makeText(context, "파일 저장 화면을 열 수 없습니다", Toast.LENGTH_SHORT).show()
-                    }
-            }
+                title = "로그 내보내기",
+                subtitle = "전체 대화를 HTML · 텍스트 · PDF로 저장합니다",
+            ) { showExportPicker = true }
             SettingRow(
                 title = "알림",
                 subtitle = "미확인 메시지 도착 시 푸시 · 본문은 표시되지 않습니다",
@@ -329,6 +370,26 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             ) { showResetConfirm = true }
             Spacer(Modifier.height(PbpDimens.gap6))
         }
+    }
+
+    if (showExportPicker) {
+        AlertDialog(
+            onDismissRequest = { showExportPicker = false },
+            title = { PbpDialogTitle("로그 내보내기") },
+            text = {
+                Column {
+                    ExportFormat.entries.forEach { format ->
+                        SettingRow(title = format.label, subtitle = format.hint) {
+                            startExport(format)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                PbpDialogButton("취소", { showExportPicker = false }, kind = PbpButtonKind.Cancel)
+            },
+            containerColor = tokens.panel,
+        )
     }
 
     if (showResetConfirm) {
@@ -476,4 +537,16 @@ private fun copyInviteCode(context: Context, code: String) {
         as android.content.ClipboardManager
     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PbP 초대 코드", code))
     Toast.makeText(context, "초대 코드 \"$code\" 복사했습니다", Toast.LENGTH_SHORT).show()
+}
+
+/**
+ * 로그 내보내기 형식.
+ *
+ * HTML은 서식을 그대로 보는 용도, 텍스트는 다른 도구에 붙여 넣을 원문,
+ * PDF는 서식을 지킨 채 인쇄·배포하기 좋은 형태다.
+ */
+enum class ExportFormat(val label: String, val extension: String, val hint: String) {
+    Html("HTML", "html", "말풍선·색·서술까지 그대로 · 브라우저로 봅니다"),
+    Text("텍스트", "txt", "서식 없이 날짜·시각·화자·본문만"),
+    Pdf("PDF", "pdf", "서식을 지킨 채 페이지로 나눠 저장"),
 }

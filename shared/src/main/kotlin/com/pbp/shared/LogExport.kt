@@ -261,4 +261,71 @@ $body</div>
             else -> null
         }
     }
+
+    // ── 서식 없는 텍스트 내보내기 ───────────────────────────
+
+    /**
+     * 서식이 전혀 없는 .txt 로그.
+     *
+     * HTML판이 "보기 좋은 기록"이라면 이쪽은 **다른 도구에 붙여 넣기 위한 원문**이다.
+     * 색·말풍선·아바타를 버리고 날짜·시각·화자·본문만 남긴다. 마크다운 기호도
+     * 지운다(`**굵게**` → `굵게`) — 서식이 없는 파일에 기호만 남으면 잡음이다.
+     *
+     * GM 서술은 인용을 따로 떼지 않는다. 종이에서는 문단이 곧 서술이고,
+     * 대사는 따옴표로 이미 구분되기 때문이다.
+     */
+    fun buildText(roomName: String, messages: List<ExportMessage>): String {
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val lf = "\n"
+        val out = StringBuilder()
+        out.appendLine(roomName)
+        out.appendLine("PbP 대화 기록 · ${messages.size}개 메시지")
+        var lastDayKey = ""
+        for (message in messages) {
+            val dayKey = ChatDates.dayKey(message.createdAt)
+            if (dayKey != lastDayKey) {
+                out.appendLine()
+                out.appendLine("── ${ChatDates.label(message.createdAt)} ──")
+                lastDayKey = dayKey
+            }
+            val time = timeFormat.format(Date(message.createdAt))
+            val edited = if (message.editedAt != null) " (수정됨)" else ""
+            val name = message.senderName?.takeIf { it.isNotBlank() } ?: "이름 없음"
+            when {
+                message.type == Protocol.MessageType.SYSTEM ||
+                    message.type == Protocol.MessageType.JUDGE ->
+                    out.appendLine("[${plain(message.body)}]")
+
+                message.type == Protocol.MessageType.DICE -> {
+                    val outcome = Rules.outcomeLabel(message.diceOutcome)?.let { " ($it)" } ?: ""
+                    out.appendLine(
+                        "[$time] 🎲 ${message.diceExpr ?: ""} → ${plain(message.body)}$outcome"
+                    )
+                }
+
+                message.isOoc ->
+                    out.appendLine("[$time] ($name · 잡담) ${plain(message.body)}$edited")
+
+                else -> {
+                    // 여러 줄 본문은 두 번째 줄부터 시각·이름 폭만큼 들여쓴다
+                    val indent = " ".repeat(8)
+                    out.appendLine(
+                        "[$time] $name: ${plain(message.body).replace(lf, lf + indent)}$edited"
+                    )
+                }
+            }
+        }
+        return out.toString()
+    }
+
+    /** 마크업 기호를 걷어낸 본문 — 루비는 "본문(독음)"으로 편다 */
+    internal fun plain(body: String): String = buildString {
+        for (node in PbpMarkup.parse(body)) {
+            when (node) {
+                is PbpMarkup.Node.Span -> append(node.text)
+                is PbpMarkup.Node.Value -> append(node.text)
+                is PbpMarkup.Node.Ruby -> append(node.base).append('(').append(node.ruby).append(')')
+            }
+        }
+    }
 }

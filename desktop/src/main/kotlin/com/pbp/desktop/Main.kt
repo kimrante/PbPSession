@@ -726,26 +726,42 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         rollJudge(request)
     }
 
+    /**
+     * 로그 내보내기 — 파일 이름의 확장자로 형식을 고른다.
+     *
+     * PC에는 형식 선택 창이 따로 없다. 저장 대화상자에서 확장자를 `.txt`로 바꾸면
+     * 서식 없는 원문이, 그대로 두면 HTML이 나온다 — 창을 하나 더 띄우는 것보다
+     * 파일 이름을 고치는 쪽이 PC에서는 익숙하다.
+     * (PDF는 모바일 전용 — PC에는 HTML을 PDF로 옮길 렌더러가 없다.)
+     */
     fun exportLogs() {
         val room = selected ?: return
         val snapshot = messages
         scope.launch {
             // 대화상자는 EDT에서, 조립·쓰기만 IO에서 (E13)
             val (dir, file) = showFileDialog(
-                "세션 로그 저장", java.awt.FileDialog.SAVE, "${room.name}-log.html",
+                "세션 로그 저장 (.html 또는 .txt)", java.awt.FileDialog.SAVE,
+                "${room.name}-log.html",
             ) ?: return@launch
             withContext(Dispatchers.IO) {
                 runCatching {
-                    val html = com.pbp.desktop.export.LogExporter.buildHtml(
-                        roomName = room.name,
-                        messages = snapshot,
-                        myUid = authorUid(),
-                        avatarDataUri = { id ->
-                            fetchAvatarCached(firestore, room.remoteId, id)
-                                ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
-                        },
-                    )
-                    java.io.File(dir, file).writeText(html, Charsets.UTF_8)
+                    val asText = file.lowercase().endsWith(".txt")
+                    val content = if (asText) {
+                        com.pbp.desktop.export.LogExporter.buildText(
+                            roomName = room.name, messages = snapshot, myUid = authorUid(),
+                        )
+                    } else {
+                        com.pbp.desktop.export.LogExporter.buildHtml(
+                            roomName = room.name,
+                            messages = snapshot,
+                            myUid = authorUid(),
+                            avatarDataUri = { id ->
+                                fetchAvatarCached(firestore, room.remoteId, id)
+                                    ?.let { com.pbp.desktop.export.LogExporter.bytesToDataUri(it) }
+                            },
+                        )
+                    }
+                    java.io.File(dir, file).writeText(content, Charsets.UTF_8)
                 }.onFailure { System.err.println("로그 저장 실패: $it") }
             }
         }

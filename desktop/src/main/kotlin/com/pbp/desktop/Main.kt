@@ -498,7 +498,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
                     room.remoteId,
-                    systemMessageValues("방 로그가 초기화되었습니다", authorUid()),
+                    systemMessageValues(Protocol.Notice.LOGS_RESET, authorUid()),
                 )
             }
             onDone(ok)

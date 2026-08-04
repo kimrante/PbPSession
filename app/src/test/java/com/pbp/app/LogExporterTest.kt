@@ -106,7 +106,7 @@ class LogExporterTest {
         assertTrue(html.contains("…거기 있는 거, 알아."))
         assertTrue(html.contains("background:#EFE9D8")) // 인용 말풍선
         // 인용 말풍선의 화자 이름 — GM 표기
-        assertTrue(html.contains("""color:#8A6D1C">GM<time>"""))
+        assertTrue(html.contains("""color:#8A6D1C">GM<"""))
     }
 
     @Test

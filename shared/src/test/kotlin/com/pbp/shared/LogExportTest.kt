@@ -92,7 +92,7 @@ class LogExportTest {
 
     @Test
     fun `SYSTEM 안내는 가운데 한 줄로`() {
-        val out = html(msg(body = "방 로그가 초기화되었습니다", type = Protocol.MessageType.SYSTEM))
+        val out = html(msg(body = "프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM))
         assertTrue(out.contains("class=\"sys\""))
     }
 
@@ -102,24 +102,38 @@ class LogExportTest {
         assertTrue(out.contains("수정됨"))
     }
 
-    // ── 날짜 구분선 ──────────────────────────────────────
+    // ── 머리글·걸러내기 ─────────────────────────────────
 
     @Test
-    fun `날짜가 바뀌면 구분선이 한 번 더 들어간다`() {
+    fun `날짜 구분선은 넣지 않는다 — 범위는 머리글이 말한다`() {
         val day1 = 1_700_000_000_000
         val day2 = day1 + 3 * 24 * 60 * 60 * 1000L
-        val out = html(msg(createdAt = day1), msg(createdAt = day1 + 1000), msg(createdAt = day2))
-        assertEquals(
-            "같은 날은 한 번, 다른 날에 한 번 더",
-            2,
-            Regex("class=\"day\"").findAll(out).count(),
-        )
+        val out = html(msg(createdAt = day1), msg(createdAt = day2))
+        assertFalse("본문에 날짜 구분선이 남으면 안 된다", out.contains("class=\"day\""))
     }
 
     @Test
-    fun `구분선 문구는 화면과 같은 규칙을 쓴다`() {
-        val at = 1_700_000_000_000
-        assertTrue(html(msg(createdAt = at)).contains(ChatDates.label(at)))
+    fun `제목 아래에 첫 메시지부터 마지막 메시지까지의 날짜가 붙는다`() {
+        val day1 = 1_700_000_000_000
+        val day2 = day1 + 3 * 24 * 60 * 60 * 1000L
+        val out = html(msg(createdAt = day1), msg(createdAt = day2))
+        assertTrue(out, out.contains(CaptureLayout.formatDateRange(day1, day2)))
+    }
+
+    @Test
+    fun `말풍선 곁 시각은 찍지 않는다`() {
+        val out = html(msg(createdAt = 1_700_000_000_000))
+        assertFalse("시각 자리가 남으면 안 된다", out.contains("<time>"))
+    }
+
+    @Test
+    fun `로그 초기화 안내는 내보내기에서 빠진다 — 다른 시스템 안내는 남는다`() {
+        val out = html(
+            msg(body = Protocol.Notice.LOGS_RESET, type = Protocol.MessageType.SYSTEM),
+            msg(body = "프로필을 바꿨습니다", type = Protocol.MessageType.SYSTEM),
+        )
+        assertFalse(out, out.contains(Protocol.Notice.LOGS_RESET))
+        assertTrue(out, out.contains("프로필을 바꿨습니다"))
     }
 
     // ── 이미지 MIME 스니핑 ───────────────────────────────
@@ -205,12 +219,30 @@ class LogExportTest {
     }
 
     @Test
-    fun `날짜가 바뀌면 구분선이 하나 더 — 같은 날이면 한 번뿐`() {
+    fun `텍스트도 둘째 줄이 기록 범위 — 날짜 구분선은 없다`() {
         val day = 24 * 60 * 60 * 1000L
-        val one = LogExport.buildText("방", listOf(msg("가"), msg("나")))
-        val two = LogExport.buildText("방", listOf(msg("가"), msg("나", at = 1_754_270_000_000L + day)))
-        assertEquals(1, one.lines().count { it.startsWith("── ") })
-        assertEquals(2, two.lines().count { it.startsWith("── ") })
+        val at = 1_754_270_000_000L
+        val out = LogExport.buildText("방", listOf(msg("가", at = at), msg("나", at = at + day)))
+        assertEquals(
+            "${CaptureLayout.formatDateRange(at, at + day)} · 2개 메시지 · PbP 대화 기록",
+            out.lines()[1],
+        )
+        assertFalse(out, out.lines().any { it.startsWith("── ") })
+    }
+
+    @Test
+    fun `텍스트에도 시각은 찍지 않는다`() {
+        val out = LogExport.buildText("방", listOf(msg("가"), msg("7", type = Protocol.MessageType.DICE)))
+        assertFalse(out, Regex("""\d\d:\d\d""").containsMatchIn(out))
+    }
+
+    @Test
+    fun `텍스트에서도 로그 초기화 안내는 빠진다`() {
+        val out = LogExport.buildText(
+            "방",
+            listOf(msg(Protocol.Notice.LOGS_RESET, type = Protocol.MessageType.SYSTEM), msg("가")),
+        )
+        assertFalse(out, out.contains(Protocol.Notice.LOGS_RESET))
     }
 
     @Test

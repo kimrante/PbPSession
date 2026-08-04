@@ -97,17 +97,17 @@ object CaptureLayout {
             maxOf(1, (line.length + perLine - 1) / perLine)
         }.coerceAtLeast(1)
 
-    /** "2026-07-30 21:03 – 21:14" — 날짜가 다르면 양쪽 모두 날짜를 붙인다 */
+    /**
+     * "2026-07-30" 또는 "2026-07-30 – 2026-08-01" — 첫 메시지부터 마지막 메시지까지.
+     *
+     * 시각은 넣지 않는다. 말풍선 곁 시각을 뺀 마당에 머리글에만 남으면 그 시각이
+     * 무엇의 시각인지 알 길이 없다 — 기록의 범위는 날짜로 충분하다.
+     */
     fun formatDateRange(first: Long, last: Long): String {
         val day = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val time = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val sameDay = day.format(Date(first)) == day.format(Date(last))
-        return if (sameDay) {
-            "${day.format(Date(first))} ${time.format(Date(first))} – ${time.format(Date(last))}"
-        } else {
-            "${day.format(Date(first))} ${time.format(Date(first))} – " +
-                "${day.format(Date(last))} ${time.format(Date(last))}"
-        }
+        val from = day.format(Date(first))
+        val to = day.format(Date(last))
+        return if (from == to) from else "$from – $to"
     }
 
     /** 낙관에 찍는 날짜 */

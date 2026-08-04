@@ -2,6 +2,7 @@ package com.pbp.app.data
 
 import androidx.room.withTransaction
 import com.pbp.shared.ProfileStats
+import com.pbp.shared.Protocol
 import com.pbp.shared.DiceBot
 import com.pbp.app.sync.SyncManager
 import com.pbp.app.ui.theme.PbpPalette
@@ -358,7 +359,7 @@ class PbpRepository(private val db: AppDatabase) {
             val notice = Message(
                 roomId = roomId,
                 type = MessageType.SYSTEM,
-                body = "방 로그가 초기화되었습니다",
+                body = Protocol.Notice.LOGS_RESET,
                 createdAt = System.currentTimeMillis(),
             )
             val inserted = notice.copy(id = db.messageDao().insert(notice))

@@ -1,6 +1,7 @@
 package com.pbp.shared
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -83,5 +84,25 @@ class CaptureLayoutTest {
     fun `본문 없는 종류는 한 줄 크기로 센다`() {
         val dice = CaptureLayout.Item("1d100 → 42", Protocol.MessageType.DICE, false, false)
         assertEquals(28f, CaptureLayout.estimate(dice), 0.01f)
+    }
+
+    // ── 기록 범위 ────────────────────────────────────────
+
+    @Test
+    fun `범위는 날짜만 — 시각은 넣지 않는다`() {
+        val at = 1_754_270_000_000L
+        val range = CaptureLayout.formatDateRange(at, at + 3 * 60 * 60 * 1000L)
+        assertFalse(range, Regex("""\d\d:\d\d""").containsMatchIn(range))
+    }
+
+    @Test
+    fun `같은 날이면 한 번만, 날짜가 다르면 양쪽 모두`() {
+        val at = 1_754_270_000_000L
+        val day = 24 * 60 * 60 * 1000L
+        assertEquals(CaptureLayout.dateOnly(at), CaptureLayout.formatDateRange(at, at + 1000))
+        assertEquals(
+            "${CaptureLayout.dateOnly(at)} – ${CaptureLayout.dateOnly(at + day)}",
+            CaptureLayout.formatDateRange(at, at + day),
+        )
     }
 }

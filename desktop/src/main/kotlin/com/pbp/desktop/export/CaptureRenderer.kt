@@ -32,7 +32,6 @@ import com.pbp.desktop.data.FirestoreRest
 import com.pbp.desktop.data.JoinedRoom
 import com.pbp.desktop.data.Message
 import com.pbp.desktop.isContinuation
-import com.pbp.desktop.sharesTimeLabel
 import com.pbp.desktop.ui.DesktopDimens
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.Tokens
@@ -194,7 +193,6 @@ private fun CaptureSheet(
             ) {
                 messages.forEachIndexed { index, message ->
                     val grouped = isContinuation(messages.getOrNull(index - 1), message)
-                    val showTime = !sharesTimeLabel(message, messages.getOrNull(index + 1))
                     Box(
                         Modifier.padding(
                             top = when {
@@ -206,7 +204,8 @@ private fun CaptureSheet(
                     ) {
                         MessageBlock(
                             message, myUid, room, avatarCache, firestore, grouped,
-                            showTime = showTime,
+                            // 이미지에는 시각을 찍지 않는다 — 범위는 머리글이 말한다
+                            showTime = false,
                         )
                     }
                 }

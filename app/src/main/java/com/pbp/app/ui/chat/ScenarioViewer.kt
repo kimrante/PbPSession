@@ -1,17 +1,14 @@
 package com.pbp.app.ui.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +21,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -32,11 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.ScenarioFetcher
@@ -45,14 +39,14 @@ import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
-import kotlin.math.roundToInt
 
 /**
- * 시나리오 뷰어 플로트 창 (V4·V5).
+ * 시나리오 뷰어 — **입력줄 위에 붙는 판** (V4·V5).
  *
- * 방 안에 떠 있는 카드다. 링크를 받아 문서를 문장 단위로 넘겨 보여 준다 —
- * GM이 대화 화면을 벗어나지 않고 시나리오를 읽기 위한 창이라, 화면 전환 대신
- * 오버레이로 둔다. 읽던 위치는 ViewModel에 있어 창을 닫아도 살아남는다.
+ * 링크를 받아 문서를 문장 단위로 넘겨 보여 준다. GM이 대화 화면을 벗어나지 않고
+ * 시나리오를 읽기 위한 것이라 화면 전환 대신 입력 영역 위에 얹는다.
+ * 떠다니지 않는다 — 자리를 정해 두면 눈이 그 자리를 다시 찾지 않아도 된다.
+ * 읽던 위치는 ViewModel에 있어 판을 닫아도 살아남는다.
  *
  * 내용은 **GM 화면에만 있다** — 상대에게 전송되지 않고 서버에도 올라가지 않는다.
  */
@@ -68,85 +62,68 @@ internal fun ScenarioFloat(
     val tokens = Pbp.colors
     // 입력 중인 링크는 화면에 둔다 — 실패 후 고쳐서 다시 보낼 수 있어야 한다
     var link by rememberSaveable { mutableStateOf("") }
-    var offsetX by rememberSaveable { mutableFloatStateOf(0f) }
-    var offsetY by rememberSaveable { mutableFloatStateOf(0f) }
 
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val density = LocalDensity.current
-        // 창이 화면 밖으로 도망가지 않게 — 드래그 폭은 좌우 여백만큼만
-        val maxDragX = with(density) { PbpDimens.gap4.toPx() }
-        // 위로만 끌어 올린다 — 아래는 입력줄이라 내려갈 자리가 없다
-        val maxDragY = with(density) { maxHeight.toPx() }
-        Column(
-            Modifier
-                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-                .padding(horizontal = PbpDimens.gap4)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(PbpDimens.rCell))
-                // 입력 바 톤을 쓰되 **불투명**해야 한다 — chatBarBg는 반투명이라
-                // 그대로 두면 뒤 말풍선이 글자에 겹쳐 시나리오를 읽을 수 없다
-                .background(tokens.panel)
-                .background(tokens.chatBarBg)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, drag ->
-                        change.consume()
-                        offsetX = (offsetX + drag.x).coerceIn(-maxDragX, maxDragX)
-                        offsetY = (offsetY + drag.y).coerceIn(-maxDragY, 0f)
-                    }
-                }
-                .padding(PbpDimens.gap4),
-        ) {
-            // 머리글 — 좌측 이름표, 우측 닫기
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "📖 시나리오",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = tokens.inkDim,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    Modifier
-                        .size(PbpDimens.touchTarget)
-                        .clip(RoundedCornerShape(999.dp))
-                        .semantics { contentDescription = "시나리오 창 닫기" }
-                        .pointerInput(Unit) { detectTapGesturesSimple(onClose) },
-                    contentAlignment = Alignment.Center,
-                ) { Text("×", fontSize = 18.sp, color = tokens.inkDim) }
-            }
-            Spacer(Modifier.height(PbpDimens.gap3))
-
-            // 본문만 굴린다 — 아래 이동 행은 늘 손이 닿는 자리에 있어야 한다
+    Column(
+        Modifier
+            .fillMaxWidth()
+            // 입력줄에 맞닿는 판이라 위쪽만 둥글린다 — 아래는 이어지는 면이다
+            .clip(RoundedCornerShape(topStart = PbpDimens.rCell, topEnd = PbpDimens.rCell))
+            // 입력 바 톤을 쓰되 **불투명**해야 한다 — chatBarBg는 반투명이라
+            // 그대로 두면 뒤 말풍선이 글자에 겹쳐 시나리오를 읽을 수 없다
+            .background(tokens.panel)
+            .background(tokens.chatBarBg)
+            .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
+    ) {
+        // 머리글 — 좌측 이름표, 우측 닫기
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "📖 시나리오",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = tokens.inkDim,
+                modifier = Modifier.weight(1f),
+            )
             Box(
                 Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                when (state) {
-                    is ChatViewModel.ScenarioState.Viewing -> Text(
-                        // 시나리오 원문 그대로 — 마크업으로 해석하지 않는다.
-                        // 서체는 GM 서술과 같은 명조: 읽는 글이지 대화가 아니다
-                        state.sentences.getOrNull(state.index).orEmpty(),
-                        fontFamily = GowunBatang,
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        color = tokens.ink,
-                    )
+                    .size(PbpDimens.touchTarget)
+                    .clip(RoundedCornerShape(999.dp))
+                    .semantics { contentDescription = "시나리오 창 닫기" }
+                    .pointerInput(Unit) { detectTapGesturesSimple(onClose) },
+                contentAlignment = Alignment.Center,
+            ) { Text("×", fontSize = 18.sp, color = tokens.inkDim) }
+        }
+        Spacer(Modifier.height(PbpDimens.gap3))
 
-                    is ChatViewModel.ScenarioState.Loading -> Box(
-                        Modifier.fillMaxWidth().heightIn(min = LINK_FORM_MIN_HEIGHT),
-                        contentAlignment = Alignment.Center,
-                    ) { CircularProgressIndicator(color = tokens.signature) }
+        // 본문만 굴린다 — 아래 이동 행은 늘 손이 닿는 자리에 있어야 한다
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            when (state) {
+                is ChatViewModel.ScenarioState.Viewing -> Text(
+                    // 시나리오 원문 그대로 — 마크업으로 해석하지 않는다.
+                    // 서체는 GM 서술과 같은 명조: 읽는 글이지 대화가 아니다
+                    state.sentences.getOrNull(state.index).orEmpty(),
+                    fontFamily = GowunBatang,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    color = tokens.ink,
+                )
 
-                    // 경고창을 확인하기 전까지는 링크 폼을 그대로 둔다 — 카드가 튀지 않는다
-                    else -> LinkForm(link, { link = it }, onSubmit)
-                }
+                is ChatViewModel.ScenarioState.Loading -> Box(
+                    Modifier.fillMaxWidth().heightIn(min = LINK_FORM_MIN_HEIGHT),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator(color = tokens.signature) }
+
+                // 경고창을 확인하기 전까지는 링크 폼을 그대로 둔다 — 카드가 튀지 않는다
+                else -> LinkForm(link, { link = it }, onSubmit)
             }
-            if (state is ChatViewModel.ScenarioState.Viewing) {
-                Spacer(Modifier.height(PbpDimens.gap3))
-                NavRow(state, onStep, onReset)
-            }
+        }
+        if (state is ChatViewModel.ScenarioState.Viewing) {
+            Spacer(Modifier.height(PbpDimens.gap3))
+            NavRow(state, onStep, onReset)
         }
     }
 

@@ -4,7 +4,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -46,8 +44,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.CharacterProfile
-import com.pbp.app.ui.common.Avatar
-import com.pbp.app.ui.common.dashedBorder
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
 
@@ -67,9 +63,6 @@ internal fun InputZone(
     profiles: List<CharacterProfile>,
     activeId: Long?,
     themeColor: Color,
-    onSwitch: (CharacterProfile) -> Unit,
-    onEditProfile: (CharacterProfile) -> Unit,
-    onAddProfile: () -> Unit,
     onSend: (String, Boolean) -> Unit,
     rule: String,
     /** 상대 이름 — "○○님이 입력 중…". 만료 판정은 [TypingLine]이 스스로 한다 (E2) */
@@ -119,54 +112,12 @@ internal fun InputZone(
             .background(tokens.chatBarBg)
             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
     ) {
-        // 프로필 교체 스트립 — 활성 프로필은 옐로 링 (스펙 4장)
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap3),
-            verticalAlignment = Alignment.Top,
-        ) {
-            items(profiles, key = { it.id }) { profile ->
-                val on = profile.id == activeId
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.combinedClickable(
-                        onClick = { onSwitch(profile) },
-                        onLongClick = { onEditProfile(profile) },
-                    ),
-                ) {
-                    Avatar(
-                        emoji = profile.emoji,
-                        imagePath = profile.imagePath,
-                        size = PbpDimens.avatarStrip,
-                        ringColor = if (on) tokens.signature else null,
-                    )
-                    Text(
-                        profile.name,
-                        fontSize = 10.sp,
-                        color = if (on) tokens.signatureInk else tokens.inkDim,
-                        fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                    )
-                }
-            }
-            item {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier
-                            .size(PbpDimens.avatarStrip)
-                            .dashedBorder(tokens.line, PbpDimens.avatarStrip / 2)
-                            .clip(CircleShape)
-                            .clickable(onClick = onAddProfile),
-                        contentAlignment = Alignment.Center,
-                    ) { Text("＋", color = tokens.inkDim, fontSize = 15.sp) }
-                    Text("추가", fontSize = 10.sp, color = tokens.inkDim)
-                }
-            }
-        }
+        // 프로필 교체는 **상단 바 아바타 → 사이드바** 한 곳으로 모았다.
+        // 입력줄의 스트립은 같은 동작의 두 번째 진입점이라 자리만 먹었고,
+        // 프로필이 늘수록 입력 영역이 두꺼워져 대화가 밀렸다.
         if (gmActive) {
-            // 판정 팔레트 칩과 같은 캡슐·같은 자리 — 위 프로필 스트립의 점선 '＋ 추가'와
-            // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2).
-            // 프로필 스트립 바로 아래에 붙인다 — 입력 중 표시줄이 사이에 끼면
-            // 스트립과 칩 사이가 불필요하게 벌어진다
+            // 판정 팔레트 칩과 같은 캡슐·같은 자리 (J2).
+            // 입력 중 표시줄보다 위에 둔다 — 사이에 끼면 칩과 입력줄이 불필요하게 벌어진다
             Row(
                 Modifier.heightIn(min = PbpDimens.touchTarget),
                 horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),

@@ -648,14 +648,11 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         }
                     }
                 }
-                // ── 시나리오 뷰어 — 입력줄 바로 위에 뜬다 (V4).
+                // ── 시나리오 뷰어 — 입력줄 위에 맞붙는 판 (V4).
                 // 진입점은 팔레트 칩 하나뿐이고, 여기서 저절로 뜨는 경로는 없다.
                 // GM이 아닌 프로필로 바꾸면 사라진다(상태는 VM에 남아 GM으로 돌아오면
                 // 읽던 자리에서 재개). 캡처 중에는 숨긴다 — 캡처 이미지에 찍히면 안 되고
-                // 탭 히트테스트와도 부딪힌다 (A1과 같은 계열).
-                // 목록 위에 겹치지 않고 자리를 차지하는 쪽을 골랐다: 겹치게 두면 가로
-                // 화면처럼 목록이 얕을 때 카드 아래쪽(확인 버튼)이 잘려 손이 닿지 않는다.
-                // 끌어 올리면 목록 위로 떠오른다
+                // 탭 히트테스트와도 부딪힌다 (A1과 같은 계열)
                 if (scenarioOpen && gmActive && !capturing) {
                     ScenarioFloat(
                         state = scenarioState,
@@ -665,7 +662,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         onClose = { scenarioOpen = false },
                         onFailureAck = vm::scenarioReset,
                     )
-                    Spacer(Modifier.height(PbpDimens.gap2))
                 }
 
                 // ── 하단: 캡처 모드면 입력줄 자리를 캡처 바가 대신한다
@@ -711,14 +707,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         },
                     )
                 } else
-                // ── 입력 영역: 프로필 교체 스트립 + 잡담 토글 + 입력줄
+                // ── 입력 영역: GM 도구 칩 + 잡담 토글 + 입력줄
+                // (프로필 교체는 상단 바 아바타 → 사이드바로 옮겼다)
                 InputZone(
                     profiles = profiles,
                     activeId = active?.id,
                     themeColor = themeColor,
-                    onSwitch = { vm.switchTo(it) },
-                    onEditProfile = { nav.navigate(com.pbp.app.Routes.profile(it.id)) },
-                    onAddProfile = { showAddProfile = true },
                     onSend = { text, ooc ->
                         vm.send(text, ooc)
                         vm.notifyTypingStopped()

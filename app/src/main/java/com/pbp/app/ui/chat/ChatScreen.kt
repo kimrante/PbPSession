@@ -547,7 +547,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         // 상하 대칭 규칙(CLAUDE.md §0)의 의도적 예외
                         Column {
                             // 구분선이 이미 위아래 여백을 갖고 있어 말풍선 여백을 또 주면 벌어진다
-                            if (showDay) DayDivider(message.createdAt)
+                            // 구분선이 고른 구간 한가운데면 밴드도 그 위를 덮는다 —
+                            // 안 그러면 노란 상자가 날짜에서 두 동강 난 것처럼 보인다
+                            if (showDay) CaptureBandedDay(message.createdAt, banded = joinsAbove)
                             Box(Modifier.padding(top = if (showDay) 0.dp else topPad)) {
                                 MessageBlock(
                                     message = message,

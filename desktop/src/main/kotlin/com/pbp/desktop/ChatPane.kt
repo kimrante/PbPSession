@@ -239,7 +239,9 @@ internal fun ChatPane(
                             captureIdx.contains(index - 1)
                         Column {
                             // 구분선이 이미 위아래 여백을 갖고 있어 말풍선 여백을 또 주면 벌어진다
-                            if (showDay) DayDivider(message.createdAt)
+                            // 구분선이 고른 구간 한가운데면 밴드도 그 위를 덮는다 —
+                            // 안 그러면 노란 상자가 날짜에서 두 동강 난 것처럼 보인다
+                            if (showDay) CaptureBandedDay(message.createdAt, banded = joinsAbove)
                             Box(
                                 Modifier.padding(
                                     top = when {
@@ -555,6 +557,20 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
 
 /** 캡처 범위 선택 표시 — 모바일 CaptureMark와 같은 규칙 (목업 mockup-capture 03장) */
 internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
+
+/**
+ * 날짜 구분선을 캡처 밴드 안에 넣는다 — 구분선은 메시지가 아니라 눈금이라
+ * 범위의 끝점이 될 수 없지만, 고른 두 메시지 사이에 끼면 밴드가 거기서 끊긴다.
+ * 화면에서만 이어 붙이는 것이고 **캡처 이미지에는 구분선이 들어가지 않는다**.
+ */
+@Composable
+internal fun CaptureBandedDay(millis: Long, banded: Boolean) {
+    val radiusPx = with(LocalDensity.current) { DesktopDimens.rCell.toPx() }
+    val mark = if (banded) CaptureMark.IN else CaptureMark.NONE
+    Box(Modifier.fillMaxWidth().captureBand(mark, Tokens.Signature, radiusPx)) {
+        DayDivider(millis)
+    }
+}
 
 /**
  * 밴드(선택 구간) 배경·테두리. 열린 쪽의 둥근 모서리는 캔버스 밖으로 밀어 잘리게 하는

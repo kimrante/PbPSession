@@ -110,7 +110,7 @@ internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
  * 밴드(선택 구간) 배경·테두리. 열린 쪽(위/아래)의 둥근 모서리는 캔버스 밖으로 밀어내
  * 잘리게 하는 방식이라, 인접한 밴드가 맞닿아도 가로선이 생기지 않는다.
  */
-private fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
+internal fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Float): Modifier =
     drawBehind {
         if (mark == CaptureMark.NONE || mark == CaptureMark.OUT) return@drawBehind
         val stroke = 2.dp.toPx()
@@ -137,6 +137,22 @@ private fun Modifier.captureBand(mark: CaptureMark, accent: Color, radiusPx: Flo
             )
         }
     }
+
+/**
+ * 날짜 구분선을 캡처 밴드 안에 넣는다 — 구분선은 메시지가 아니라 눈금이라
+ * 범위의 끝점이 될 수 없지만, 고른 두 메시지 사이에 끼면 밴드가 거기서 끊긴다.
+ * 화면에서만 이어 붙이는 것이고 **캡처 이미지에는 구분선이 들어가지 않는다**
+ * (CaptureSheet은 메시지만 그린다).
+ */
+@Composable
+internal fun CaptureBandedDay(millis: Long, banded: Boolean) {
+    val tokens = Pbp.colors
+    val radiusPx = with(LocalDensity.current) { PbpDimens.rCell.toPx() }
+    val mark = if (banded) CaptureMark.IN else CaptureMark.NONE
+    Box(Modifier.fillMaxWidth().captureBand(mark, tokens.signature, radiusPx)) {
+        DayDivider(millis)
+    }
+}
 
 @Composable
 internal fun MessageBlock(

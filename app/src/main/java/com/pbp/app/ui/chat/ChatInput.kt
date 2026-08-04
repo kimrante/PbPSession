@@ -75,8 +75,17 @@ internal fun InputZone(
     /** 상대 이름 — "○○님이 입력 중…". 만료 판정은 [TypingLine]이 스스로 한다 (E2) */
     typingName: String? = null,
     typingUntil: Long = 0L,
+    /**
+     * 지금 말하고 있는 프로필이 GM인가 — GM 도구 칩의 노출 기준.
+     * room.isMaster가 아니라 **활성 프로필** 기준이다: GM이 자기 NPC로 말하는 중에는
+     * 요청을 걸 수 없고, 그게 자연스럽다 (J2). 시나리오 창도 같은 기준을 쓰므로
+     * 화면(ChatScreen)에서 한 번 계산해 내려보낸다 (V4).
+     */
+    gmActive: Boolean,
     /** GM 프로필로 말하는 중에만 보이는 판정 요청 (J2) */
     onJudgeRequest: () -> Unit = {},
+    /** 시나리오 뷰어를 여는 **유일한 진입점** (V3) — 다른 경로로는 창이 뜨지 않는다 */
+    onScenarioViewer: () -> Unit = {},
     /** 실제로 글자가 바뀔 때만 */
     onTyping: () -> Unit = {},
     onTypingStopped: () -> Unit = {},
@@ -93,11 +102,6 @@ internal fun InputZone(
     }
     val suggestions = remember(input, activeStats) {
         com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
-    }
-    // room.isMaster가 아니라 **지금 말하고 있는 프로필** 기준 — GM이 자기 NPC로
-    // 말하는 중에는 요청을 걸 수 없고, 그게 자연스럽다 (J2)
-    val gmActive = remember(profiles, activeId) {
-        profiles.find { it.id == activeId }?.isGm == true
     }
     val onOocToggle = { oocOn = !oocOn }
     val onInputChange = { text: String ->
@@ -163,22 +167,14 @@ internal fun InputZone(
             // 구분되도록 아이콘만 두지 않고 문구를 붙인다 (J2).
             // 프로필 스트립 바로 아래에 붙인다 — 입력 중 표시줄이 사이에 끼면
             // 스트립과 칩 사이가 불필요하게 벌어진다
-            Box(
+            Row(
                 Modifier.heightIn(min = PbpDimens.touchTarget),
-                contentAlignment = Alignment.CenterStart,
+                horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "＋ 판정 요청",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = tokens.signatureInk,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(tokens.signature.copy(alpha = .14f))
-                        .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
-                        .clickable(onClick = onJudgeRequest)
-                        .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
-                )
+                GmChip("＋ 판정 요청", onJudgeRequest)
+                // 시나리오 뷰어 (V3) — 판정 요청과 같은 급의 GM 도구라 같은 캡슐을 쓴다
+                GmChip("📖 시나리오", onScenarioViewer)
             }
             // 칩과 입력줄 사이 여백 — 없애 보니 붙어 보여 원래대로 되돌렸다
             Spacer(Modifier.height(PbpDimens.gap2))
@@ -324,6 +320,27 @@ internal fun InputZone(
  * 만료 확인용 0.5초 틱을 **여기서만** 돈다. 예전에는 채팅 화면 본체에 있어서
  * 상대가 타이핑하는 동안 초당 두 번 화면 전체가 리컴포즈됐다.
  */
+/**
+ * GM 도구 칩 — 판정 요청·시나리오가 같은 캡슐을 쓴다.
+ * 자간·패딩·토큰을 한 곳에 두어 동류 컴포넌트가 갈라지지 않게 한다 (CLAUDE.md 0장).
+ */
+@Composable
+private fun GmChip(label: String, onClick: () -> Unit) {
+    val tokens = Pbp.colors
+    Text(
+        label,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = tokens.signatureInk,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(tokens.signature.copy(alpha = .14f))
+            .border(1.dp, tokens.signature.copy(alpha = .4f), RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
+    )
+}
+
 @Composable
 private fun TypingLine(typingName: String?, typingUntil: Long) {
     val tokens = Pbp.colors

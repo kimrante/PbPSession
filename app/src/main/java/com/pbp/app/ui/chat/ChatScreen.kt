@@ -70,6 +70,7 @@ import com.pbp.shared.ChatDates
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.importCharacterFromClipboard
+import com.pbp.app.data.ScenarioFetcher
 import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
@@ -256,6 +257,43 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         super.onCleared()
     }
 
+    // ── 시나리오 뷰어 (V2) ───────────────────────────────
+
+    /**
+     * 창의 내용 상태. **열림 여부는 여기 없다** — 그건 화면의 rememberSaveable이다.
+     * 창을 닫았다 열어도 읽던 문장이 그대로여야 하므로 둘을 갈라 둔다.
+     */
+    sealed interface ScenarioState {
+        /** 첫 화면 — 링크 입력 */
+        data object AskLink : ScenarioState
+        data object Loading : ScenarioState
+        data class Viewing(val sentences: List<String>, val index: Int) : ScenarioState
+        data class Failed(val error: ScenarioFetcher.Result.Error) : ScenarioState
+    }
+
+    val scenario = kotlinx.coroutines.flow.MutableStateFlow<ScenarioState>(ScenarioState.AskLink)
+
+    fun loadScenario(url: String) = viewModelScope.launch {
+        scenario.value = ScenarioState.Loading
+        val result = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
+        scenario.value = when (result) {
+            is ScenarioFetcher.Result.Ok -> ScenarioState.Viewing(result.sentences, 0)
+            is ScenarioFetcher.Result.Error -> ScenarioState.Failed(result)
+        }
+    }
+
+    /** 문장 이동 — 양 끝에서는 제자리 */
+    fun scenarioStep(delta: Int) {
+        val current = scenario.value as? ScenarioState.Viewing ?: return
+        scenario.value = current.copy(
+            index = (current.index + delta).coerceIn(0, current.sentences.lastIndex),
+        )
+    }
+
+    /** "다른 문서" — 창을 닫는 것으로는 초기화되지 않는다 */
+    fun scenarioReset() {
+        scenario.value = ScenarioState.AskLink
+    }
 }
 
 @Composable
@@ -270,10 +308,13 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val messages by vm.messages.collectAsState()
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
+    val scenarioState by vm.scenario.collectAsState()
     // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
     val peerState by vm.peerState.collectAsStateWithLifecycle()
     val peerReadAt = peerState.readAt
     val active = profiles.find { it.id == room?.activeProfileId }
+    // GM 도구(판정 요청 칩·시나리오 창)의 공통 게이트 — 활성 프로필 기준 (J2·V4)
+    val gmActive = active?.isGm == true
     val themeColor = Color(room?.themeColor ?: PbpPalette.DEFAULT_THEME_COLOR)
     // 다이얼로그 대상은 메시지 id로 — 회전해도 유지된다 (N10)
     var editTargetId by rememberSaveable {
@@ -298,6 +339,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     var showProfileDrawer by rememberSaveable { mutableStateOf(false) }
     // 판정 요청 (J3) — 시트와 "값이 없어요" 다이얼로그
     var judgeSheetOpen by rememberSaveable { mutableStateOf(false) }
+    // 시나리오 뷰어 (V4) — 열림 여부만 화면에, 읽던 문장은 ViewModel에.
+    // 닫았다 열면 그대로여야 하므로 둘을 갈라 둔다
+    var scenarioOpen by rememberSaveable { mutableStateOf(false) }
     var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var needValueName by rememberSaveable { mutableStateOf("") }
     // 캡처 범위 — (시작 조각 키, 끝 조각 키). 끝이 null이면 아직 고르는 중.
@@ -604,6 +648,25 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         }
                     }
                 }
+                // ── 시나리오 뷰어 — 입력줄 바로 위에 뜬다 (V4).
+                // 진입점은 팔레트 칩 하나뿐이고, 여기서 저절로 뜨는 경로는 없다.
+                // GM이 아닌 프로필로 바꾸면 사라진다(상태는 VM에 남아 GM으로 돌아오면
+                // 읽던 자리에서 재개). 캡처 중에는 숨긴다 — 캡처 이미지에 찍히면 안 되고
+                // 탭 히트테스트와도 부딪힌다 (A1과 같은 계열).
+                // 목록 위에 겹치지 않고 자리를 차지하는 쪽을 골랐다: 겹치게 두면 가로
+                // 화면처럼 목록이 얕을 때 카드 아래쪽(확인 버튼)이 잘려 손이 닿지 않는다.
+                // 끌어 올리면 목록 위로 떠오른다
+                if (scenarioOpen && gmActive && !capturing) {
+                    ScenarioFloat(
+                        state = scenarioState,
+                        onSubmit = vm::loadScenario,
+                        onStep = vm::scenarioStep,
+                        onReset = vm::scenarioReset,
+                        onClose = { scenarioOpen = false },
+                        onFailureAck = vm::scenarioReset,
+                    )
+                    Spacer(Modifier.height(PbpDimens.gap2))
+                }
 
                 // ── 하단: 캡처 모드면 입력줄 자리를 캡처 바가 대신한다
                 if (capturing) {
@@ -663,7 +726,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     },
                     typingName = peerState.typingName,
                     typingUntil = peerState.typingUntil,
+                    gmActive = gmActive,
                     onJudgeRequest = { judgeSheetOpen = true },
+                    onScenarioViewer = { scenarioOpen = true },
                     onTyping = vm::notifyTyping,
                     onTypingStopped = vm::notifyTypingStopped,
                     rule = room?.rule ?: com.pbp.shared.Rules.COC7,

@@ -67,6 +67,7 @@ import com.pbp.app.export.LogExporter
 import com.pbp.app.export.CaptureHolder
 import com.pbp.app.export.CaptureRenderer
 import com.pbp.shared.ChatDates
+import com.pbp.shared.ScenarioDoc
 import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.importCharacterFromClipboard
@@ -267,17 +268,45 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         /** 첫 화면 — 링크 입력 */
         data object AskLink : ScenarioState
         data object Loading : ScenarioState
-        data class Viewing(val sentences: List<String>, val index: Int) : ScenarioState
+
+        /**
+         * @param sentences **원문 문장** 목록. 표시 단위를 바꿔도 이건 그대로 두고
+         *   [pages]만 다시 짓는다 — 같은 문서를 두 번 받아 올 이유가 없다.
+         * @param index 화면 단위(=[pages]) 기준 위치
+         */
+        data class Viewing(
+            val title: String?,
+            val url: String,
+            val sentences: List<String>,
+            val index: Int,
+            val linesPerView: Int,
+        ) : ScenarioState {
+            val pages: List<String> get() = ScenarioDoc.group(sentences, linesPerView)
+        }
+
         data class Failed(val error: ScenarioFetcher.Result.Error) : ScenarioState
     }
 
     val scenario = kotlinx.coroutines.flow.MutableStateFlow<ScenarioState>(ScenarioState.AskLink)
 
+    /**
+     * 표시 단위 — 문서를 바꿔도 유지한다. 읽는 습관이지 문서의 성질이 아니다.
+     * 문서를 열기 전에도 설정 창이 고른 값을 보여 줘야 해서 상태와 따로 둔다.
+     */
+    val scenarioLines = kotlinx.coroutines.flow.MutableStateFlow(1)
+
     fun loadScenario(url: String) = viewModelScope.launch {
         scenario.value = ScenarioState.Loading
         val result = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
         scenario.value = when (result) {
-            is ScenarioFetcher.Result.Ok -> ScenarioState.Viewing(result.sentences, 0)
+            is ScenarioFetcher.Result.Ok -> ScenarioState.Viewing(
+                title = result.title,
+                url = url.trim(),
+                sentences = result.sentences,
+                index = 0,
+                linesPerView = scenarioLines.value,
+            )
+
             is ScenarioFetcher.Result.Error -> ScenarioState.Failed(result)
         }
     }
@@ -286,7 +315,22 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     fun scenarioStep(delta: Int) {
         val current = scenario.value as? ScenarioState.Viewing ?: return
         scenario.value = current.copy(
-            index = (current.index + delta).coerceIn(0, current.sentences.lastIndex),
+            index = (current.index + delta).coerceIn(0, current.pages.lastIndex),
+        )
+    }
+
+    /**
+     * 표시 단위 변경 — **읽던 자리를 지킨다**. 묶음 크기가 바뀌면 같은 번호가
+     * 다른 문장을 가리키므로, 문장 기준으로 환산해 그 문장이 든 묶음으로 옮긴다.
+     */
+    fun setScenarioLines(lines: Int) {
+        val next = lines.coerceIn(ScenarioDoc.VIEW_LINES)
+        scenarioLines.value = next
+        val current = scenario.value as? ScenarioState.Viewing ?: return
+        val sentenceAt = current.index * current.linesPerView
+        val moved = current.copy(linesPerView = next, index = 0)
+        scenario.value = moved.copy(
+            index = (sentenceAt / next).coerceIn(0, moved.pages.lastIndex.coerceAtLeast(0)),
         )
     }
 
@@ -309,6 +353,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val scenarioState by vm.scenario.collectAsState()
+    val scenarioLines by vm.scenarioLines.collectAsState()
     // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
     val peerState by vm.peerState.collectAsStateWithLifecycle()
     val peerReadAt = peerState.readAt
@@ -342,6 +387,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     // 시나리오 뷰어 (V4) — 열림 여부만 화면에, 읽던 문장은 ViewModel에.
     // 닫았다 열면 그대로여야 하므로 둘을 갈라 둔다
     var scenarioOpen by rememberSaveable { mutableStateOf(false) }
+    // 시나리오에서 입력창으로 건네는 글 — 넣고 나면 InputZone이 비운다
+    var scenarioDraft by remember { mutableStateOf<String?>(null) }
     var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var needValueName by rememberSaveable { mutableStateOf("") }
     // 캡처 범위 — (시작 조각 키, 끝 조각 키). 끝이 null이면 아직 고르는 중.
@@ -658,7 +705,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                         state = scenarioState,
                         onSubmit = vm::loadScenario,
                         onStep = vm::scenarioStep,
+                        lines = scenarioLines,
+                        onLinesChange = vm::setScenarioLines,
                         onReset = vm::scenarioReset,
+                        onCopyToInput = { scenarioDraft = it },
                         onClose = { scenarioOpen = false },
                         onFailureAck = vm::scenarioReset,
                     )
@@ -723,6 +773,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     gmActive = gmActive,
                     onJudgeRequest = { judgeSheetOpen = true },
                     onScenarioViewer = { scenarioOpen = true },
+                    insertText = scenarioDraft,
+                    onInsertConsumed = { scenarioDraft = null },
                     onTyping = vm::notifyTyping,
                     onTypingStopped = vm::notifyTypingStopped,
                     rule = room?.rule ?: com.pbp.shared.Rules.COC7,

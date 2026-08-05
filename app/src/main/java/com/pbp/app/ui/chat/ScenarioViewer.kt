@@ -2,6 +2,7 @@ package com.pbp.app.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,14 +33,18 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.ScenarioFetcher
+import com.pbp.app.ui.common.PbpButtonKind
 import com.pbp.app.ui.common.PbpDialogButton
 import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.theme.Pbp
 import com.pbp.app.ui.theme.PbpDimens
+import com.pbp.shared.ScenarioDoc
 
 /**
  * 시나리오 뷰어 — **입력줄 위에 붙는 판** (V4·V5).
@@ -55,13 +61,20 @@ internal fun ScenarioFloat(
     state: ChatViewModel.ScenarioState,
     onSubmit: (String) -> Unit,
     onStep: (Int) -> Unit,
+    /** 지금 고른 표시 단위 — 문서를 열기 전에도 설정 창이 이 값을 보여 준다 */
+    lines: Int,
+    onLinesChange: (Int) -> Unit,
     onReset: () -> Unit,
+    /** 지금 보고 있는 문장을 입력창에 넣는다 — **보내지는 않는다** */
+    onCopyToInput: (String) -> Unit,
     onClose: () -> Unit,
     onFailureAck: () -> Unit,
 ) {
     val tokens = Pbp.colors
     // 입력 중인 링크는 화면에 둔다 — 실패 후 고쳐서 다시 보낼 수 있어야 한다
     var link by rememberSaveable { mutableStateOf("") }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    val viewing = state as? ChatViewModel.ScenarioState.Viewing
 
     Column(
         Modifier
@@ -74,23 +87,32 @@ internal fun ScenarioFloat(
             .background(tokens.chatBarBg)
             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
     ) {
-        // 머리글 — 좌측 이름표, 우측 닫기
+        // 머리글 — 좌측 이름표와 문서 제목, 우측 도구
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "📖 시나리오",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = tokens.inkDim,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                Modifier
-                    .size(PbpDimens.touchTarget)
-                    .clip(RoundedCornerShape(999.dp))
-                    .semantics { contentDescription = "시나리오 창 닫기" }
-                    .pointerInput(Unit) { detectTapGesturesSimple(onClose) },
-                contentAlignment = Alignment.Center,
-            ) { Text("×", fontSize = 18.sp, color = tokens.inkDim) }
+            Text("📖 시나리오", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.inkDim)
+            if (viewing != null) {
+                Spacer(Modifier.width(PbpDimens.gap2))
+                Text(
+                    // 제목을 못 받았으면 자리를 비워 두지 않는다 — 무엇을 읽는지가
+                    // 머리글의 존재 이유다
+                    viewing.title ?: "제목 없는 문서",
+                    fontSize = 11.sp,
+                    color = tokens.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            // 복사는 **읽을 문장이 있을 때만** 뜬다 — 링크 입력 중에는 복사할 게 없다
+            if (viewing != null) {
+                HeaderIcon("⧉", "이 문장을 입력창에 넣기") {
+                    onCopyToInput(viewing.pages.getOrNull(viewing.index).orEmpty())
+                }
+            }
+            HeaderIcon("⚙", "시나리오 설정") { settingsOpen = true }
+            HeaderIcon("×", "시나리오 창 닫기", size = 18.sp, onTap = onClose)
         }
         Spacer(Modifier.height(PbpDimens.gap3))
 
@@ -105,7 +127,7 @@ internal fun ScenarioFloat(
                 is ChatViewModel.ScenarioState.Viewing -> Text(
                     // 시나리오 원문 그대로 — 마크업으로 해석하지 않는다.
                     // 서체는 GM 서술과 같은 명조: 읽는 글이지 대화가 아니다
-                    state.sentences.getOrNull(state.index).orEmpty(),
+                    state.pages.getOrNull(state.index).orEmpty(),
                     fontFamily = GowunBatang,
                     fontSize = 14.sp,
                     lineHeight = 22.sp,
@@ -123,13 +145,46 @@ internal fun ScenarioFloat(
         }
         if (state is ChatViewModel.ScenarioState.Viewing) {
             Spacer(Modifier.height(PbpDimens.gap3))
-            NavRow(state, onStep, onReset)
+            NavRow(state, onStep)
         }
     }
 
     if (state is ChatViewModel.ScenarioState.Failed) {
         ScenarioErrorDialog(state.error, onFailureAck)
     }
+    if (settingsOpen) {
+        ScenarioSettingsDialog(
+            viewing = viewing,
+            lines = lines,
+            onLinesChange = onLinesChange,
+            onReset = {
+                // 재설정하면 빈 상자로 돌아간다 — 남은 링크를 지워야 정말 빈 상자다
+                link = ""
+                settingsOpen = false
+                onReset()
+            },
+            onDismiss = { settingsOpen = false },
+        )
+    }
+}
+
+/** 머리글의 아이콘 버튼 — 셋이 같은 히트 규격·같은 톤을 쓰도록 한 곳에 둔다 */
+@Composable
+private fun HeaderIcon(
+    glyph: String,
+    description: String,
+    size: androidx.compose.ui.unit.TextUnit = 15.sp,
+    onTap: () -> Unit,
+) {
+    val tokens = Pbp.colors
+    Box(
+        Modifier
+            .size(PbpDimens.touchTarget)
+            .clip(RoundedCornerShape(999.dp))
+            .semantics { contentDescription = description }
+            .pointerInput(Unit) { detectTapGesturesSimple(onTap) },
+        contentAlignment = Alignment.Center,
+    ) { Text(glyph, fontSize = size, color = tokens.inkDim) }
 }
 
 /** 링크 입력 폼 높이 — Loading이 이 높이를 지켜야 카드가 깜빡이지 않는다 */
@@ -164,33 +219,19 @@ private fun LinkForm(link: String, onLinkChange: (String) -> Unit, onSubmit: (St
 
 /** 진행 표시·"다른 문서"·이동 버튼 — 본문이 아무리 길어도 이 줄은 잘리지 않는다 */
 @Composable
-private fun NavRow(
-    state: ChatViewModel.ScenarioState.Viewing,
-    onStep: (Int) -> Unit,
-    onReset: () -> Unit,
-) {
+private fun NavRow(state: ChatViewModel.ScenarioState.Viewing, onStep: (Int) -> Unit) {
     val tokens = Pbp.colors
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
-            "${state.index + 1} / ${state.sentences.size}",
+            "${state.index + 1} / ${state.pages.size}",
             fontSize = 10.sp,
             color = tokens.inkDim,
-        )
-        Spacer(Modifier.width(PbpDimens.gap3))
-        Text(
-            "다른 문서",
-            fontSize = 10.sp,
-            color = tokens.inkDim,
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .pointerInput(Unit) { detectTapGesturesSimple(onReset) }
-                .padding(horizontal = PbpDimens.gap2, vertical = PbpDimens.gap1),
         )
         Spacer(Modifier.weight(1f))
         // 요구사항 고정 위치 — 우하단
         NavButton("<", "이전 문장", state.index > 0) { onStep(-1) }
         Spacer(Modifier.width(PbpDimens.gap2))
-        NavButton(">", "다음 문장", state.index < state.sentences.lastIndex) { onStep(1) }
+        NavButton(">", "다음 문장", state.index < state.pages.lastIndex) { onStep(1) }
     }
 }
 
@@ -216,6 +257,77 @@ private fun NavButton(label: String, description: String, enabled: Boolean, onCl
             color = if (enabled) tokens.signatureInk else tokens.inkDisabled,
         )
     }
+}
+
+/**
+ * 시나리오 설정 — 표시 단위와 현재 문서.
+ *
+ * 표시 단위를 바꿔도 문서를 다시 받지 않는다. 이미 나눠 둔 문장을 다시 묶기만 하면
+ * 되고, 읽던 자리도 같은 문장 위에 남는다 (ChatViewModel.setScenarioLines).
+ */
+@Composable
+private fun ScenarioSettingsDialog(
+    viewing: ChatViewModel.ScenarioState.Viewing?,
+    lines: Int,
+    onLinesChange: (Int) -> Unit,
+    onReset: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val tokens = Pbp.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { PbpDialogTitle("시나리오 설정") },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                Text("한 번에 보여 줄 문장 수", fontSize = 12.sp, color = tokens.ink)
+                Spacer(Modifier.height(PbpDimens.gap2))
+                Row(horizontalArrangement = Arrangement.spacedBy(PbpDimens.gap2)) {
+                    for (n in ScenarioDoc.VIEW_LINES) {
+                        val on = lines == n
+                        Text(
+                            "$n",
+                            fontSize = 13.sp,
+                            fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            color = if (on) tokens.signatureInk else tokens.inkDim,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .size(PbpDimens.touchTarget)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (on) tokens.signature.copy(alpha = .14f) else tokens.inkFaint)
+                                .pointerInput(n) { detectTapGesturesSimple { onLinesChange(n) } }
+                                .wrapContentHeight(),
+                        )
+                    }
+                }
+                Spacer(Modifier.height(PbpDimens.gap4))
+                Text("현재 문서", fontSize = 12.sp, color = tokens.ink)
+                Spacer(Modifier.height(PbpDimens.gap1))
+                Text(
+                    viewing?.title ?: "아직 문서를 열지 않았습니다",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (viewing != null) {
+                    Spacer(Modifier.height(PbpDimens.gap1))
+                    Text(
+                        viewing.url,
+                        fontSize = 10.sp,
+                        color = tokens.inkDim,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        confirmButton = { PbpDialogButton("닫기", onDismiss) },
+        // 재설정은 되돌릴 수 없는 쪽이라 확인 버튼과 반대편에 둔다
+        dismissButton = {
+            PbpDialogButton("문서 재설정", onReset, kind = PbpButtonKind.Cancel, enabled = viewing != null)
+        },
+    )
 }
 
 /**

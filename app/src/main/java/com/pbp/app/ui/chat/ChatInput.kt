@@ -79,6 +79,15 @@ internal fun InputZone(
     onJudgeRequest: () -> Unit = {},
     /** 시나리오 뷰어를 여는 **유일한 진입점** (V3) — 다른 경로로는 창이 뜨지 않는다 */
     onScenarioViewer: () -> Unit = {},
+    /**
+     * 바깥(시나리오 뷰어)에서 입력창에 넣어 달라고 건네는 글. **보내지는 않는다.**
+     *
+     * 입력 상태를 화면으로 끌어올리지 않고 이 통로만 뚫은 이유: 입력값이 위로 가면
+     * 글자 하나마다 채팅 화면 전체가 리컴포즈된다. 넣고 나면 [onInsertConsumed]로
+     * 비워 같은 글이 두 번 들어가지 않게 한다.
+     */
+    insertText: String? = null,
+    onInsertConsumed: () -> Unit = {},
     /** 실제로 글자가 바뀔 때만 */
     onTyping: () -> Unit = {},
     onTypingStopped: () -> Unit = {},
@@ -95,6 +104,13 @@ internal fun InputZone(
     }
     val suggestions = remember(input, activeStats) {
         com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
+    }
+    LaunchedEffect(insertText) {
+        val incoming = insertText ?: return@LaunchedEffect
+        // 쓰던 글이 있으면 지우지 않고 뒤에 잇는다 — 남의 글을 삼키면 안 된다
+        input = if (input.isBlank()) incoming else "$input $incoming"
+        onTyping()
+        onInsertConsumed()
     }
     val onOocToggle = { oocOn = !oocOn }
     val onInputChange = { text: String ->

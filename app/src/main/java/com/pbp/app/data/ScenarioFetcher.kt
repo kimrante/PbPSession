@@ -21,7 +21,8 @@ import java.net.URL
 object ScenarioFetcher {
 
     sealed interface Result {
-        data class Ok(val sentences: List<String>) : Result
+        /** @param title 문서 제목 — 응답 헤더에서 못 뽑으면 null (화면이 대체 문구를 쓴다) */
+        data class Ok(val title: String?, val sentences: List<String>) : Result
 
         enum class Error : Result {
             /** 구글 독스 문서 링크가 아니다 */
@@ -57,11 +58,15 @@ object ScenarioFetcher {
         } catch (_: IOException) {
             return Result.Error.NETWORK
         }
+        val title: String?
         val text = try {
             if (connection.responseCode !in 200..299) return Result.Error.NO_ACCESS
+            // 제목은 첨부 파일 이름에 실려 온다 — 본문 첫 줄을 제목이라 우기지 않는다
+            title = ScenarioDoc.titleFromDisposition(connection.getHeaderField("Content-Disposition"))
             connection.inputStream.use { stream ->
-                // UTF-8 고정 — export가 돌려주는 인코딩이다
-                String(stream.readNBytes(MAX_BYTES), Charsets.UTF_8)
+                // UTF-8 고정 — export가 돌려주는 인코딩이다. BOM은 여기서 뗀다:
+                // 남겨 두면 첫 문장에 안 보이는 글자가 붙고 HTML 판별도 빗나간다
+                ScenarioDoc.stripBom(String(stream.readNBytes(MAX_BYTES), Charsets.UTF_8))
             }
         } catch (_: IOException) {
             return Result.Error.NETWORK
@@ -71,6 +76,6 @@ object ScenarioFetcher {
         // 200인데 HTML이면 로그인 페이지다 — 문서로 착각하면 목차가 통째로 문장이 된다
         if (text.trimStart().startsWith("<")) return Result.Error.NO_ACCESS
         val sentences = ScenarioDoc.splitSentences(text)
-        return if (sentences.isEmpty()) Result.Error.EMPTY else Result.Ok(sentences)
+        return if (sentences.isEmpty()) Result.Error.EMPTY else Result.Ok(title, sentences)
     }
 }

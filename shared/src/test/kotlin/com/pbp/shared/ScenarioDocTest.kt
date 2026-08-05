@@ -141,4 +141,68 @@ class ScenarioDocTest {
             ScenarioDoc.splitSentences("끝났다.\n다음 장."),
         )
     }
+
+    // ── 제목 ────────────────────────────────────────────
+
+    @Test
+    fun `한글 제목은 filename 별표 쪽에서 뽑는다 — 곁들여 오는 ASCII 이름은 뭉개져 있다`() {
+        val header = "attachment; filename=\"___.txt\"; " +
+            "filename*=UTF-8''%EC%8B%AC%ED%95%B4%20%EB%93%B1%EB%8C%80.txt"
+        assertEquals("심해 등대", ScenarioDoc.titleFromDisposition(header))
+    }
+
+    @Test
+    fun `별표 항목이 없으면 따옴표 이름을 쓴다`() {
+        assertEquals(
+            "Haunted Manors",
+            ScenarioDoc.titleFromDisposition("attachment; filename=\"Haunted Manors.txt\""),
+        )
+    }
+
+    @Test
+    fun `더하기는 공백이 아니다 — 제목에 든 +가 사라지면 안 된다`() {
+        assertEquals(
+            "A+B",
+            ScenarioDoc.titleFromDisposition("attachment; filename*=UTF-8''A+B.txt"),
+        )
+    }
+
+    @Test
+    fun `헤더가 없거나 이름이 비면 null`() {
+        assertNull(ScenarioDoc.titleFromDisposition(null))
+        assertNull(ScenarioDoc.titleFromDisposition("attachment"))
+        assertNull(ScenarioDoc.titleFromDisposition("attachment; filename=\".txt\""))
+    }
+
+    // ── 표시 단위 묶기 ───────────────────────────────────
+
+    @Test
+    fun `문장을 정한 수만큼 묶고 마지막 묶음은 남는 만큼만`() {
+        val five = listOf("가.", "나.", "다.", "라.", "마.")
+        assertEquals(five, ScenarioDoc.group(five, 1))
+        assertEquals(listOf("가.\n나.", "다.\n라.", "마."), ScenarioDoc.group(five, 2))
+        assertEquals(listOf("가.\n나.\n다.", "라.\n마."), ScenarioDoc.group(five, 3))
+    }
+
+    @Test
+    fun `범위를 벗어난 단위는 끌어당긴다 — 0으로 묶으면 무한히 나뉜다`() {
+        val three = listOf("가.", "나.", "다.")
+        assertEquals(ScenarioDoc.group(three, 1), ScenarioDoc.group(three, 0))
+        assertEquals(ScenarioDoc.group(three, 5), ScenarioDoc.group(three, 99))
+    }
+
+    @Test
+    fun `빈 목록은 빈 묶음`() {
+        assertEquals(emptyList<String>(), ScenarioDoc.group(emptyList(), 3))
+    }
+
+    @Test
+    fun `BOM은 떼어 낸다 — 첫 문장에 안 보이는 글자가 붙으면 안 된다`() {
+        assertEquals("문이 열린다.", ScenarioDoc.stripBom("﻿문이 열린다."))
+        assertEquals("문이 열린다.", ScenarioDoc.stripBom("문이 열린다."))
+        assertEquals(
+            listOf("문이 열린다."),
+            ScenarioDoc.splitSentences(ScenarioDoc.stripBom("﻿문이 열린다.")),
+        )
+    }
 }

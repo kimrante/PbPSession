@@ -43,6 +43,61 @@ object ScenarioDoc {
     fun exportUrl(docId: String): String =
         "https://docs.google.com/document/d/$docId/export?format=txt"
 
+    /** 한 번에 보여 줄 수 있는 문장 수 — 설정에서 고르는 범위 */
+    val VIEW_LINES = 1..5
+
+    /**
+     * 문서 제목 — export 응답의 `Content-Disposition` 파일명에서 뽑는다.
+     * 본문 첫 줄을 제목으로 삼으면 제목이 없는 문서에서 첫 문장을 제목이라 우기게 된다.
+     *
+     * 한글 제목은 `filename*=UTF-8''...`로 퍼센트 인코딩돼 오므로 그쪽을 먼저 본다 —
+     * 곁들여 오는 `filename=`은 ASCII로 뭉개져 있다.
+     */
+    fun titleFromDisposition(header: String?): String? {
+        if (header == null) return null
+        val extended = Regex("""filename\*\s*=\s*UTF-8''([^;]+)""", RegexOption.IGNORE_CASE)
+            .find(header)?.groupValues?.get(1)?.let { percentDecode(it) }
+        val plain = Regex("filename\\s*=\\s*\"([^\"]*)\"", RegexOption.IGNORE_CASE)
+            .find(header)?.groupValues?.get(1)
+        val name = extended ?: plain ?: return null
+        return name.removeSuffix(".txt").trim().takeIf { it.isNotEmpty() }
+    }
+
+    /** `+`를 공백으로 바꾸지 않는 퍼센트 디코더 — 제목에 +가 든 문서가 있다 */
+    private fun percentDecode(text: String): String {
+        val bytes = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            val hex = if (c == '%' && i + 2 < text.length) {
+                text.substring(i + 1, i + 3).toIntOrNull(16)
+            } else null
+            if (hex != null) {
+                bytes.write(hex)
+                i += 3
+            } else {
+                bytes.write(c.toString().toByteArray(Charsets.UTF_8))
+                i++
+            }
+        }
+        return bytes.toString(Charsets.UTF_8.name())
+    }
+
+    /**
+     * 문장을 [size]개씩 묶어 한 화면 분량으로 만든다 (설정의 "표시 단위").
+     *
+     * 다시 받아 오지 않는다 — 원문 문장 목록은 그대로 두고 묶음만 다시 짓는다.
+     * 같은 문서를 네트워크로 두 번 가져올 이유가 없다.
+     */
+    fun group(sentences: List<String>, size: Int): List<String> =
+        sentences.chunked(size.coerceIn(VIEW_LINES)) { it.joinToString(separator = "\n") }
+
+    /**
+     * 앞머리의 BOM을 뗀다. 구글 export는 UTF-8 BOM을 붙여 보내는데, 그대로 두면
+     * 첫 문장 맨 앞에 보이지 않는 글자가 남고 HTML 판별(`<`로 시작하나)도 빗나간다.
+     */
+    fun stripBom(text: String): String = text.removePrefix("﻿")
+
     /** 문장 끝으로 볼 부호. 연속으로 찍힌 것(`?!`, `...`)은 한 덩어리로 본다 */
     private const val ENDERS = ".!?…"
 

@@ -43,9 +43,6 @@ object ScenarioDoc {
     fun exportUrl(docId: String): String =
         "https://docs.google.com/document/d/$docId/export?format=txt"
 
-    /** 한 번에 보여 줄 수 있는 문장 수 — 설정에서 고르는 범위 */
-    val VIEW_LINES = 1..5
-
     /**
      * 문서 제목 — export 응답의 `Content-Disposition` 파일명에서 뽑는다.
      * 본문 첫 줄을 제목으로 삼으면 제목이 없는 문서에서 첫 문장을 제목이라 우기게 된다.
@@ -84,19 +81,13 @@ object ScenarioDoc {
     }
 
     /**
-     * 문장을 [size]개씩 묶어 한 화면 분량으로 만든다 (설정의 "표시 단위").
-     *
-     * 다시 받아 오지 않는다 — 원문 문장 목록은 그대로 두고 묶음만 다시 짓는다.
-     * 같은 문서를 네트워크로 두 번 가져올 이유가 없다.
-     */
-    fun group(sentences: List<String>, size: Int): List<String> =
-        sentences.chunked(size.coerceIn(VIEW_LINES)) { it.joinToString(separator = "\n") }
-
-    /**
      * 앞머리의 BOM을 뗀다. 구글 export는 UTF-8 BOM을 붙여 보내는데, 그대로 두면
      * 첫 문장 맨 앞에 보이지 않는 글자가 남고 HTML 판별(`<`로 시작하나)도 빗나간다.
      */
     fun stripBom(text: String): String = text.removePrefix("﻿")
+
+    /** 문단 안에서 줄을 잇는 개행 */
+    private const val LF = '\n'
 
     /** 문장 끝으로 볼 부호. 연속으로 찍힌 것(`?!`, `...`)은 한 덩어리로 본다 */
     private const val ENDERS = ".!?…"
@@ -141,5 +132,54 @@ object ScenarioDoc {
             line.substring(start).trim().takeIf { it.isNotEmpty() }?.let { out += it }
         }
         return out
+    }
+
+    /**
+     * 평문 → 문단 목록. **빈 줄 하나 이상**이 문단 경계다 (설정의 "문단 단위로 보기").
+     *
+     * 문장 분리와 달리 줄을 합친다 — 시나리오 문서는 한 문단을 여러 줄로 접어 쓰는
+     * 일이 많아서, 줄마다 끊으면 문단이라고 부를 수 없는 조각이 된다.
+     */
+    fun splitParagraphs(text: String): List<String> {
+        val out = mutableListOf<String>()
+        val buffer = StringBuilder()
+        fun flush() {
+            buffer.toString().trim().takeIf { it.isNotEmpty() }?.let { out += it }
+            buffer.setLength(0)
+        }
+        for (line in text.lines()) {
+            if (line.isBlank()) flush() else {
+                if (buffer.isNotEmpty()) buffer.append(LF)
+                buffer.append(line.trim())
+            }
+        }
+        flush()
+        return out
+    }
+
+    /**
+     * 문장 번호 → 그 문장이 든 문단 번호. 보기 방식을 바꿔도 **읽던 자리를 지키려고**
+     * 쓴다 — 번호를 그대로 옮기면 전혀 다른 곳으로 튄다.
+     *
+     * 문단을 다시 문장으로 쪼개 세는 방식이라 [splitSentences]와 같은 규칙 위에 선다.
+     */
+    fun paragraphIndexOf(text: String, sentenceIndex: Int): Int {
+        if (sentenceIndex <= 0) return 0
+        var counted = 0
+        splitParagraphs(text).forEachIndexed { index, paragraph ->
+            counted += splitSentences(paragraph).size
+            if (sentenceIndex < counted) return index
+        }
+        return (splitParagraphs(text).size - 1).coerceAtLeast(0)
+    }
+
+    /** 문단 번호 → 그 문단의 첫 문장 번호 (문단 → 문장 전환에서 자리 보존) */
+    fun sentenceIndexOfParagraph(text: String, paragraphIndex: Int): Int {
+        var counted = 0
+        splitParagraphs(text).forEachIndexed { index, paragraph ->
+            if (index == paragraphIndex) return counted
+            counted += splitSentences(paragraph).size
+        }
+        return counted
     }
 }

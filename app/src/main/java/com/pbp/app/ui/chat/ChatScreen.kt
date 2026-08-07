@@ -72,6 +72,7 @@ import com.pbp.app.ui.common.Avatar
 import com.pbp.app.ui.common.AddProfileDialog
 import com.pbp.app.ui.common.importCharacterFromClipboard
 import com.pbp.app.data.ScenarioFetcher
+import com.pbp.app.data.ScenarioSettings
 import com.pbp.app.ui.common.RoomBackdrop
 import com.pbp.app.ui.common.formatTime
 import com.pbp.app.ui.theme.GowunBatang
@@ -261,8 +262,8 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     // ── 시나리오 뷰어 (V2) ───────────────────────────────
 
     /**
-     * 창의 내용 상태. **열림 여부는 여기 없다** — 그건 화면의 rememberSaveable이다.
-     * 창을 닫았다 열어도 읽던 문장이 그대로여야 하므로 둘을 갈라 둔다.
+     * 패널의 내용 상태. **열림 여부는 여기 없다** — 그건 화면의 rememberSaveable이다.
+     * 패널을 닫았다 열어도 읽던 문장이 그대로여야 하므로 둘을 갈라 둔다.
      */
     sealed interface ScenarioState {
         /** 첫 화면 — 링크 입력 */
@@ -270,25 +271,41 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         data object Loading : ScenarioState
 
         /**
-         * @param sentences **원문 문장** 목록. 표시 단위를 바꿔도 이건 그대로 두고
-         *   [pages]만 다시 짓는다 — 같은 문서를 두 번 받아 올 이유가 없다.
-         * @param index 화면 단위(=[pages]) 기준 위치
+         * @param text 원문 — 문단 보기로 바꿀 때 여기서 다시 나눈다(문서 재요청 없음)
+         * @param index **문장 번호**. 문단 보기에서도 문장 기준을 유지한다 —
+         *   보기 방식을 바꿔도 읽던 자리가 그대로여야 하고, "읽은 문장까지 진하게"가
+         *   문단 안에서 어디까지 읽었는지 알아야 하기 때문이다.
+         * @param paragraphStarts 각 문단이 시작하는 문장 번호. 불러올 때 한 번만 센다 —
+         *   이동할 때마다 다시 세면 큰 문서에서 매번 전체를 훑는다 (K4)
          * @param truncated 문서가 상한을 넘어 뒷부분이 잘렸는가 (K3)
          */
         data class Viewing(
             val title: String?,
             val url: String,
+            val text: String,
             val sentences: List<String>,
+            val paragraphs: List<String>,
+            val paragraphStarts: List<Int>,
             val index: Int,
-            val linesPerView: Int,
+            val paragraphMode: Boolean,
             val truncated: Boolean = false,
         ) : ScenarioState {
-            /**
-             * 화면 단위로 묶은 본문. **저장 필드다** — get()으로 두면 본문·복사 버튼·
-             * 이동 행이 읽을 때마다 문서 전체를 다시 묶는다(1MB 문서면 리컴포지션마다
-             * 그만큼 할당). 묶음이 달라지는 건 로드와 설정 변경 때뿐이다 (K4).
-             */
-            val pages: List<String> = ScenarioDoc.group(sentences, linesPerView)
+
+            /** 지금 문장이 든 문단 번호 */
+            val paragraphIndex: Int
+                get() = paragraphStarts.indexOfLast { it <= index }.coerceAtLeast(0)
+
+            /** 화면에 띄우는 덩어리 — 문장 모드면 문장, 문단 모드면 그 문장이 든 문단 */
+            val displayText: String
+                get() = if (paragraphMode) paragraphs.getOrNull(paragraphIndex).orEmpty()
+                else sentences.getOrNull(index).orEmpty()
+
+            /** ⧉가 넣는 것은 문단 모드에서도 **문장** 하나다 (지시서 V4) */
+            val currentSentence: String get() = sentences.getOrNull(index).orEmpty()
+
+            /** 진행 표시 — 보기 단위를 따른다 */
+            val position: Int get() = if (paragraphMode) paragraphIndex + 1 else index + 1
+            val total: Int get() = if (paragraphMode) paragraphs.size else sentences.size
         }
 
         data class Failed(val error: ScenarioFetcher.Result.Error) : ScenarioState
@@ -296,55 +313,88 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     val scenario = kotlinx.coroutines.flow.MutableStateFlow<ScenarioState>(ScenarioState.AskLink)
 
-    /**
-     * 표시 단위 — 문서를 바꿔도 유지한다. 읽는 습관이지 문서의 성질이 아니다.
-     * 문서를 열기 전에도 설정 창이 고른 값을 보여 줘야 해서 상태와 따로 둔다.
-     */
-    val scenarioLines = kotlinx.coroutines.flow.MutableStateFlow(1)
-
     fun loadScenario(url: String) = viewModelScope.launch {
         scenario.value = ScenarioState.Loading
         val result = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
         scenario.value = when (result) {
-            is ScenarioFetcher.Result.Ok -> ScenarioState.Viewing(
-                title = result.title,
-                url = url.trim(),
-                sentences = result.sentences,
-                index = 0,
-                linesPerView = scenarioLines.value,
-                truncated = result.truncated,
-            )
+            is ScenarioFetcher.Result.Ok -> {
+                val paragraphs = ScenarioDoc.splitParagraphs(result.text)
+                var counted = 0
+                val starts = paragraphs.map { paragraph ->
+                    counted.also { counted += ScenarioDoc.splitSentences(paragraph).size }
+                }
+                ScenarioState.Viewing(
+                    title = result.title,
+                    url = url.trim(),
+                    text = result.text,
+                    sentences = result.sentences,
+                    paragraphs = paragraphs,
+                    paragraphStarts = starts,
+                    index = 0,
+                    paragraphMode = ScenarioSettings.paragraphMode,
+                    truncated = result.truncated,
+                )
+            }
 
             is ScenarioFetcher.Result.Error -> ScenarioState.Failed(result)
         }
     }
 
-    /** 문장 이동 — 양 끝에서는 제자리 */
+    /**
+     * 이동 — 양 끝에서는 제자리.
+     *
+     * 문단 보기에서 한 걸음의 크기가 설정에 따라 다르다: "읽은 문장까지 진하게"가
+     * 켜져 있으면 문단을 띄워 둔 채 **한 문장씩** 밝혀 가고, 꺼져 있으면 문단째로
+     * 넘긴다. 진하게가 문단 안의 진행을 보여 주는 장치라 걸음도 거기에 맞춘다.
+     */
     fun scenarioStep(delta: Int) {
         val current = scenario.value as? ScenarioState.Viewing ?: return
+        val next = if (current.paragraphMode && !ScenarioSettings.boldRead) {
+            val paragraph = (current.paragraphIndex + delta)
+                .coerceIn(0, current.paragraphs.lastIndex.coerceAtLeast(0))
+            current.paragraphStarts.getOrElse(paragraph) { current.index }
+        } else {
+            current.index + delta
+        }
         scenario.value = current.copy(
-            index = (current.index + delta).coerceIn(0, current.pages.lastIndex),
+            index = next.coerceIn(0, current.sentences.lastIndex.coerceAtLeast(0)),
         )
+    }
+
+    /** "다른 문서로 바꾸기" — 패널을 닫는 것으로는 초기화되지 않는다 */
+    fun scenarioReset() {
+        scenario.value = ScenarioState.AskLink
+    }
+
+    /** "처음부터 읽기" — 문서는 그대로 두고 자리만 맨 앞으로 */
+    fun scenarioRestart() {
+        val current = scenario.value as? ScenarioState.Viewing ?: return
+        scenario.value = current.copy(index = 0)
     }
 
     /**
-     * 표시 단위 변경 — **읽던 자리를 지킨다**. 묶음 크기가 바뀌면 같은 번호가
-     * 다른 문장을 가리키므로, 문장 기준으로 환산해 그 문장이 든 묶음으로 옮긴다.
+     * ⧉ — 지금 보고 있는 **문장**을 입력창에 넣어 달라는 신호.
+     *
+     * 입력값을 화면으로 끌어올리지 않고 흐름만 흘려보낸다: 입력 상태가 위로 가면
+     * 글자 하나마다 채팅 화면 전체가 리컴포즈된다. 버퍼 1칸이면 충분하다 —
+     * 밀린 삽입을 쌓아 둘 이유가 없다.
      */
-    fun setScenarioLines(lines: Int) {
-        val next = lines.coerceIn(ScenarioDoc.VIEW_LINES)
-        scenarioLines.value = next
+    val scenarioInsert = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+    fun scenarioInsertCurrent() {
         val current = scenario.value as? ScenarioState.Viewing ?: return
-        val sentenceAt = current.index * current.linesPerView
-        val moved = current.copy(linesPerView = next, index = 0)
-        scenario.value = moved.copy(
-            index = (sentenceAt / next).coerceIn(0, moved.pages.lastIndex.coerceAtLeast(0)),
-        )
+        scenarioInsert.tryEmit(current.currentSentence)
     }
 
-    /** "다른 문서" — 창을 닫는 것으로는 초기화되지 않는다 */
-    fun scenarioReset() {
-        scenario.value = ScenarioState.AskLink
+    /**
+     * 보기 단위 전환 — **읽던 자리는 저절로 지켜진다**. 번호를 문장 기준 하나로
+     * 통일해 두었기 때문에 환산할 것이 없다: 문단 보기는 "그 문장이 든 문단"을
+     * 띄우는 것뿐이다.
+     */
+    fun setScenarioParagraphMode(context: android.content.Context, on: Boolean) {
+        ScenarioSettings.setParagraphMode(context, on)
+        val current = scenario.value as? ScenarioState.Viewing ?: return
+        scenario.value = current.copy(paragraphMode = on)
     }
 }
 
@@ -361,7 +411,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val totalCount by vm.totalCount.collectAsState()
     val profiles by vm.profiles.collectAsState()
     val scenarioState by vm.scenario.collectAsState()
-    val scenarioLines by vm.scenarioLines.collectAsState()
     // 백그라운드에서는 구독을 끊는다 — 리스너가 살아 있으면 상대 영수증마다 read가 붙는다 (R5)
     val peerState by vm.peerState.collectAsStateWithLifecycle()
     val peerReadAt = peerState.readAt
@@ -395,8 +444,6 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     // 시나리오 뷰어 (V4) — 열림 여부만 화면에, 읽던 문장은 ViewModel에.
     // 닫았다 열면 그대로여야 하므로 둘을 갈라 둔다
     var scenarioOpen by rememberSaveable { mutableStateOf(false) }
-    // 시나리오에서 입력창으로 건네는 글 — 넣고 나면 InputZone이 비운다
-    var scenarioDraft by remember { mutableStateOf<String?>(null) }
     var needValueFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var needValueName by rememberSaveable { mutableStateOf("") }
     // 캡처 범위 — (시작 조각 키, 끝 조각 키). 끝이 null이면 아직 고르는 중.
@@ -709,14 +756,14 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 // 읽던 자리에서 재개). 캡처 중에는 숨긴다 — 캡처 이미지에 찍히면 안 되고
                 // 탭 히트테스트와도 부딪힌다 (A1과 같은 계열)
                 if (scenarioOpen && gmActive && !capturing) {
-                    ScenarioFloat(
+                    ScenarioPanel(
                         state = scenarioState,
                         onSubmit = vm::loadScenario,
                         onStep = vm::scenarioStep,
-                        lines = scenarioLines,
-                        onLinesChange = vm::setScenarioLines,
+                        onInsert = vm::scenarioInsertCurrent,
                         onReset = vm::scenarioReset,
-                        onCopyToInput = { scenarioDraft = it },
+                        onRestart = vm::scenarioRestart,
+                        onParagraphMode = { vm.setScenarioParagraphMode(context, it) },
                         onClose = { scenarioOpen = false },
                         onFailureAck = vm::scenarioReset,
                     )
@@ -781,8 +828,8 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     gmActive = gmActive,
                     onJudgeRequest = { judgeSheetOpen = true },
                     onScenarioViewer = { scenarioOpen = true },
-                    insertText = scenarioDraft,
-                    onInsertConsumed = { scenarioDraft = null },
+                    scenarioOpen = scenarioOpen && gmActive,
+                    insertFlow = vm.scenarioInsert,
                     onTyping = vm::notifyTyping,
                     onTypingStopped = vm::notifyTypingStopped,
                     rule = room?.rule ?: com.pbp.shared.Rules.COC7,

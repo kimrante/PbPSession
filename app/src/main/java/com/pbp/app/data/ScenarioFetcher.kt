@@ -29,6 +29,8 @@ object ScenarioFetcher {
          */
         data class Ok(
             val title: String?,
+            /** 원문 — 문단 보기로 바꿀 때 다시 나누려면 필요하다 (문서를 다시 받지 않는다) */
+            val text: String,
             val sentences: List<String>,
             val truncated: Boolean = false,
         ) : Result
@@ -97,7 +99,7 @@ object ScenarioFetcher {
         if (text.trimStart().startsWith("<")) return Result.Error.NO_ACCESS
         val sentences = ScenarioDoc.splitSentences(text)
         return if (sentences.isEmpty()) Result.Error.EMPTY
-        else Result.Ok(title, sentences, truncated)
+        else Result.Ok(title, text, sentences, truncated)
     }
 
     /**

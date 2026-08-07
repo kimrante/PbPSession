@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
         com.pbp.app.ui.theme.AppFonts.load(this)
         com.pbp.app.data.OwnerProfile.load(this)
         com.pbp.app.data.CaptureSettings.load(this)
+        com.pbp.app.data.ScenarioSettings.load(this)
         com.pbp.app.data.RecentColors.load(this)
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED

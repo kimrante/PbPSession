@@ -174,26 +174,49 @@ class ScenarioDocTest {
         assertNull(ScenarioDoc.titleFromDisposition("attachment; filename=\".txt\""))
     }
 
-    // ── 표시 단위 묶기 ───────────────────────────────────
+    // ── 문단 나누기 ─────────────────────────────────────
+
+    private val doc = "첫 문단 첫 문장. 첫 문단 둘째 문장." + "\n" +
+        "접힌 줄." + "\n\n" +
+        "둘째 문단." + "\n\n\n" +
+        "셋째 문단 하나. 셋째 문단 둘."
 
     @Test
-    fun `문장을 정한 수만큼 묶고 마지막 묶음은 남는 만큼만`() {
-        val five = listOf("가.", "나.", "다.", "라.", "마.")
-        assertEquals(five, ScenarioDoc.group(five, 1))
-        assertEquals(listOf("가.\n나.", "다.\n라.", "마."), ScenarioDoc.group(five, 2))
-        assertEquals(listOf("가.\n나.\n다.", "라.\n마."), ScenarioDoc.group(five, 3))
+    fun `빈 줄이 문단 경계 — 접힌 줄은 한 문단으로 잇는다`() {
+        assertEquals(
+            listOf("첫 문단 첫 문장. 첫 문단 둘째 문장." + "\n" + "접힌 줄.", "둘째 문단.", "셋째 문단 하나. 셋째 문단 둘."),
+            ScenarioDoc.splitParagraphs(doc),
+        )
     }
 
     @Test
-    fun `범위를 벗어난 단위는 끌어당긴다 — 0으로 묶으면 무한히 나뉜다`() {
-        val three = listOf("가.", "나.", "다.")
-        assertEquals(ScenarioDoc.group(three, 1), ScenarioDoc.group(three, 0))
-        assertEquals(ScenarioDoc.group(three, 5), ScenarioDoc.group(three, 99))
+    fun `빈 줄이 몇 개든 경계는 하나 — 빈 문단을 만들지 않는다`() {
+        assertEquals(listOf("가.", "나."), ScenarioDoc.splitParagraphs("가." + "\n\n\n\n" + "나."))
+        assertEquals(emptyList<String>(), ScenarioDoc.splitParagraphs("   \n  \n"))
     }
 
     @Test
-    fun `빈 목록은 빈 묶음`() {
-        assertEquals(emptyList<String>(), ScenarioDoc.group(emptyList(), 3))
+    fun `문장 번호로 그 문장이 든 문단을 찾는다 — 보기 전환에서 자리를 지킨다`() {
+        // 문장: 0,1,2 = 첫 문단 / 3 = 둘째 / 4,5 = 셋째
+        assertEquals(0, ScenarioDoc.paragraphIndexOf(doc, 0))
+        assertEquals(0, ScenarioDoc.paragraphIndexOf(doc, 2))
+        assertEquals(1, ScenarioDoc.paragraphIndexOf(doc, 3))
+        assertEquals(2, ScenarioDoc.paragraphIndexOf(doc, 5))
+    }
+
+    @Test
+    fun `범위를 넘는 문장 번호는 마지막 문단으로`() {
+        assertEquals(2, ScenarioDoc.paragraphIndexOf(doc, 99))
+        assertEquals(0, ScenarioDoc.paragraphIndexOf(doc, -1))
+    }
+
+    @Test
+    fun `문단 번호는 그 문단의 첫 문장으로 되돌아간다 — 왕복해도 같은 문단`() {
+        for (sentence in 0..5) {
+            val paragraph = ScenarioDoc.paragraphIndexOf(doc, sentence)
+            val back = ScenarioDoc.sentenceIndexOfParagraph(doc, paragraph)
+            assertEquals(paragraph, ScenarioDoc.paragraphIndexOf(doc, back))
+        }
     }
 
     @Test

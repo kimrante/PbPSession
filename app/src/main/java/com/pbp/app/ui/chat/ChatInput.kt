@@ -34,6 +34,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
@@ -96,31 +98,37 @@ internal fun InputZone(
     val tokens = Pbp.colors
     // 입력 상태는 여기(하위)에서만 — 키 입력마다 화면 전체가 리컴포즈되지 않도록.
     // rememberSaveable: 화면 회전에도 입력을 보존 (P2-4)
-    var input by rememberSaveable { mutableStateOf("") }
+    // 값이 아니라 TextFieldValue다 — 시나리오에서 문장을 붙여 넣을 때 **커서를 끝으로**
+    // 보내야 하는데, 문자열만 들고 있으면 커서 위치를 코드가 정할 수 없다
+    var input by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(""))
+    }
     var oocOn by rememberSaveable { mutableStateOf(false) }
     // 자동완성 채팅 팔레트 — 활성 캐릭터의 값 이름을 부분 입력하면 판정 매크로 추천
     val activeStats = remember(profiles, activeId) {
         profiles.find { it.id == activeId }
             ?.let { com.pbp.shared.ProfileStats.decode(it.stats) } ?: emptyList()
     }
-    val suggestions = remember(input, activeStats) {
-        com.pbp.shared.ProfileStats.paletteSuggestions(input, activeStats)
+    val suggestions = remember(input.text, activeStats) {
+        com.pbp.shared.ProfileStats.paletteSuggestions(input.text, activeStats)
     }
     LaunchedEffect(insertFlow) {
         insertFlow?.collect { incoming ->
             // 쓰던 글이 있으면 지우지 않고 뒤에 잇는다 — 남의 글을 삼키면 안 된다
-            input = if (input.isBlank()) incoming else "$input $incoming"
+            val joined = if (input.text.isBlank()) incoming else "${input.text} $incoming"
+            // 커서를 끝으로 — 붙여 넣고 바로 이어 쓸 수 있어야 한다
+            input = TextFieldValue(joined, selection = TextRange(joined.length))
             onTyping()
         }
     }
     val onOocToggle = { oocOn = !oocOn }
-    val onInputChange = { text: String ->
-        val changed = text != input
-        input = text
+    val onInputChange = { value: TextFieldValue ->
+        val changed = value.text != input.text
+        input = value
         // 입력 이벤트가 실제로 있을 때만 알린다. 비우면 즉시 끈다 —
         // 포커스만 있거나 써 둔 글을 그대로 두는 상태는 입력 중이 아니다.
         if (changed) {
-            if (text.isBlank()) onTypingStopped() else onTyping()
+            if (value.text.isBlank()) onTypingStopped() else onTyping()
         }
     }
     Column(
@@ -170,7 +178,7 @@ internal fun InputZone(
                                 // 예: "1d100<={LUK} LUK 판정" — 무엇을 판정했는지 함께 남긴다
                                 val command = com.pbp.shared.Rules.judgeCommand(rule, name)
                                 onSend("$command $name 판정", false)
-                                input = ""
+                                input = TextFieldValue("")
                             }
                             .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
                     )
@@ -204,11 +212,11 @@ internal fun InputZone(
                     .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
             )
             }
-            val canSend = input.isNotBlank() && activeId != null
+            val canSend = input.text.isNotBlank() && activeId != null
             val doSend = {
                 if (canSend) {
-                    onSend(input, oocOn)
-                    input = ""
+                    onSend(input.text, oocOn)
+                    input = TextFieldValue("")
                 }
             }
             TextField(

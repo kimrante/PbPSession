@@ -64,6 +64,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -519,6 +520,8 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
                 horizontal = DesktopDimens.gap3 - border + 1.dp,
                 vertical = DesktopDimens.gap3 - border + 1.dp,
             ),
+            // 아이콘까지 한 덩어리로 가운데 (모바일과 같은 규칙)
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 상태는 오른쪽 버튼 하나로 충분하다 — 문구로 한 번 더 말하지 않는다
@@ -527,7 +530,10 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Tokens.Ink,
-                modifier = Modifier.alpha(if (state == JudgeState.Done) .55f else 1f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .alpha(if (state == JudgeState.Done) .55f else 1f),
             )
             Spacer(Modifier.width(DesktopDimens.gap3))
             Box(

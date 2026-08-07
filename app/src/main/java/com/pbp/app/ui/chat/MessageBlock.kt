@@ -39,6 +39,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -712,6 +713,9 @@ private fun JudgeCard(
                 horizontal = PbpDimens.gap3 - border + 1.dp,
                 vertical = PbpDimens.gap3 - border + 1.dp,
             ),
+            // 카드가 폭을 다 쓰게 되는 긴 이름에서도 문구와 아이콘이 한 덩어리로
+            // 가운데 남는다 — 내용이 짧을 때만 가운데인 것은 정렬이 아니다
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 상태는 오른쪽 버튼 하나로 충분하다 — 문구로 한 번 더 말하지 않는다
@@ -720,7 +724,11 @@ private fun JudgeCard(
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = tokens.ink,
-                modifier = Modifier.alpha(if (state == JudgeState.Done) .55f else 1f),
+                // 두 줄로 접히는 이름에서도 줄마다 가운데
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .alpha(if (state == JudgeState.Done) .55f else 1f),
             )
             Spacer(Modifier.width(PbpDimens.gap3))
             Box(

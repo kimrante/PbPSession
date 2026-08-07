@@ -340,16 +340,10 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         }
     }
 
-    /**
-     * 이동 — 양 끝에서는 제자리.
-     *
-     * 문단 보기에서 한 걸음의 크기가 설정에 따라 다르다: "읽은 문장까지 진하게"가
-     * 켜져 있으면 문단을 띄워 둔 채 **한 문장씩** 밝혀 가고, 꺼져 있으면 문단째로
-     * 넘긴다. 진하게가 문단 안의 진행을 보여 주는 장치라 걸음도 거기에 맞춘다.
-     */
+    /** 이동 — 지금 보기 단위(문장/문단)로 한 걸음. 양 끝에서는 제자리 */
     fun scenarioStep(delta: Int) {
         val current = scenario.value as? ScenarioState.Viewing ?: return
-        val next = if (current.paragraphMode && !ScenarioSettings.boldRead) {
+        val next = if (current.paragraphMode) {
             val paragraph = (current.paragraphIndex + delta)
                 .coerceIn(0, current.paragraphs.lastIndex.coerceAtLeast(0))
             current.paragraphStarts.getOrElse(paragraph) { current.index }

@@ -2,6 +2,7 @@ package com.pbp.shared
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -217,6 +218,33 @@ class ScenarioDocTest {
             val back = ScenarioDoc.sentenceIndexOfParagraph(doc, paragraph)
             assertEquals(paragraph, ScenarioDoc.paragraphIndexOf(doc, back))
         }
+    }
+
+    @Test
+    fun `여덟 문장이 넘는 문단은 여덟 문장씩 나눈다 — 긴 문단이 화면 밖으로 넘치지 않게`() {
+        val long = (1..20).joinToString(separator = " ") { "문장 $it." }
+        val units = ScenarioDoc.splitParagraphs(long)
+        assertEquals(3, units.size) // 8 + 8 + 4
+        units.forEach {
+            assertTrue(it, ScenarioDoc.splitSentences(it).size <= ScenarioDoc.MAX_SENTENCES_PER_UNIT)
+        }
+        // 나눠도 문장은 하나도 잃지 않는다
+        assertEquals(
+            ScenarioDoc.splitSentences(long),
+            units.flatMap { ScenarioDoc.splitSentences(it) },
+        )
+    }
+
+    @Test
+    fun `여덟 문장 이하는 그대로 한 덩어리`() {
+        val short = (1..8).joinToString(separator = " ") { "문장 $it." }
+        assertEquals(1, ScenarioDoc.splitParagraphs(short).size)
+    }
+
+    @Test
+    fun `자를 경계가 없는 한 덩어리는 그대로 둔다`() {
+        val single = "종결부호가 하나도 없는 아주 긴 줄 " + "가".repeat(500)
+        assertEquals(listOf(single.trim()), ScenarioDoc.splitParagraphs(single))
     }
 
     @Test

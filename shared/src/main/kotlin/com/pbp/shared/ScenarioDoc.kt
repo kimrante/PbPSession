@@ -135,17 +135,34 @@ object ScenarioDoc {
     }
 
     /**
+     * 한 화면에 담을 문장 수의 상한. 이보다 긴 문단은 여기서 나눈다 —
+     * 화면 높이에 기대면 긴 문단의 뒷부분이 잘려 보이지 않는다.
+     */
+    const val MAX_SENTENCES_PER_UNIT = 8
+
+    /**
      * 평문 → 문단 목록. **빈 줄 하나 이상**이 문단 경계다 (설정의 "문단 단위로 보기").
      *
      * 문장 분리와 달리 줄을 합친다 — 시나리오 문서는 한 문단을 여러 줄로 접어 쓰는
      * 일이 많아서, 줄마다 끊으면 문단이라고 부를 수 없는 조각이 된다.
+     *
+     * 다만 [MAX_SENTENCES_PER_UNIT]문장을 넘는 문단은 **문장 경계에서 더 잘게 나눈다**.
+     * 긴 문단을 한 덩어리로 두면 화면 밖으로 넘쳐 뒷부분을 읽을 수 없었다.
      */
     fun splitParagraphs(text: String): List<String> {
         val out = mutableListOf<String>()
         val buffer = StringBuilder()
         fun flush() {
-            buffer.toString().trim().takeIf { it.isNotEmpty() }?.let { out += it }
+            val paragraph = buffer.toString().trim()
             buffer.setLength(0)
+            if (paragraph.isEmpty()) return
+            val sentences = splitSentences(paragraph)
+            // 문장으로 나뉘지 않는 한 덩어리(문장 하나가 통째로 길다)는 그대로 둔다 —
+            // 더 자를 경계가 없다
+            if (sentences.size <= MAX_SENTENCES_PER_UNIT) out += paragraph
+            else sentences.chunked(MAX_SENTENCES_PER_UNIT) { chunk ->
+                out += chunk.joinToString(separator = " ")
+            }
         }
         for (line in text.lines()) {
             if (line.isBlank()) flush() else {

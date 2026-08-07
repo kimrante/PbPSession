@@ -35,21 +35,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pbp.app.data.ScenarioFetcher
-import com.pbp.app.data.ScenarioSettings
 import com.pbp.app.ui.common.PbpDialogButton
 import com.pbp.app.ui.common.PbpDialogTitle
 import com.pbp.app.ui.theme.GowunBatang
@@ -109,7 +103,9 @@ internal fun ScenarioPanel(
             }
             HeaderIcon("✕", "시나리오 패널 닫기", onClose)
         }
-        Spacer(Modifier.height(PbpDimens.gap3))
+        // 본문 위아래를 gap2로 맞춘다 (상하 대칭) — gap3 + 본문 자체 여백까지
+        // 겹쳐 한 문장짜리 본문에 견줘 위아래가 지나치게 두꺼웠다
+        Spacer(Modifier.height(PbpDimens.gap2))
 
         when (state) {
             is ChatViewModel.ScenarioState.Viewing -> ViewingBody(state)
@@ -124,7 +120,7 @@ internal fun ScenarioPanel(
         }
 
         if (viewing != null) {
-            Spacer(Modifier.height(PbpDimens.gap3))
+            Spacer(Modifier.height(PbpDimens.gap2))
             NavRow(viewing, onStep)
         }
     }
@@ -237,16 +233,16 @@ private fun ViewingBody(state: ChatViewModel.ScenarioState.Viewing) {
                 Modifier
                     .fillMaxWidth()
                     .heightIn(max = maxBody)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = PbpDimens.gap2),
+                    .verticalScroll(rememberScrollState()),
             ) {
                 // 시나리오 원문 그대로 — 마크업으로 해석하지 않는다.
                 // 서체·행간은 GM 서술과 같다: 읽는 글이지 대화가 아니다
                 Text(
-                    bodyText(state, tokens.ink, tokens.inkDim),
+                    state.displayText,
                     fontFamily = GowunBatang,
                     fontSize = 13.sp,
                     lineHeight = 24.sp,
+                    color = tokens.ink,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -261,35 +257,6 @@ private fun ViewingBody(state: ChatViewModel.ScenarioState.Viewing) {
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
-    }
-}
-
-/**
- * 화면에 띄울 본문.
- *
- * 문단 보기 + "읽은 문장까지 진하게"면 문단을 통째로 띄우되 **현재 문장까지만
- * 진하게** 칠한다 — 문단을 눈앞에 두고 한 문장씩 밝혀 가며 읽는 방식이다.
- * 그 밖에는 덩어리 하나를 그대로 진하게 띄운다.
- */
-private fun bodyText(
-    state: ChatViewModel.ScenarioState.Viewing,
-    ink: Color,
-    inkDim: Color,
-): AnnotatedString {
-    val body = state.displayText
-    if (!state.paragraphMode || !ScenarioSettings.boldRead) {
-        return AnnotatedString(body, SpanStyle(color = ink))
-    }
-    // 문단 안에서 지금 문장이 몇 번째인지 — 거기까지가 "읽은" 부분이다
-    val readCount = state.index - state.paragraphStarts.getOrElse(state.paragraphIndex) { 0 } + 1
-    val sentences = com.pbp.shared.ScenarioDoc.splitSentences(body)
-    return buildAnnotatedString {
-        sentences.forEachIndexed { index, sentence ->
-            withStyle(SpanStyle(color = if (index < readCount) ink else inkDim)) {
-                append(sentence)
-            }
-            if (index != sentences.lastIndex) append(" ")
         }
     }
 }
@@ -354,7 +321,6 @@ private fun ScenarioSettingsDialog(
     onDismiss: () -> Unit,
 ) {
     val tokens = Pbp.colors
-    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { PbpDialogTitle("시나리오 뷰어 설정") },
@@ -393,15 +359,8 @@ private fun ScenarioSettingsDialog(
                 Spacer(Modifier.height(PbpDimens.gap2))
                 SectionLabel("보기")
                 ScenarioToggle(
-                    "읽은 문장까지 진하게",
-                    checked = ScenarioSettings.boldRead,
-                    // 문장 하나만 띄우는 모드에는 진하게 할 "앞부분"이 없다
-                    enabled = viewing.paragraphMode,
-                ) { ScenarioSettings.setBoldRead(context, !ScenarioSettings.boldRead) }
-                ScenarioToggle(
                     "문단 단위로 보기",
                     checked = viewing.paragraphMode,
-                    enabled = true,
                 ) { onParagraphMode(!viewing.paragraphMode) }
             }
         },
@@ -431,18 +390,13 @@ private fun TapRow(label: String, onTap: () -> Unit) {
 
 /** 캡처 설정 토글과 같은 규격(34×20) — 설정 창끼리 부품이 갈라지지 않게 */
 @Composable
-private fun ScenarioToggle(
-    label: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onToggle: () -> Unit,
-) {
+private fun ScenarioToggle(label: String, checked: Boolean, onToggle: () -> Unit) {
     val tokens = Pbp.colors
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(999.dp))
-            .clickable(enabled = enabled, onClick = onToggle)
+            .clickable(onClick = onToggle)
             .padding(vertical = PbpDimens.gap2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -450,13 +404,7 @@ private fun ScenarioToggle(
             Modifier
                 .size(width = 34.dp, height = 20.dp)
                 .clip(RoundedCornerShape(999.dp))
-                .background(
-                    when {
-                        !enabled -> tokens.inkFaint
-                        checked -> tokens.signature
-                        else -> tokens.ink.copy(alpha = .16f)
-                    }
-                ),
+                .background(if (checked) tokens.signature else tokens.ink.copy(alpha = .16f)),
             contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart,
         ) {
             Box(
@@ -468,12 +416,7 @@ private fun ScenarioToggle(
             )
         }
         Spacer(Modifier.width(PbpDimens.gap2))
-        Text(
-            label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (enabled) tokens.ink else tokens.inkDisabled,
-        )
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tokens.ink)
     }
 }
 

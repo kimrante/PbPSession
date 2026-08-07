@@ -99,6 +99,7 @@ body{
 .f-foot{display:flex;align-items:center;gap:var(--sp-2)}
 .f-count{flex:1;text-align:center;font-size:10px;color:var(--ink-dim)}
 .f-nav{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--ink);flex-shrink:0}
+.f-nav.sm{width:32px;height:32px;font-size:13px} /* 시각 32 + 히트 40 (§6 패턴) */
 
 /* ── 입력 영역 ── */
 .inputzone{flex-shrink:0;background:var(--chatbar);padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2)}
@@ -109,7 +110,7 @@ body{
 .strip .on{color:var(--signature-ink);font-weight:700}
 .strip .gm .a{font-family:'Gowun Batang',serif;font-size:12px;font-weight:700;color:var(--signature-ink)}
 .chiprow{display:flex;gap:var(--sp-2)}
-.chip{font-size:11px;font-weight:700;color:var(--signature-ink);background:rgba(255,208,92,.14);border:1px solid rgba(255,208,92,.4);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3)}
+.chip{font-size:11px;font-weight:700;color:var(--signature-ink);background:rgba(255,208,92,.14);border:1px solid rgba(255,208,92,.4);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3);white-space:nowrap}
 .chip.hot{background:rgba(255,208,92,.32);border-color:var(--postit-deep)}
 .inputrow{display:flex;gap:var(--sp-2);align-items:center}
 .ooc{display:flex;align-items:center;gap:var(--sp-2);border:1px solid var(--line);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3);font-size:10px;font-weight:700;color:var(--ink-dim);background:rgba(20,25,32,.06)}
@@ -248,11 +249,6 @@ body{
         </div>
       </div>
       <div class="inputzone">
-        <div class="strip">
-          <div class="p on"><div class="a">🦊</div>세이시로</div>
-          <div class="p"><div class="a">🕯️</div>코우</div>
-          <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
-        </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
           <div class="field">**굵게** · (등대)[等臺] · 1d100</div>
@@ -357,21 +353,15 @@ body{
           <div class="f-x">✕</div>
         </div>
         <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다 — 마지막 장에는 "빛이 두 번 꺼졌다"고만 적혀 있다.</div>
-        <div class="f-foot">
-          <div class="f-count">17 / 128</div>
-          <div class="f-nav">‹</div>
-          <div class="f-nav">›</div>
-        </div>
       </div>
       <div class="inputzone">
-        <div class="strip">
-          <div class="p on gm"><div class="a">GM</div>서술자</div>
-          <div class="p"><div class="a">🦊</div>세이시로</div>
-          <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
-        </div>
-        <div class="chiprow">
+        <div class="chiprow" style="align-items:center">
           <div class="chip hot">📖 시나리오</div>
           <div class="chip">🎲 판정</div>
+          <div style="flex:1"></div>
+          <div class="f-count" style="flex:none;white-space:nowrap">17/128</div>
+          <div class="f-nav sm">‹</div>
+          <div class="f-nav sm">›</div>
         </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
@@ -459,7 +449,9 @@ body{
       <h4>② 채팅방 상단 바</h4>
       <p>좌 ←·? / 우 ⚙·<b>현재 프로필</b>(avatarBar 32 + 옐로 링 2) —
       내보내기 ↓는 방 설정 '공유·기타' 행으로 이동(v0.12.0). 타이틀 묶음
-      정중앙 <code>titleInset 96</code>. 배경 이미지 위 <code>barScrim</code>.</p>
+      정중앙 <code>titleInset 96</code>. 배경 이미지 위 <code>barScrim</code>.
+      입력줄 프로필 스트립은 제거(v0.16) — 전환은 상단 바 아바타 →
+      사이드바 단일 진입점.</p>
     </div>
 
     <div class="note">
@@ -473,10 +465,12 @@ body{
     <div class="note">
       <h4>④ 시나리오 뷰어 (GM 전용)</h4>
       <p>입력 영역 위 <b>도킹 패널</b> — chatBarBg 한 면, 위 line 1dp.
-      칩 행: <code>📖 시나리오</code>(첫 번째, 열림 시 진하게) ·
-      <code>🎲 판정</code>. 헤더 = 📖 문서 제목 | ⧉(현재 문장을 입력창에
-      삽입) | ⚙(설정) | ✕. 문장 = 명조 13sp 행간 1.85 센터. 하단 =
-      진행 표시 + ‹ › 40 pill. 상세 사양은 지시서 V3~V5.</p>
+      패널은 <b>헤더 + 문장 두 줄뿐</b>: 헤더 = 📖 문서 제목 | ⧉(현재
+      문장을 입력창에 삽입) | ⚙(설정) | ✕ · 문장 = 명조 13sp 행간 1.85 센터.
+      <b>진행 표시(17/128)와 ‹ ›는 칩 행 우측으로 이동</b>(컴팩트 개정) —
+      칩 행: <code>📖 시나리오</code>(열림 시 진하게) · <code>🎲 판정</code> ·
+      우측 정렬 진행+‹ ›(시각 32 pill, 히트 40 — §6 패턴). 칩 행 높이(40)
+      안이라 패널이 하단 행 한 줄만큼 짧아진다. 진행·‹ ›는 패널이 열려 있을 때만 노출.</p>
     </div>
 
     <div class="note">

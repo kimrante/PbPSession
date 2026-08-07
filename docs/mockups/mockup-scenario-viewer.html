@@ -164,8 +164,8 @@ body{
           <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
         </div>
         <div class="chiprow">
-          <div class="chip">＋ 판정 요청</div>
           <div class="chip hot">📖 시나리오</div>
+          <div class="chip">＋ 판정 요청</div>
         </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
@@ -208,7 +208,7 @@ body{
       <!-- 시나리오 패널: Viewing -->
       <div class="dock">
         <div class="f-head">
-          <div class="f-label">📖 시나리오</div>
+          <div class="f-label">📖 등대의 일지 — 1장</div>
           <div class="f-x">✕</div>
         </div>
         <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다 — 마지막 장에는 "빛이 두 번 꺼졌다"고만 적혀 있다.</div>
@@ -227,8 +227,8 @@ body{
           <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
         </div>
         <div class="chiprow">
-          <div class="chip">＋ 판정 요청</div>
           <div class="chip hot">📖 시나리오</div>
+          <div class="chip">＋ 판정 요청</div>
         </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
@@ -306,10 +306,21 @@ body{
     </div>
 
     <div class="note y">
-      <h4>① 진입 — 📖 시나리오 칩</h4>
-      <p>GM 프로필 활성 시 판정 요청 칩 옆(<code>spacedBy(gap2)</code>).
-      패널이 열려 있는 동안은 칩을 진하게(<code>signature 32%</code> 면 +
-      <code>signatureDeep</code> 테두리) — 열림 상태 표시.</p>
+      <h4>① 진입 — 📖 시나리오 칩 (판정 요청 왼쪽)</h4>
+      <p>GM 프로필 활성 시 칩 행의 <b>첫 번째</b> — 시나리오가 판정 요청보다
+      왼쪽(<code>spacedBy(gap2)</code>). 패널이 열려 있는 동안은 칩을
+      진하게(<code>signature 32%</code> 면 + <code>signatureDeep</code>
+      테두리) — 열림 상태 표시.</p>
+    </div>
+
+    <div class="note y">
+      <h4>헤더에 문서 제목 표시</h4>
+      <p>문서를 불러오면 헤더 라벨이 <code>📖 시나리오</code> →
+      <code>📖 {문서 제목}</code>으로 바뀐다(11sp bold inkDim, 1줄
+      ellipsis). 제목 소스: export 응답의 <code>Content-Disposition:
+      filename="제목.txt"</code> 헤더 — 추가 요청 없이 얻는다(RFC 5987
+      <code>filename*=UTF-8''…</code> 우선 파싱). 제목을 못 얻으면
+      "시나리오"로 폴백.</p>
     </div>
 
     <div class="note">

@@ -1,22 +1,28 @@
-# 작업 지시서 — 시나리오 뷰어 (GM 전용 플로트 창)
+# 작업 지시서 — 시나리오 뷰어 (GM 전용, 입력창 위 패널)
 
 **다른 세션이 이 문서만 보고 작업할 수 있도록** 항목마다 위치·변경·주의를 명시한다.
 기준: v0.12.0(`aae4841`) 이후 코드. 라인 번호는 참고용(±수 줄 드리프트 가능) — 앵커는
 함수·변수명으로 찾을 것.
 
+> **UI 확정 개정 (2026-08-02, 시안 승인)** — 확정 시안:
+> `docs/mockups/mockup-scenario-viewer.html`(.png). 초안의 "플로트 창"을
+> **입력 영역 위 도킹 패널**로 변경하고, 문서 제목 표시·⧉ 입력창 삽입·뷰어 설정
+> 창·칩 순서/문구를 확정했다. V3~V5는 전면 개정, V0~V2·V6은 델타만 추가.
+> UI 수치·색은 전부 `docs/ui-guidelines.md` 기존 토큰 — **신규 등재 수치 0개.**
+
 ## 기능 한 줄
 
-GM이 채팅 팔레트의 **시나리오 칩**을 누르면 방 안에 **플로트 창**이 뜨고, 구글 독스
-**뷰어 권한 링크**를 입력하면 문서를 **1문장씩** 보여준다. 우하단 `<` `>` 버튼으로
-이전·다음 문장 이동. GM 프로필로 말하는 중에만 보이고, 링크가 잘못되었거나 파싱에
-실패하면 경고창을 띄운다.
+GM이 채팅 팔레트의 **📖 시나리오 칩**을 누르면 **입력 영역 바로 위에 패널**이 뜨고,
+구글 독스 **뷰어 권한 링크**를 입력하면 문서를 **1문장씩**(설정 시 문단씩) 보여준다.
+우하단 `‹` `›` 버튼으로 이전·다음 이동, 헤더 ⧉로 현재 문장을 입력창에 삽입.
+GM 프로필로 말하는 중에만 보이고, 링크가 잘못되었거나 파싱에 실패하면 경고창을 띄운다.
 
 ## 요구사항 원문 → 설계 대응
 
 | 요구 | 대응 |
 |---|---|
-| 세션 방 안 플로트 창, 파싱 문서 1줄씩 | V4 — ChatScreen 오버레이 카드, 문장 인덱스 상태 |
-| 구글 독스 뷰어 권한 링크 입력 화면이 먼저 | V4 — 창의 첫 상태 = 링크 입력 폼 |
+| 세션 방 안 뷰어, 파싱 문서 1줄씩 | V4 — 입력창 위 도킹 패널(UI 확정), 문장 인덱스 상태 |
+| 구글 독스 뷰어 권한 링크 입력 화면이 먼저 | V4 — 패널의 첫 상태 = 링크 입력 폼 |
 | 각 방의 GM 프로필에서만 보임 | V3 — 기존 `gmActive` 게이트(판정 요청 J2와 동일 기준) |
 | `<` `>` 버튼 우하단, 이전/다음 문장 | V4 — 창 우하단 내비게이션 행 |
 | 팔레트 클릭 시에만 창 생성 | V3→V4 — 칩 탭이 유일한 진입점, 그 외 자동 생성 없음 |
@@ -56,7 +62,8 @@ GM이 채팅 팔레트의 **시나리오 칩**을 누르면 방 안에 **플로�
 | V1 | 문서 가져오기 — HTTP fetch + 실패 사유 판정 | S | `app/.../data/ScenarioFetcher.kt` |
 | V2 | 상태 — ChatViewModel에 뷰어 상태 기계 | S | `ChatScreen.kt`(VM부) |
 | V3 | GM 팔레트 칩 — 진입점 | S | `ChatInput.kt` |
-| V4 | 플로트 창 — 링크 입력 → 문장 표시 → `<` `>` | M | 신규 `ScenarioViewer.kt` |
+| V4 | 입력창 위 패널 — 링크 입력 → 문장 표시 → `‹` `›` | M | 신규 `ScenarioViewer.kt` |
+| V4.5 | 뷰어 설정 창 — 문서·보기 토글 | S | `ScenarioViewer.kt` |
 | V5 | 경고창 — 실패 사유별 AlertDialog | S | `ScenarioViewer.kt` |
 | V6 | 검증 | S | 테스트·수동 시나리오 |
 
@@ -80,6 +87,12 @@ object ScenarioDoc {
 
     /** 평문 → 문장 목록. 빈 결과는 emptyList — 호출부가 "빈 문서" 경고. */
     fun splitSentences(text: String): List<String>
+
+    /** 평문 → 문단 목록 (빈 줄 1개 이상 기준 분리, 각 문단 trim). — UI 개정: 문단 보기 */
+    fun splitParagraphs(text: String): List<String>
+
+    /** 문장 인덱스 → 그 문장이 속한 문단 인덱스 (문단 보기 전환 시 위치 보존용) */
+    fun paragraphIndexOf(text: String, sentenceIndex: Int): Int
 }
 ```
 
@@ -117,13 +130,20 @@ object ScenarioDoc {
 ```kotlin
 object ScenarioFetcher {
     sealed interface Result {
-        data class Ok(val sentences: List<String>) : Result
+        /** title: Content-Disposition 파일명에서 추출한 문서 제목 (실패 시 null) */
+        data class Ok(val text: String, val sentences: List<String>, val title: String?) : Result
         enum class Error : Result { BAD_LINK, NO_ACCESS, NETWORK, EMPTY }
     }
     /** Dispatchers.IO에서 호출할 것 (V2가 viewModelScope에서 감싼다) */
     fun fetch(url: String): Result
 }
 ```
+
+**문서 제목 (UI 개정)** — export 응답의 `Content-Disposition:
+attachment; filename="제목.txt"` 헤더에서 추출한다. 추가 요청 없음.
+RFC 5987 `filename*=UTF-8''…`(percent-encoding)을 우선 파싱하고, 없으면
+`filename=` 값에서 `.txt` 확장자를 뗀다. 어느 쪽도 없으면 `title = null` —
+UI가 "시나리오"로 폴백. 원문 `text`도 Ok에 담는다(문단 분리는 상태 계층에서).
 
 - 절차: `extractDocId` → null이면 `BAD_LINK` → `exportUrl` GET
   (connect/read 타임아웃 각 10초, 리다이렉트 기본 추종) →
@@ -145,7 +165,13 @@ object ScenarioFetcher {
 sealed interface ScenarioState {
     data object AskLink : ScenarioState                       // 첫 화면: 링크 입력
     data object Loading : ScenarioState
-    data class Viewing(val sentences: List<String>, val index: Int) : ScenarioState
+    /** text 원문 보존 — 문단 보기 전환 시 splitParagraphs(text) 재계산 */
+    data class Viewing(
+        val text: String,
+        val sentences: List<String>,
+        val index: Int,               // 현재 문장 인덱스 (문단 모드에서도 문장 기준 유지)
+        val title: String?,           // 헤더 표시 — null이면 "시나리오"
+    ) : ScenarioState
     data class Failed(val error: ScenarioFetcher.Result.Error) : ScenarioState  // V5 경고창
 }
 val scenario = MutableStateFlow<ScenarioState>(ScenarioState.AskLink)
@@ -154,67 +180,125 @@ fun loadScenario(url: String) = viewModelScope.launch {
     scenario.value = ScenarioState.Loading
     val r = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
     scenario.value = when (r) {
-        is Ok -> ScenarioState.Viewing(r.sentences, 0)
+        is Ok -> ScenarioState.Viewing(r.text, r.sentences, 0, r.title)
         is Error -> ScenarioState.Failed(r)
     }
 }
-fun scenarioStep(delta: Int)   // index를 coerceIn(0, lastIndex)로 이동
-fun scenarioReset()            // 창을 닫아도 유지, "다른 문서" 버튼에서만 AskLink로
+fun scenarioStep(delta: Int)   // 문장(문단 모드면 문단) 단위 이동, coerceIn
+fun scenarioReset()            // 패널을 닫아도 유지, "다른 문서로 바꾸기"에서만 AskLink로
+fun scenarioRestart()          // "처음부터 읽기" — index = 0 (문서는 유지)
+
+/** ⧉ — 현재 문장을 입력창에 삽입. InputZone의 input 상태는 하위에 있으므로
+ *  Flow로 전달: InputZone이 collect해 기존 입력 뒤에 덧붙인다 (커서 끝). */
+val scenarioInsert = MutableSharedFlow<String>(extraBufferCapacity = 1)
 ```
 
 - `Failed` 처리 후(경고창 확인) `AskLink`로 되돌린다 — 입력한 링크 문자열은
   UI(rememberSaveable)에 남아 있으므로 수정 후 재시도 가능.
-- **닫기 ≠ 리셋**: 창을 닫았다 다시 열면 읽던 문장이 그대로여야 한다(Viewing 유지).
+- **닫기 ≠ 리셋**: 패널을 닫았다 다시 열면 읽던 문장이 그대로여야 한다(Viewing 유지).
 
-## V3. GM 팔레트 칩 — `ChatInput.kt` `InputZone`
+### V2.5 뷰어 표시 설정 — `ScenarioSettings` (UI 개정, 신규)
+
+`CaptureSettings`(SharedPreferences) 패턴 그대로 오브젝트 1개:
+- `boldRead: Boolean` 기본 **true** — "읽은 문장까지 진하게"
+- `paragraphMode: Boolean` 기본 **false** — "문단 단위로 보기"
+
+의미(확정):
+- **문단 단위로 보기 ON**: 표시·이동 단위가 문단(`splitParagraphs`). 진행 표시도
+  문단 기준(`3 / 42`). 전환 시 `paragraphIndexOf`로 현재 위치 보존.
+- **읽은 문장까지 진하게**: 문단 모드에서 문단 안의 문장 중 **현재 인덱스까지는
+  `ink`(진하게), 이후는 `inkDim`** — 문단을 띄워 두고 한 문장씩 밝혀 가며 읽는
+  워크플로. 이때 `›`는 문장 단위로 전진하되 문단 경계에서 다음 문단으로 넘어간다.
+  **문장 단위 모드에서는 효과 없음** — 설정 창에서 토글을 비활성(inkDisabled)으로.
+
+## V3. GM 팔레트 칩 — `ChatInput.kt` `InputZone` (UI 확정)
 
 - 앵커: `if (gmActive)` 블록(:161 부근)의 `＋ 판정 요청` 칩.
-- 그 칩을 감싼 `Box`를 **`Row`(spacedBy(PbpDimens.gap2))로 바꾸고** 두 번째 칩
-  `📖 시나리오`를 추가한다. **캡슐 스타일은 판정 요청 칩과 자간·패딩·토큰까지 동일**하게
-  (CLAUDE.md 0장 — 동류 컴포넌트는 같은 스페이싱 토큰).
+- 그 칩을 감싼 `Box`를 **`Row`(spacedBy(PbpDimens.gap2))로 바꾸고** 칩 2개를 배치:
+  1. **`📖 시나리오`** — **행의 첫 번째(왼쪽)**. 캡슐 스타일은 판정 칩과
+     자간·패딩·토큰까지 동일 (원칙 4). **패널이 열려 있는 동안은 진하게**:
+     `signature.copy(alpha=.32f)` 면 + `signatureDeep` 1dp 테두리 (열림 상태 표시).
+  2. 기존 판정 칩 — 문구를 **`🎲 판정`**으로 개정 ("＋ 판정 요청" → 다이스
+     아이콘 + "판정").
 - 콜백 `onScenarioViewer: () -> Unit = {}` 를 InputZone 파라미터에 추가 —
-  `onJudgeRequest`(:79)와 같은 자리·같은 기본값 스타일.
+  `onJudgeRequest`(:79)와 같은 자리·같은 기본값 스타일. 열림 상태 표시를 위해
+  `scenarioOpen: Boolean = false`도 내려보낸다.
 - **이 칩이 유일한 진입점**이다. 다른 어떤 경로(방 입장·프로필 전환·수신 이벤트)에서도
-  창을 자동 생성하지 않는다.
+  패널을 자동 생성하지 않는다.
+- ⧉ 삽입 수신: `LaunchedEffect(Unit) { vm.scenarioInsert.collect { s ->
+  input = if (input.isBlank()) s else input + " " + s } }` — 커서는 끝.
 
-## V4. 플로트 창 — 신규 `app/src/main/java/com/pbp/app/ui/chat/ScenarioViewer.kt`
+## V4. 입력창 위 패널 — 신규 `app/src/main/java/com/pbp/app/ui/chat/ScenarioViewer.kt` (UI 확정)
+
+확정 시안: `docs/mockups/mockup-scenario-viewer.html` ①·②. 플로트가 아니라
+**입력 영역 위 도킹** — 드래그·그림자·offset 없음.
 
 ### 배선 (`ChatScreen.kt`)
 
 - `var scenarioOpen by rememberSaveable { mutableStateOf(false) }` —
   `judgeSheetOpen`(:300)과 같은 자리.
-- InputZone 호출부(:666 부근)에 `onScenarioViewer = { scenarioOpen = true }`.
-- 렌더 위치: `RoomBackdrop` 안, 메시지 리스트 **위 레이어** —
-  `if (scenarioOpen && gmActive) ScenarioFloat(...)`. `gmActive`는 InputZone과 같은
-  계산(활성 프로필 isGm)을 ChatScreen 레벨로 끌어올려 공용화한다.
-  **GM 아닌 프로필로 전환하면 창이 사라진다**(상태는 VM에 살아 있어 GM 복귀 시 재개) —
-  "GM 프로필에서만 보임" 요구의 해석. 캡처 모드(`capturing`) 중에는 표시하지 않는다
+- InputZone 호출부(:666 부근)에 `onScenarioViewer = { scenarioOpen = true }`,
+  `scenarioOpen = scenarioOpen && gmActive`.
+- 렌더 위치: **InputZone 바로 위, 같은 Column 흐름** —
+  `if (scenarioOpen && gmActive && !capturing) ScenarioPanel(...)` 다음에 InputZone.
+  오버레이가 아니므로 메시지 리스트가 패널 높이만큼 줄어든다(마지막 말풍선을 가리지
+  않음). `gmActive`는 InputZone과 같은 계산(활성 프로필 isGm)을 ChatScreen 레벨로
+  끌어올려 공용화한다. **GM 아닌 프로필로 전환하면 패널이 사라진다**(상태는 VM에
+  살아 있어 GM 복귀 시 재개). 캡처 모드(`capturing`) 중에는 표시하지 않는다
   (캡처 결과에 찍히면 안 되고, 탭 히트테스트와도 충돌 — 리뷰 A1과 같은 계열).
 
-### 창 구성 (`ScenarioFloat` 컴포저블)
+### 패널 구성 (`ScenarioPanel` 컴포저블)
 
-- **카드**: 화면 하단 입력줄 위쪽에 뜨는 둥근 카드. 폭 = 화면 - 좌우 `gap4`,
-  배경 `tokens.chatBarBg`(불투명), 모서리·그림자는 기존 카드류와 동일 토큰.
-  **드래그 이동 가능** — `offset` 상태 + `pointerInput(detectDragGestures)`,
-  초기 위치는 하단 중앙(센터 정렬 — CLAUDE.md 0장). 화면 밖으로 못 나가게 clamp.
-- **헤더 행**: 좌측 `📖 시나리오` 라벨(11sp Bold, `inkDim`) · 우측 `×` 닫기
-  (`scenarioOpen = false` — VM 상태는 유지).
+- **면**: `fillMaxWidth()` + `background(tokens.chatBarBg)` + 위쪽 경계
+  `line` 1dp (아래는 InputZone과 면이 이어져 경계 없음). 내부
+  `padding(horizontal = gap4, vertical = gap3)` — **InputZone과 동일**.
+  반경·그림자 없음(도킹).
+- **헤더 행** (좌→우):
+  1. 라벨 `📖 {제목}` — 11sp Bold `inkDim`, 1줄 ellipsis, `weight(1f)`.
+     제목 = `Viewing.title ?: "시나리오"`. AskLink/Loading 상태는 "시나리오".
+  2. **⧉** (40dp 히트, `inkDim`) — 탭하면 `scenarioInsert.emit(현재 문장)`
+     (문단 모드에서도 **현재 문장** 기준). **Viewing 상태에서만 노출.**
+     contentDescription "문장을 입력창에 붙여넣기".
+  3. **⚙** (40dp 히트, `inkDim`) — V4.5 설정 창 열기. **Viewing 상태에서만 노출.**
+  4. **✕** (40dp 히트) — `scenarioOpen = false` (VM 상태는 유지).
 - **본문**: 상태별 3형
-  1. `AskLink`: 안내 문구 "구글 독스 뷰어 링크를 입력해 주세요" + `OutlinedTextField`
-     (singleLine, rememberSaveable) + `확인` 버튼(테마색). 빈 입력이면 버튼 비활성.
-  2. `Loading`: 중앙 `CircularProgressIndicator` — 카드 높이는 1의 높이 유지(튀지 않게).
-  3. `Viewing`: 현재 문장 `MarkupText`가 아닌 **일반 Text** (시나리오 원문 그대로,
-     명조 serif — GM 서술과 같은 서체 토큰), 상하 패딩 대칭. 문장이 길면 카드 내부
-     `verticalScroll`(최대 높이 화면의 1/3).
-- **하단 행**: 좌측 진행 표시 `3 / 128`(10sp, `inkDim`) · **우하단 `<` `>` 버튼**
-  (요구사항 위치 고정). 터치 타깃 `PbpDimens.touchTarget`, 첫/마지막 문장에서 해당
-  방향 버튼 비활성(회색). 좌측에 작은 `다른 문서` 텍스트 버튼 → `scenarioReset()`.
-- 접근성: `<`/`>`에 contentDescription("이전 문장"/"다음 문장").
+  1. `AskLink`: 안내 "구글 독스 뷰어 링크를 입력해 주세요" 13sp 센터 +
+     필드(`panel2` 면 + `rCell`, singleLine, rememberSaveable) + `확인` 버튼
+     (전송 버튼과 동일: 테마색 면 + `rCell` + 높이 40 + `bubbleInk` 글자,
+     빈 입력이면 비활성). 필드와 버튼은 한 행(`spacedBy(gap2)`).
+  2. `Loading`: 중앙 `CircularProgressIndicator`(테마색) — 패널 높이는 1의 높이
+     유지(튀지 않게).
+  3. `Viewing`: 문장(또는 문단)을 **명조(GowunBatang) 13sp, 행간 1.85(= GM 서술과
+     동일), 센터 정렬, 상하 대칭 `gap2`**. `MarkupText` 아님 — 원문 그대로 일반
+     Text. 길면 내부 `verticalScroll`(최대 높이 화면 1/3 — 입력줄이 밀리지 않게
+     상한). 문단 모드 + boldRead ON이면 V2.5의 진하게/흐리게 규칙.
+- **하단 행** (Viewing에서만): 진행 표시 `17 / 128`(10sp `inkDim`, `weight(1f)`
+  센터) · **우하단 `‹` `›`** — 40×40 pill, `panel` 면 + `line` 1dp 테두리,
+  글리프 15sp. 경계에서 비활성 = `inkFaint` 면 + `inkDisabled` 글리프 + 테두리
+  없음. contentDescription "이전 문장"/"다음 문장"(문단 모드면 "이전/다음 문단").
+
+## V4.5. 뷰어 설정 창 (UI 확정, 신규) — 시안 ④
+
+헤더 ⚙ 탭 → `AlertDialog` (다이얼로그 한 가족: `panel` 면 · `rSheet` ·
+`PbpDialogTitle("시나리오 뷰어 설정")` · 닫기 = `PbpDialogButton`). 구성 (위→아래):
+
+1. 섹션 라벨 `문서` (11sp bold `inkDim`)
+2. **현재 문서 카드**: `panel2` 면 + `rCell` + `padding(gap3)` — 📖 + 제목
+   13sp bold 1줄 ellipsis + 링크 10sp `inkDim` 1줄 ellipsis (탭 동작 없음, 표시 전용)
+3. **"다른 문서로 바꾸기"** 탭 행 (`padding(gap3)` + `rCell`, 13sp bold
+   `signatureInk`) → `scenarioReset()` 후 다이얼로그·패널 모두 AskLink로
+4. **"처음부터 읽기"** 탭 행 (동일 규격) → `scenarioRestart()` 후 다이얼로그 닫기
+5. 구분선 `line` 1dp, 상하 `gap2`
+6. 섹션 라벨 `보기` + 토글 2행 — **CaptureToggle과 동일 부품**(34×20, 공용화):
+   - "읽은 문장까지 진하게" = `ScenarioSettings.boldRead` (기본 ON).
+     문장 단위 모드에서는 비활성 표시(inkDisabled).
+   - "문단 단위로 보기" = `ScenarioSettings.paragraphMode` (기본 OFF)
 
 ## V5. 경고창
 
-- `ScenarioState.Failed`일 때 `AlertDialog`(기존 삭제 확인 다이얼로그 :789 부근과 같은
-  구성 — 확인 단일 버튼) 표시. 확인 시 `AskLink`로 복귀(입력값 보존).
+- `ScenarioState.Failed`일 때 `AlertDialog`(다이얼로그 한 가족 — `PbpDialogTitle`
+  "시나리오 뷰어" + 본문 13sp + `PbpDialogButton("확인")` 단일 버튼) 표시.
+  확인 시 `AskLink`로 복귀(입력값 보존).
 - 사유별 문구 (모두 이 문서에서 확정 — 구현 세션이 임의로 바꾸지 말 것):
   - `BAD_LINK` — "구글 독스 문서 링크가 아닙니다. 공유 → '링크가 있는 모든 사용자'
     링크를 붙여넣어 주세요."
@@ -225,15 +309,24 @@ fun scenarioReset()            // 창을 닫아도 유지, "다른 문서" 버�
 
 ## V6. 검증
 
-- 단위: `ScenarioDocTest`(V0 케이스 전부) — `gradlew :shared:test`.
+- 단위: `ScenarioDocTest`(V0 케이스 전부 + splitParagraphs·paragraphIndexOf) —
+  `gradlew :shared:test`.
 - 수동 체크리스트:
-  - [ ] GM 프로필 활성 시에만 칩 노출, NPC·플레이어 프로필로 전환하면 칩·창 모두 사라짐
-  - [ ] 칩 탭 → 링크 입력 화면. **그 외 어떤 경로로도 창이 저절로 뜨지 않음**
-  - [ ] 실제 뷰어 링크 → 문장 표시, `<` `>` 이동, 경계에서 버튼 비활성
-  - [ ] 창 닫고 다시 열면 읽던 문장 유지, "다른 문서"로만 초기화
-  - [ ] 회전 → 창 열림 상태·문장 위치·입력 중 링크 보존
+  - [ ] GM 프로필 활성 시에만 칩 노출, NPC·플레이어 프로필로 전환하면 칩·패널 모두 사라짐
+  - [ ] 칩 순서 📖 시나리오(왼쪽) · 🎲 판정, 패널 열림 동안 시나리오 칩 진하게
+  - [ ] 칩 탭 → 링크 입력 패널(입력 영역 위 도킹, 마지막 말풍선 가림 없음).
+        **그 외 어떤 경로로도 패널이 저절로 뜨지 않음**
+  - [ ] 실제 뷰어 링크 → 헤더에 문서 제목 표시(제목 없으면 "시나리오"), 문장 표시,
+        `‹` `›` 이동, 경계에서 버튼 비활성
+  - [ ] ⧉ 탭 → 현재 문장이 입력창 끝에 삽입(클립보드 아님), 기존 입력 보존
+  - [ ] ⚙ → 설정 창: 다른 문서로 바꾸기 = AskLink, 처음부터 읽기 = index 0,
+        문단 단위 토글 시 위치 보존, boldRead 진하게/흐리게 규칙
+  - [ ] ⧉·⚙는 Viewing 상태에서만 보임
+  - [ ] 패널 닫고 다시 열면 읽던 문장 유지, "다른 문서로 바꾸기"로만 초기화
+  - [ ] 회전 → 패널 열림 상태·문장 위치·입력 중 링크·설정 보존
   - [ ] 권한 없는 링크·스프레드시트 링크·아무 URL·비행기 모드 → 각 사유별 경고창
-  - [ ] 캡처 모드 진입 시 창 숨김, 캡처 이미지에 찍히지 않음
+  - [ ] 캡처 모드 진입 시 패널 숨김, 캡처 이미지에 찍히지 않음
+  - [ ] 신규 dp/sp/색 리터럴 0건 (`Color(0x` grep — 전부 기존 토큰)
   - [ ] `gradlew assembleDebug testDebugUnitTest` 통과
 - **검증 후 에뮬레이터 즉시 종료.**
 

@@ -63,4 +63,11 @@ class GmSpeechTest {
         assertEquals(1, parts.size)
         assertTrue(parts.single() is Part.Narration)
     }
+
+    @Test
+    fun `공백만 든 따옴표도 사라지지 않는다 — 빈 목록이면 메시지가 통째로 증발한다`() {
+        val parts = GmSpeech.split("\" \"")
+        assertEquals(1, parts.size)
+        assertTrue(parts.first() is GmSpeech.Part.Narration)
+    }
 }

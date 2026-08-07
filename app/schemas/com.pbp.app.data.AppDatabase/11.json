@@ -1,0 +1,367 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 11,
+    "identityHash": "f4da271c4137ae7ed15449c1e2736a8e",
+    "entities": [
+      {
+        "tableName": "rooms",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `activeProfileId` INTEGER, `createdAt` INTEGER NOT NULL, `remoteId` TEXT, `inviteCode` TEXT, `themeColor` INTEGER NOT NULL, `backgroundKey` TEXT NOT NULL, `isMaster` INTEGER NOT NULL, `rule` TEXT NOT NULL, `lastReadAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeProfileId",
+            "columnName": "activeProfileId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "inviteCode",
+            "columnName": "inviteCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "themeColor",
+            "columnName": "themeColor",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "backgroundKey",
+            "columnName": "backgroundKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isMaster",
+            "columnName": "isMaster",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rule",
+            "columnName": "rule",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastReadAt",
+            "columnName": "lastReadAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "profiles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `tagline` TEXT NOT NULL, `emoji` TEXT NOT NULL, `imagePath` TEXT, `isGm` INTEGER NOT NULL, `roomId` INTEGER, `nameColor` INTEGER, `bubbleColor` INTEGER, `textColor` INTEGER, `stats` TEXT NOT NULL, FOREIGN KEY(`roomId`) REFERENCES `rooms`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tagline",
+            "columnName": "tagline",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "emoji",
+            "columnName": "emoji",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imagePath",
+            "columnName": "imagePath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isGm",
+            "columnName": "isGm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roomId",
+            "columnName": "roomId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "nameColor",
+            "columnName": "nameColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "bubbleColor",
+            "columnName": "bubbleColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "textColor",
+            "columnName": "textColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "stats",
+            "columnName": "stats",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_profiles_roomId",
+            "unique": false,
+            "columnNames": [
+              "roomId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_profiles_roomId` ON `${TABLE_NAME}` (`roomId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "rooms",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "roomId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `roomId` INTEGER NOT NULL, `type` TEXT NOT NULL, `body` TEXT NOT NULL, `diceExpr` TEXT, `diceOutcome` TEXT, `senderName` TEXT, `senderEmoji` TEXT, `senderImagePath` TEXT, `senderIsGm` INTEGER NOT NULL, `senderIsBot` INTEGER NOT NULL, `senderNameColor` INTEGER, `senderBubbleColor` INTEGER, `senderTextColor` INTEGER, `createdAt` INTEGER NOT NULL, `remoteId` TEXT, `isOoc` INTEGER NOT NULL, `editedAt` INTEGER, `incoming` INTEGER NOT NULL, `uploaded` INTEGER NOT NULL, `judgeTarget` TEXT, `judgeRef` TEXT, FOREIGN KEY(`roomId`) REFERENCES `rooms`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "roomId",
+            "columnName": "roomId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "diceExpr",
+            "columnName": "diceExpr",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "diceOutcome",
+            "columnName": "diceOutcome",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderName",
+            "columnName": "senderName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderEmoji",
+            "columnName": "senderEmoji",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderImagePath",
+            "columnName": "senderImagePath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "senderIsGm",
+            "columnName": "senderIsGm",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderIsBot",
+            "columnName": "senderIsBot",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "senderNameColor",
+            "columnName": "senderNameColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "senderBubbleColor",
+            "columnName": "senderBubbleColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "senderTextColor",
+            "columnName": "senderTextColor",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isOoc",
+            "columnName": "isOoc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editedAt",
+            "columnName": "editedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "incoming",
+            "columnName": "incoming",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uploaded",
+            "columnName": "uploaded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "judgeTarget",
+            "columnName": "judgeTarget",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "judgeRef",
+            "columnName": "judgeRef",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_messages_roomId",
+            "unique": false,
+            "columnNames": [
+              "roomId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_roomId` ON `${TABLE_NAME}` (`roomId`)"
+          },
+          {
+            "name": "index_messages_remoteId",
+            "unique": true,
+            "columnNames": [
+              "remoteId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_messages_remoteId` ON `${TABLE_NAME}` (`remoteId`)"
+          },
+          {
+            "name": "index_messages_roomId_createdAt_id",
+            "unique": false,
+            "columnNames": [
+              "roomId",
+              "createdAt",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_messages_roomId_createdAt_id` ON `${TABLE_NAME}` (`roomId`, `createdAt`, `id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "rooms",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "roomId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f4da271c4137ae7ed15449c1e2736a8e')"
+    ]
+  }
+}

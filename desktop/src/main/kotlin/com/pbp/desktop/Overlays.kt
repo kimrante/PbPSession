@@ -45,6 +45,7 @@ import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.Pretendard
 import com.pbp.desktop.ui.Tokens
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.style.TextAlign
@@ -376,10 +377,14 @@ internal fun SettingsOverlay(
                     .border(1.dp, Tokens.Line, RoundedCornerShape(10.dp))
                     .clickable(enabled = !picking) {
                         picking = true
-                        scope.launch(Dispatchers.IO) {
+                        scope.launch {
                             try {
-                                pickAndStoreImage("배경 이미지 선택", AppPaths.BACKGROUNDS, DesktopDimens.BACKGROUND_PX)
-                                    ?.let { background = it }
+                                val picked = withContext(Dispatchers.IO) {
+                                    pickAndStoreImage(
+                                        "배경 이미지 선택", AppPaths.BACKGROUNDS, DesktopDimens.BACKGROUND_PX,
+                                    )
+                                }
+                                if (picked != null) background = picked // 상태는 UI 스코프 (H3)
                             } finally {
                                 picking = false
                             }

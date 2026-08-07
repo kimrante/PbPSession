@@ -19,6 +19,13 @@ internal class RoomSession {
     var diskLoaded: Boolean = false
     /** 마지막 파일 캐시 저장 시각 — 30초 스로틀 */
     var lastSavedAt: Long = 0L
+
+    /**
+     * 마지막으로 **적용한** logsClearedAt (H2). 방 문서의 값은 영구히 남아 있어서,
+     * 이걸 기억해 두지 않으면 60초 메타 폴마다 같은 초기화를 다시 적용한다 —
+     * 리셋 직후 상대가 보낸 메시지가 떴다 사라졌다를 반복했다.
+     */
+    var appliedClearedAt: Long = 0L
 }
 
 
@@ -35,9 +42,9 @@ internal fun messageValues(
     judgeTarget: String? = null,
     judgeRef: String? = null,
 ): Map<String, Any?> = mapOf(
-    // 폴 커서 전용 필드 — 안드로이드는 서버 타임스탬프로, 데스크톱은 지금 시각으로 쓴다.
-    // REST 쓰기는 즉시 커밋이라 둘이 같은 의미다 (V1). 타입은 반드시 타임스탬프.
-    "syncAt" to FirestoreRest.ServerTime(System.currentTimeMillis()),
+    // 폴 커서 전용 필드(syncAt)는 여기서 넣지 않는다 — 쓰기 시점에 **서버가 찍는다**
+    // (FirestoreRest.postMessage의 updateTransforms, G2). 로컬 시계로 쓰면 PC 시계가
+    // 몇 초만 빨라도 폴 커서가 서버 시각을 앞질러 상대 메시지를 건너뛴다.
     "type" to type,
     "judgeTarget" to judgeTarget,
     "judgeRef" to judgeRef,
@@ -64,9 +71,8 @@ internal fun messageValues(
  * 스키마가 바뀌어도 데스크톱은 이 한 곳만 고치면 된다.
  */
 internal fun systemMessageValues(body: String, authorUid: String): Map<String, Any?> = mapOf(
-    // 폴 커서 전용 — 없으면 상대 데스크톱의 syncAt 증분 질의에 아예 안 걸려
-    // 참여 인사·초기화 안내가 영구 누락된다 (A5)
-    "syncAt" to FirestoreRest.ServerTime(System.currentTimeMillis()),
+    // 폴 커서 전용 syncAt은 쓰기 시점에 서버가 찍는다 (G2). 반드시 있어야 한다 —
+    // 없으면 상대 데스크톱의 증분 질의에 안 걸려 참여 인사·초기화 안내가 영구 누락된다 (A5)
     "type" to Protocol.MessageType.SYSTEM,
     "body" to body,
     "createdAt" to System.currentTimeMillis(),

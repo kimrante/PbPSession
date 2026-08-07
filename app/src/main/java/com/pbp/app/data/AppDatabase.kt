@@ -11,7 +11,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
     version = 11,
-    exportSchema = false,
+    // 마이그레이션이 10개인데 스키마 JSON이 없어 MigrationTestHelper를 쓸 수 없었다 (I1).
+    // 내보낸 스키마는 schemas/에 커밋한다 — 다음 버전부터 마이그레이션 테스트가 가능해진다
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -102,7 +104,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** 말풍선 글씨색 — 프로필 설정값 + 메시지 스냅샷 */
+        /** 자동 판정 요청 — 대상 캐릭터와 요청 참조 (J1) */
         private val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE messages ADD COLUMN judgeTarget TEXT")
@@ -110,6 +112,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** 말풍선 글씨색 — 프로필 설정값 + 메시지 스냅샷 */
         private val MIGRATION_9_10 = object : Migration(9, 10) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE profiles ADD COLUMN textColor INTEGER")

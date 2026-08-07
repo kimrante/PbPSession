@@ -34,20 +34,27 @@ class PbpApp : Application(), coil3.SingletonImageLoader.Factory {
         PbpRepository(database).also { repo ->
             repo.syncManager = syncManager
             // 참여 시 로컬 방 생성 능력만 넘긴다 — 상호 참조 대신 단방향 (리뷰 B6)
-            syncManager.createLocalRoom = { name, themeColor, backgroundKey, rule ->
+            syncManager.createLocalRoom = { name, themeColor, backgroundKey, rule, remoteId, code ->
                 repo.createRoom(
                     name = name,
                     isMaster = false, // 참여자 표시용 (설정 변경은 누구나 가능)
                     themeColor = themeColor,
                     backgroundKey = backgroundKey,
                     rule = rule,
+                    // 원격 연결까지 한 트랜잭션에서 (H6)
+                    remoteId = remoteId,
+                    inviteCode = code,
                 )
             }
         }
     }
     private val notifier by lazy { MessageNotifier(this) }
 
-    /** 앱이 화면에 떠 있는지 — 비활성 상태에서만 푸시를 띄운다 (스펙 7장) */
+    /**
+     * 앱이 화면에 떠 있는지 — 비활성 상태에서만 푸시를 띄운다 (스펙 7장).
+     * 세는 쪽은 메인 스레드지만 읽는 쪽은 **FCM 바인더 스레드**라 @Volatile이 필요하다 (I6)
+     */
+    @Volatile
     private var resumedActivities = 0
     val isForeground: Boolean get() = resumedActivities > 0
 

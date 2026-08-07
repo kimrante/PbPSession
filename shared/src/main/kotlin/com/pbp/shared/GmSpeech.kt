@@ -29,6 +29,10 @@ object GmSpeech {
         }
         val tail = text.substring(cursor).trim()
         if (tail.isNotEmpty()) parts += Part.Narration(tail)
+        // 본문이 `" "`처럼 **공백만 든 따옴표**뿐이면 위 규칙이 전부 걸러 내 빈 목록이
+        // 된다. 그러면 그 메시지는 화면에도 안 그려지고 내보내기에서도 통째로 빠진다 —
+        // 보낸 사람에겐 사라진 것처럼 보인다. 아무것도 못 건졌으면 원문을 그대로 둔다 (K5)
+        if (parts.isEmpty() && text.isNotBlank()) parts += Part.Narration(text.trim())
         return parts
     }
 

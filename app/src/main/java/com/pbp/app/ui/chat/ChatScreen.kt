@@ -273,6 +273,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
          * @param sentences **원문 문장** 목록. 표시 단위를 바꿔도 이건 그대로 두고
          *   [pages]만 다시 짓는다 — 같은 문서를 두 번 받아 올 이유가 없다.
          * @param index 화면 단위(=[pages]) 기준 위치
+         * @param truncated 문서가 상한을 넘어 뒷부분이 잘렸는가 (K3)
          */
         data class Viewing(
             val title: String?,
@@ -280,8 +281,14 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
             val sentences: List<String>,
             val index: Int,
             val linesPerView: Int,
+            val truncated: Boolean = false,
         ) : ScenarioState {
-            val pages: List<String> get() = ScenarioDoc.group(sentences, linesPerView)
+            /**
+             * 화면 단위로 묶은 본문. **저장 필드다** — get()으로 두면 본문·복사 버튼·
+             * 이동 행이 읽을 때마다 문서 전체를 다시 묶는다(1MB 문서면 리컴포지션마다
+             * 그만큼 할당). 묶음이 달라지는 건 로드와 설정 변경 때뿐이다 (K4).
+             */
+            val pages: List<String> = ScenarioDoc.group(sentences, linesPerView)
         }
 
         data class Failed(val error: ScenarioFetcher.Result.Error) : ScenarioState
@@ -305,6 +312,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
                 sentences = result.sentences,
                 index = 0,
                 linesPerView = scenarioLines.value,
+                truncated = result.truncated,
             )
 
             is ScenarioFetcher.Result.Error -> ScenarioState.Failed(result)

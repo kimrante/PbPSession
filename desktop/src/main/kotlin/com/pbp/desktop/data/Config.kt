@@ -173,9 +173,25 @@ class AppConfig private constructor(
     @Synchronized
     fun profilesCopy(): List<Profile> = profiles.toList()
 
-    /** 이미 굳힌 스냅샷을 파일에 쓴다. 실패해도 예외를 밖으로 던지지 않는다 (N8). */
+    /** 굳힌 스냅샷마다 붙는 세대 번호 — 뒤늦게 도착한 옛 쓰기를 가려내는 기준 (I2) */
+    private val snapshotSequence = java.util.concurrent.atomic.AtomicLong()
+    private var writtenGeneration = 0L
+
+    /** [writeSnapshot]에 함께 넘길 세대 번호를 발급한다 — 굳히는 쪽에서 부른다 */
+    fun nextSnapshotGeneration(): Long = snapshotSequence.incrementAndGet()
+
+    /**
+     * 이미 굳힌 스냅샷을 파일에 쓴다. 실패해도 예외를 밖으로 던지지 않는다 (N8).
+     *
+     * @param generation [nextSnapshotGeneration]이 준 번호. IO 워커 둘이 역순으로 락을
+     *   잡으면 옛 json이 최종본으로 남는데(I2), 이 번호로 뒤처진 쓰기를 버린다.
+     *   다음 저장이 스스로 고치긴 하지만 그 전에 앱을 닫으면 마지막 변경이 사라졌다.
+     *   기본값은 지금 발급 — 굳히기와 쓰기가 붙어 있는 호출부(save)는 그대로 쓰면 된다.
+     */
     @Synchronized
-    fun writeSnapshot(json: String) {
+    fun writeSnapshot(json: String, generation: Long = nextSnapshotGeneration()) {
+        if (generation < writtenGeneration) return
+        writtenGeneration = generation
         runCatching {
             file.parentFile?.mkdirs()
             // 임시 파일에 쓴 뒤 원자적 이동 — 쓰다 죽어도 기존 config가 깨지지 않는다 (P2-8)

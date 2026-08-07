@@ -46,6 +46,13 @@ class PbpRepository(private val db: AppDatabase) {
         themeColor: Long = PbpPalette.DEFAULT_THEME_COLOR,
         backgroundKey: String = PbpPalette.DEFAULT_BACKGROUND,
         rule: String = com.pbp.shared.Rules.COC7,
+        /**
+         * 참여로 만드는 방이면 원격 정보를 **같은 트랜잭션에서** 함께 기록한다 (H6).
+         * 나눠 쓰면 그 사이 크래시가 났을 때 원격과 이어지지 않은 고아 방이 남고,
+         * 다시 참여하면 같은 방이 하나 더 생긴다.
+         */
+        remoteId: String? = null,
+        inviteCode: String? = null,
     ): Long = db.withTransaction {
         val roomId = db.roomDao().insert(
             ChatRoom(
@@ -58,6 +65,7 @@ class PbpRepository(private val db: AppDatabase) {
                 rule = rule,
             )
         )
+        if (remoteId != null) db.roomDao().setRemote(roomId, remoteId, inviteCode ?: "")
         if (isMaster) {
             val gmId = db.profileDao().insert(
                 CharacterProfile(
@@ -264,7 +272,7 @@ class PbpRepository(private val db: AppDatabase) {
      */
     suspend fun rollJudge(request: Message): String? {
         val key = judgeKey(request)
-        // 연타로 두 번 들어와도 결과는 1건 (렌더의 Done 상태와 두 겹)
+        // 여기서도 한 번 걸러 굴림 자체를 아낀다 — 확정 판정은 아래 트랜잭션이 한다
         if (db.messageDao().hasJudgeResult(request.roomId, key)) return null
         val target = request.judgeTarget ?: return null
         val profile = db.profileDao().forRoom(request.roomId).find { it.name == target } ?: return null
@@ -288,7 +296,13 @@ class PbpRepository(private val db: AppDatabase) {
             judgeRef = key,
             createdAt = System.currentTimeMillis(),
         )
-        val inserted = dice.copy(id = db.messageDao().insert(dice))
+        // 검사와 삽입을 한 트랜잭션으로 묶는다 (G4). 카드를 연타하면 탭마다 코루틴이
+        // 뜨는데, 둘 다 위 검사를 통과한 뒤 각자 insert하면 결과가 2건 남고 둘 다
+        // 상대에게 전파됐다 — "결과는 1건"이 주석으로만 있고 코드로는 없었다
+        val inserted = db.withTransaction {
+            if (db.messageDao().hasJudgeResult(request.roomId, key)) null
+            else dice.copy(id = db.messageDao().insert(dice))
+        } ?: return null
         pushIfSynced(request.roomId, listOf(inserted))
         return null
     }
@@ -349,10 +363,11 @@ class PbpRepository(private val db: AppDatabase) {
                 val serverOk = syncManager
                     ?.wipeMessages(remoteId, db.messageDao().listRemoteIdsForWipe(roomId))
                     ?: false
-                // 성공/실패와 무관하게 재접속 — 재접속 시 삭제 대조(reconcile)가
-                // 서버 상태 기준으로 수렴한다 (부분 삭제면 남은 것 유지)
-                syncManager?.reattach(roomId, remoteId)
-                if (!serverOk) return@withContext false // 로컬은 건드리지 않는다
+                if (!serverOk) {
+                    // 로컬은 건드리지 않는다. 붙여 두었던 리스너만 되돌린다
+                    syncManager?.reattach(roomId, remoteId)
+                    return@withContext false
+                }
             }
             db.messageDao().deleteForRoom(roomId)
             // 리셋 흔적을 양쪽에 남긴다 (서버 삭제가 끝난 뒤에 보내야 함께 지워지지 않는다)
@@ -363,6 +378,10 @@ class PbpRepository(private val db: AppDatabase) {
                 createdAt = System.currentTimeMillis(),
             )
             val inserted = notice.copy(id = db.messageDao().insert(notice))
+            // 재접속은 **로컬을 비운 뒤**에 (H4). 먼저 붙이면 detach~wipe 사이에 상대가
+            // 보낸 메시지가 초기 스냅샷으로 들어왔다가 바로 위 deleteForRoom에 쓸려 나가,
+            // 서버엔 있는데 내 로컬에만 없는 상태가 된다
+            if (remoteId != null) syncManager?.reattach(roomId, remoteId)
             pushIfSynced(roomId, listOf(inserted))
             true
         }

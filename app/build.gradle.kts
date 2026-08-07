@@ -14,8 +14,8 @@ android {
         applicationId = "com.pbp.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 38
-        versionName = "0.14.1"
+        versionCode = 39
+        versionName = "0.14.2"
     }
 
     buildTypes {
@@ -78,4 +78,10 @@ dependencies {
     implementation(project(":shared"))
 
     testImplementation(libs.junit)
+}
+
+// Room 스키마를 파일로 내보낸다 (I1) — 마이그레이션이 10개인데 스키마 JSON이 없어
+// MigrationTestHelper로 검증할 수가 없었다. schemas/는 저장소에 함께 커밋한다
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }

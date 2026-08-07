@@ -49,6 +49,7 @@ import com.pbp.shared.ProfileStats
 import com.pbp.desktop.ui.GowunBatang
 import com.pbp.desktop.ui.Tokens
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import com.pbp.desktop.data.AppPaths
 import com.pbp.desktop.ui.DesktopDimens
@@ -143,10 +144,15 @@ internal fun ProfileOverlay(
             ) {
                 if (!pickingImage) {
                     pickingImage = true
-                    overlayScope.launch(Dispatchers.IO) {
+                    overlayScope.launch {
                         try {
-                            pickAndStoreImage("프로필 이미지 선택", AppPaths.AVATARS_LOCAL, DesktopDimens.PROFILE_PX)
-                                ?.let { imagePath = it }
+                            // 고르기·저장은 IO, **상태 반영은 UI 스코프에서** (H3)
+                            val picked = withContext(Dispatchers.IO) {
+                                pickAndStoreImage(
+                                    "프로필 이미지 선택", AppPaths.AVATARS_LOCAL, DesktopDimens.PROFILE_PX,
+                                )
+                            }
+                            if (picked != null) imagePath = picked
                         } finally {
                             pickingImage = false
                         }
@@ -617,10 +623,14 @@ internal fun OwnerProfileOverlay(
             ) {
                 if (!picking) {
                     picking = true
-                    scope.launch(Dispatchers.IO) {
+                    scope.launch {
                         try {
-                            pickAndStoreImage("오너 프로필 이미지 선택", AppPaths.OWNER, DesktopDimens.PROFILE_PX)
-                                ?.let { imagePath = it }
+                            val picked = withContext(Dispatchers.IO) {
+                                pickAndStoreImage(
+                                    "오너 프로필 이미지 선택", AppPaths.OWNER, DesktopDimens.PROFILE_PX,
+                                )
+                            }
+                            if (picked != null) imagePath = picked // 상태 반영은 UI 스코프 (H3)
                         } finally {
                             picking = false
                         }

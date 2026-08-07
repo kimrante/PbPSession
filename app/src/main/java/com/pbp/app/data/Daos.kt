@@ -122,7 +122,21 @@ interface MessageDao {
     )
     fun observeLatestForRoom(roomId: Long, limit: Int): Flow<List<Message>>
 
-    @Query("SELECT * FROM messages WHERE id IN (SELECT MAX(id) FROM messages GROUP BY roomId)")
+    /**
+     * 방마다 **가장 나중 메시지** 1건 — 목록 미리보기용.
+     *
+     * MAX(id)가 아니라 createdAt 순이다 (I5). id는 로컬 삽입 순서라, 백필처럼 오래된
+     * createdAt이 나중에 큰 id로 들어오면 목록 미리보기와 채팅 마지막 줄이 어긋났다.
+     * 정렬 기준을 화면과 같은 `createdAt DESC, id DESC`로 맞춘다 —
+     * 복합 인덱스 (roomId, createdAt, id)가 이미 있어 비용은 그대로다.
+     */
+    @Query(
+        """SELECT m.* FROM messages m
+           WHERE m.id = (
+             SELECT id FROM messages WHERE roomId = m.roomId
+             ORDER BY createdAt DESC, id DESC LIMIT 1
+           )"""
+    )
     fun observeLastPerRoom(): Flow<List<Message>>
 
     /** '이전 대화 불러오기' 버튼 표시 판정용 총 개수 (P3-7) */
@@ -172,6 +186,13 @@ interface MessageDao {
 
     @Query("UPDATE messages SET body = :body, editedAt = :editedAt WHERE remoteId = :remoteId")
     suspend fun updateBodyByRemoteId(remoteId: String, body: String, editedAt: Long?)
+
+    /** 아바타를 못 받아 비어 있던 수신 메시지만 채운다 (H7) — 이미 있으면 건드리지 않는다 */
+    @Query(
+        "UPDATE messages SET senderImagePath = :path " +
+            "WHERE remoteId = :remoteId AND senderImagePath IS NULL"
+    )
+    suspend fun fillSenderImageIfMissing(remoteId: String, path: String)
 
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)

@@ -37,7 +37,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 참여(join) 시 로컬 방 생성 — Repository 전체가 아니라 이 한 가지 능력만 주입받는다.
      * 과거에는 서로를 `var …? = null`로 물고 있어 두 클래스를 독립적으로 읽을 수 없었다 (리뷰 B6).
      */
-    var createLocalRoom: (suspend (name: String, themeColor: Long, backgroundKey: String, rule: String) -> Long)? = null
+    var createLocalRoom: (
+        suspend (
+            name: String, themeColor: Long, backgroundKey: String, rule: String,
+            remoteId: String, inviteCode: String,
+        ) -> Long
+        )? = null
 
     /** 프로필 이미지 업로드·복원 (B5로 분리) */
     private val avatars by lazy { AvatarStore(context) { firestore } }
@@ -531,14 +536,17 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // 멤버 등록이 규칙상 메시지 읽기의 전제 — 리스너 attach보다 먼저
         ensureMembership(roomDoc.id)
 
+        // 방 생성과 remoteId 기록을 한 트랜잭션에서 (H6) — 나눠 하면 그 사이 크래시에
+        // 원격과 이어지지 않은 고아 방이 남고, 다시 참여할 때 방이 하나 더 생긴다
         val roomId = create(
             roomDoc.getString("name") ?: "공유 캠페인",
             roomDoc.getLong("themeColor") ?: com.pbp.shared.Protocol.DEFAULT_THEME_COLOR,
             // 배경은 공유 대상이 아니다 — 참여자는 기본 배경으로 시작하고 각자 바꾼다
             com.pbp.shared.Protocol.DEFAULT_BACKGROUND,
             roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
+            roomDoc.id,
+            code,
         )
-        db.roomDao().setRemote(roomId, roomDoc.id, code)
         // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번)
         val greeting = Message(
             roomId = roomId,
@@ -701,7 +709,6 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         if (attachedRemotes.putIfAbsent(localRoomId, remoteRoomId) != null) return
         val generation = attachSequence.incrementAndGet()
         attachGeneration[localRoomId] = generation
-        attachRoomDoc(localRoomId, remoteRoomId)
         val channel =
             kotlinx.coroutines.channels.Channel<SnapshotEvent>(kotlinx.coroutines.channels.Channel.UNLIMITED)
         eventChannels[localRoomId] = channel
@@ -719,10 +726,13 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     // 리스너 에러를 무시하면 동기화가 죽어도 무신호 (P3-4)
                     if (error != null) {
                         android.util.Log.w("PbpSync", "메시지 리스너 오류 room=$remoteRoomId", error)
-                        // 권한 거부 = 인증/멤버십 문제 — 재인증 후 다시 붙는다 (N5)
-                        if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
-                            recoverAuth(localRoomId, remoteRoomId)
-                        }
+                        // 오류 = 등록 종료. 종류를 가리지 않고 다시 붙인다 (G3).
+                        // 권한 거부일 때만 인증/멤버십부터 다시 세운다 (N5)
+                        recoverListener(
+                            localRoomId, remoteRoomId,
+                            reauth = error.code ==
+                                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                        )
                     }
                     if (snapshot == null) return@addSnapshotListener
                     channel.trySend(
@@ -743,6 +753,16 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 return@launch
             }
             listeners[localRoomId] = registration
+            // 맵에 넣는 사이에도 detach가 끼어들 수 있다 (H5) — 넣고 나서 한 번 더 본다.
+            // 어긋났으면 맵 밖 유령 리스너가 남아 재시작까지 읽기가 새어 나간다
+            if (attachGeneration[localRoomId] != generation) {
+                listeners.remove(localRoomId)?.remove()
+                channel.close()
+                return@launch
+            }
+            // 방 문서 리스너도 세대를 확인한 뒤에 건다 (H5) — attach 동기 구간에서
+            // 걸면 그 사이 들어온 detach가 지나간 뒤에 등록돼 그대로 남는다
+            attachRoomDoc(localRoomId, remoteRoomId)
             var needReconcile = true
             for (event in channel) {
                 // 삭제 대조는 서버 전체 상태가 확실한 첫 서버 스냅샷에서만 (캐시 스냅샷 제외)
@@ -811,6 +831,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 // 유니크 인덱스 충돌(-1)이면 이미 있는 메시지 — 알림을 다시 띄우지 않는다 (C6)
                 if (db.messageDao().insert(message) != -1L) {
                     onIncomingMessage?.invoke(message, remoteRoomId)
+                } else if (avatarPath != null) {
+                    // 이미 있는 메시지인데 이번엔 아바타를 받아 냈다 — 비어 있으면 채운다 (H7).
+                    // 처음 받을 때 네트워크가 잠깐 끊기면 그 메시지는 영영 빈 원이었다.
+                    // avatarId를 로컬에 두지 않으므로, 다시 붙을 때 오는 스냅샷이 유일한 기회다
+                    db.messageDao().fillSenderImageIfMissing(doc.id, avatarPath)
                 }
             }.onFailure {
                 android.util.Log.w("PbpSync", "수신 메시지 처리 실패 doc=${doc.id}", it)
@@ -856,19 +881,34 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private val recovering = java.util.concurrent.ConcurrentHashMap<Long, Boolean>()
     private val recoverAttempts = java.util.concurrent.ConcurrentHashMap<Long, Int>()
 
-    private fun recoverAuth(localRoomId: Long, remoteRoomId: String) {
+    /**
+     * 리스너가 죽었다 — 백오프 뒤 다시 붙인다 (G3).
+     *
+     * **Firestore 리스너는 오류 한 번으로 등록이 끝난다**(SDK 계약). 예전에는
+     * PERMISSION_DENIED만 복구해서, RESOURCE_EXHAUSTED(무료 쿼터 소진)·INTERNAL 같은
+     * 오류가 오면 리스너가 영구히 죽은 채였다 — FCM 알림은 오는데 열어 보면 메시지가
+     * 없는 상태가 앱을 다시 켤 때까지 이어졌다. 그래서 **오류 종류를 가리지 않고**
+     * 재attach하고, 재인증(authUid = null)만 권한 거부일 때로 좁힌다.
+     */
+    private fun recoverListener(
+        localRoomId: Long,
+        remoteRoomId: String,
+        reauth: Boolean,
+    ) {
         if (recovering.putIfAbsent(localRoomId, true) != null) return
         scope.launch {
             try {
                 // 재접속 전까지는 리스너가 죽은 상태 — FCM 경로가 알림을 맡아야 한다
                 detach(localRoomId)
-                // 권한 거부가 지속되면(설정 오류 등) 지수 백오프로 무한 재시도 폭주 방지
+                // 오류가 지속되면(설정 오류·쿼터 소진 등) 지수 백오프로 재시도 폭주 방지
                 val attempt = recoverAttempts.merge(localRoomId, 1, Int::plus) ?: 1
                 val delayMs = (3_000L shl (attempt - 1).coerceAtMost(5)).coerceAtMost(120_000L)
                 kotlinx.coroutines.delay(delayMs)
-                authUid = null // 익명 로그인 재시도
-                ensureAuth()
-                runCatching { ensureMembership(remoteRoomId) }
+                if (reauth) {
+                    authUid = null // 익명 로그인 재시도
+                    ensureAuth()
+                    runCatching { ensureMembership(remoteRoomId) }
+                }
                 attach(localRoomId, remoteRoomId)
             } finally {
                 recovering.remove(localRoomId)
@@ -883,6 +923,13 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     android.util.Log.w("PbpSync", "방 문서 리스너 오류 room=$remoteRoomId", error)
+                    // 메시지 리스너와 같은 경로로 되살린다 (G3) — 이쪽만 로그로 끝내면
+                    // 상대가 바꾼 테마·이름이 재시작까지 영영 안 온다
+                    recoverListener(
+                        localRoomId, remoteRoomId,
+                        reauth = error.code ==
+                            com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                    )
                 }
                 if (snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 if (snapshot.metadata.hasPendingWrites()) return@addSnapshotListener

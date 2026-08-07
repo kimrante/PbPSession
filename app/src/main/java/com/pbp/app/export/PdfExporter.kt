@@ -38,20 +38,32 @@ object PdfExporter {
         documentName: String,
         destination: ParcelFileDescriptor,
     ): String? = withContext(Dispatchers.Main) {
+        var webView: WebView? = null
+        var adapter: PrintDocumentAdapter? = null
         runCatching {
-            val webView = loadHtml(context, html)
-            val adapter = webView.createPrintDocumentAdapter(documentName)
+            val view = loadHtml(context, html).also { webView = it }
+            val printAdapter = view.createPrintDocumentAdapter(documentName).also { adapter = it }
             val attributes = PrintAttributes.Builder()
                 .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
                 .setResolution(PrintAttributes.Resolution("pdf", "pdf", 300, 300))
                 // 여백 0 — 종이 톤 배경이 가장자리까지 이어져야 화면과 같은 인상이 된다
                 .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                 .build()
-            layout(adapter, attributes)
-            writePages(adapter, destination)
-            adapter.onFinish()
+            layout(printAdapter, attributes)
+            writePages(printAdapter, destination)
             null
-        }.getOrElse { it.message ?: it::class.simpleName ?: "알 수 없는 오류" }
+        }.getOrElse {
+            it.message ?: it::class.simpleName ?: "알 수 없는 오류"
+        }.also {
+            // 성공이든 실패든 반드시 치운다 (K2) — 예전에는 실패 경로에서 어댑터를
+            // 놓아 주지 않았고 WebView는 어느 경로에서도 파괴하지 않아, 내보낼 때마다
+            // 렌더러 프로세스와 뷰가 통째로 샜다. 둘 다 메인 스레드 전용이라 여기서 된다
+            runCatching { adapter?.onFinish() }
+            webView?.let { view ->
+                view.stopLoading()
+                view.destroy()
+            }
+        }
     }
 
     /** 페이지가 다 그려질 때까지 기다린다 — 덜 그려진 상태로 인쇄하면 빈 장이 나온다 */

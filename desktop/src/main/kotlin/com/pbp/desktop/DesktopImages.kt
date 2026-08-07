@@ -134,8 +134,10 @@ internal fun fetchAvatarCached(
     val bytes = firestore.fetchAvatar(remoteRoomId, avatarId) ?: return null
     runCatching {
         dir.mkdirs()
-        // 임시 파일 + 교체 — 쓰다 중단된 깨진 캐시 방지 (모바일 R7-2와 동일)
-        val tmp = java.io.File(dir, "$avatarId.tmp")
+        // 임시 파일 + 교체 — 쓰다 중단된 깨진 캐시 방지 (모바일 R7-2와 동일).
+        // 이름에 난수를 붙인다 (I4): 같은 아바타를 두 곳에서 동시에 받으면 고정 이름은
+        // 서로의 파일을 덮어써, Windows에서는 renameTo가 공유 위반으로 실패한다
+        val tmp = java.io.File(dir, "$avatarId.${java.util.UUID.randomUUID()}.tmp")
         tmp.writeBytes(bytes)
         if (!tmp.renameTo(cached)) tmp.delete()
     }

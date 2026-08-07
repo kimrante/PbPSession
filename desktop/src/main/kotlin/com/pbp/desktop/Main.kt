@@ -193,7 +193,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 목록 교체+직렬화를 한 락 안에서 (C1) — IO 핸들러에서 불러도 CME 없음.
         // 파일 쓰기만 IO에서 (N8·P3-16)
         val json = config.replaceAndSnapshot(rooms, profiles)
-        scope.launch(Dispatchers.IO) { config.writeSnapshot(json) }
+        // 굳힌 순서를 함께 넘긴다 (I2) — launch 순서와 락 획득 순서는 무관해서,
+        // 이게 없으면 연속 저장에서 옛 스냅샷이 최종본으로 남을 수 있다
+        val generation = config.nextSnapshotGeneration()
+        scope.launch(Dispatchers.IO) { config.writeSnapshot(json, generation) }
     }
 
     /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
@@ -363,14 +366,27 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         persist()
                     }
                     // 누군가 로그를 초기화했다 — 폴링은 '문서가 사라졌다'를 볼 수 없어
-                    // 파일 캐시가 유령을 계속 되살렸다 (A6). 그 시각 이전만 비운다
-                    meta?.logsClearedAt?.let { clearedAt ->
-                        val session = sessionFor(room.remoteId)
-                        val kept = session.messages.filter { it.createdAt > clearedAt }
+                    // 파일 캐시가 유령을 계속 되살렸다 (A6). 그 시각 이전만 비운다.
+                    //
+                    // **값이 바뀐 회차에만 한 번** 적용한다 (H2). 방 문서의 logsClearedAt은
+                    // 영구히 남으므로 매 메타 폴마다 다시 적용하면, 리셋한 기기의 시계가
+                    // 조금 빠를 때 그 차이만큼의 상대 메시지가 폴로 왔다가 60초마다 다시
+                    // 지워진다 — 깜빡 떴다 사라지는 꼴이 된다.
+                    //
+                    // 비교 기준은 syncAt(서버 시각)이다. createdAt은 **작성한 기기의 시계**라
+                    // 리셋 기기 시계와 견주면 남길지 말지가 두 기기의 시계 차에 좌우된다.
+                    val session = sessionFor(room.remoteId)
+                    meta?.logsClearedAt?.takeIf { it != session.appliedClearedAt }?.let { clearedAt ->
+                        session.appliedClearedAt = clearedAt
+                        val kept = session.messages.filter { it.syncAt > clearedAt }
                         if (kept.size != session.messages.size) {
                             session.messages = kept
                             if (selected?.remoteId == room.remoteId) messages = kept
-                            RoomCacheStore.save(room.remoteId, kept, session.lastCreatedAt)
+                            // 직렬화 + 파일 쓰기라 EDT에서 하면 큰 방에서 화면이 멎는다 (I3)
+                            val cursor = session.lastCreatedAt
+                            withContext(Dispatchers.IO) {
+                                RoomCacheStore.save(room.remoteId, kept, cursor)
+                            }
                         }
                     }
                 }
@@ -463,7 +479,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     )
                 }
             }
-            onResult(textOk, diceOk)
+            // 콜백이 입력창 상태(input·oocOn)를 만진다 — IO에서 부르면 사용자가 치는
+            // 중인 글자와 두 스레드에서 교차한다 (H3, 코드베이스 규약 E4·M2)
+            withContext(Dispatchers.Main) { onResult(textOk, diceOk) }
             // 화면 반영은 증분 폴링(≤2.5초)이 담당 — 전체 재조회 금지
         }
     }
@@ -501,7 +519,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     systemMessageValues(Protocol.Notice.LOGS_RESET, authorUid()),
                 )
             }
-            onDone(ok)
+            withContext(Dispatchers.Main) { onDone(ok) } // 상태 변경은 UI 스코프에서 (H3)
         }
     }
 
@@ -570,18 +588,26 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         scope.launch {
             // 렌더는 동기라 이미지 로딩을 기다려 주지 않는다 — 필요한 아바타를 먼저 받아
             // 캐시에 채운다. 이러면 렌더 중 서버 요청이 0이 되고 빈 원도 남지 않는다 (P3·R6)
-            withContext(Dispatchers.IO) {
+            // 채팅 화면의 지연 로딩과 같은 아바타를 동시에 받을 수 있다 — 같은 가드를
+            // 함께 써야 한 아바타를 두 번 내려받지 않는다 (I4).
+            // 디코드는 IO에서, **캐시 쓰기는 Main에서** — 캐시는 Compose 상태다 (H3)
+            val decoded = withContext(Dispatchers.IO) {
                 picked.mapNotNull { it.avatarId }.distinct()
-                    .filter { it !in avatarCache }
-                    .forEach { id ->
-                        fetchAvatarCached(firestore, room.remoteId, id)?.let { bytes ->
-                            runCatching {
-                                org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
-                            }.onFailure { dropBrokenAvatarCache(id) }
-                                .getOrNull()?.let { avatarCache[id] = it }
+                    .filter { it !in avatarCache && avatarsInFlight.add(it) }
+                    .mapNotNull { id ->
+                        try {
+                            fetchAvatarCached(firestore, room.remoteId, id)?.let { bytes ->
+                                runCatching {
+                                    org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                                }.onFailure { dropBrokenAvatarCache(id) }
+                                    .getOrNull()?.let { id to it }
+                            }
+                        } finally {
+                            avatarsInFlight.remove(id)
                         }
                     }
             }
+            decoded.forEach { (id, bitmap) -> avatarCache[id] = bitmap }
             val result = withContext(Dispatchers.Default) {
                 runCatching {
                     com.pbp.desktop.export.CaptureRenderer.render(
@@ -911,7 +937,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 scope.launch(Dispatchers.IO) {
                     val meta = firestore.findRoomByCode(code)
                     // 멤버 등록에 실패하면 규칙상 방을 읽을 수 없다 — 참가 실패로 처리 (C13)
-                    if (meta == null || !firestore.ensureMember(meta.remoteId)) onFail()
+                    if (meta == null || !firestore.ensureMember(meta.remoteId)) {
+                        withContext(Dispatchers.Main) { onFail() } // 상태 변경은 UI 스코프 (H3)
+                    }
                     else {
                         val existing = rooms.find { it.remoteId == meta.remoteId }
                         val joined = existing ?: JoinedRoom(

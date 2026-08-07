@@ -272,13 +272,9 @@ class FirestoreRest(
     }
 
     // ── Firestore 값 인코딩/디코딩 ────────────────────────
-    /** 타임스탬프로 써야 하는 값 — 정수로 쓰면 범위 질의에서 통째로 빠진다 (V1) */
-    class ServerTime(val millis: Long)
-
     private fun v(value: Any): JsonObject {
         val o = JsonObject()
         when (value) {
-            is ServerTime -> o.addProperty("timestampValue", rfc3339(value.millis))
             is String -> o.addProperty("stringValue", value)
             is Boolean -> o.addProperty("booleanValue", value)
             is Long -> o.addProperty("integerValue", value.toString())
@@ -342,14 +338,13 @@ class FirestoreRest(
                       "value":{"stringValue":"${code.replace("\"", "")}"}}},"limit":1}}
         """.trimIndent()
         val res = runCatching {
-            val r = http.send(
+            val r = sendWithRetry {
                 HttpRequest.newBuilder(URI.create("$base:runQuery?key=$apiKey")).timeout(requestTimeout)
                     .header("Content-Type", "application/json")
                     .auth()
                     .POST(HttpRequest.BodyPublishers.ofString(query, StandardCharsets.UTF_8))
-                    .build(),
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
-            )
+                    .build()
+            } ?: return null
             if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
         }.getOrNull() ?: return null
         val doc = res.firstOrNull { it.asJsonObject.has("document") }
@@ -644,15 +639,17 @@ class FirestoreRest(
                       "value":{"timestampValue":"${rfc3339(from)}"}}},
              "orderBy":[{"field":{"fieldPath":"syncAt"},"direction":"ASCENDING"}]}}
         """.trimIndent()
+        // 가장 잦은 요청이 정작 토큰 재시도 밖에 있었다 (H1) — 서버가 로컬 만료 전에
+        // 토큰을 거부하면 죽은 토큰으로 매 폴이 실패해 커서가 멈추고, 수신만 하는 쪽은
+        // 자연 만료(최대 1시간)까지 무증상으로 조용해진다
         val res = runCatching {
-            val r = http.send(
+            val r = sendWithRetry {
                 HttpRequest.newBuilder(URI.create("$base/rooms/$remoteRoomId:runQuery?key=$apiKey")).timeout(requestTimeout)
                     .header("Content-Type", "application/json")
                     .auth()
                     .POST(HttpRequest.BodyPublishers.ofString(query, StandardCharsets.UTF_8))
-                    .build(),
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
-            )
+                    .build()
+            } ?: return null
             if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
         }.getOrNull() ?: return null
         // 파싱 예외도 오류(null)로 — 커서 미전진 계약(P1-6)이 흡수한다 (C2)
@@ -664,26 +661,92 @@ class FirestoreRest(
         }.getOrNull()
     }
 
+    /**
+     * 메시지 쓰기 — **syncAt은 서버가 찍는다** (G2).
+     *
+     * 예전에는 `System.currentTimeMillis()`를 타임스탬프로 인코딩했다. 모바일은 진짜
+     * 서버 시각(serverTimestamp)을 쓰는데 데스크톱만 로컬 시계였고, 폴 커서는 받아 온
+     * syncAt의 최대값으로 전진한다 — PC 시계가 5초만 빨라도 커서가 서버 시각을 앞질러
+     * 그 사이 도착한 상대 메시지가 증분 질의에서 통째로 빠졌다. 시계가 10분 넘게
+     * 어긋나면 레거시 스윕도 놓쳐 영구 유실이었다.
+     *
+     * commit 엔드포인트의 `updateTransforms`로 넘긴다: 쓰기 1회, 과금 동일.
+     * 문서 ID는 우리가 만든다 — commit은 자동 ID를 지원하지 않는다.
+     */
     fun postMessage(remoteRoomId: String, values: Map<String, Any?>): Boolean =
-        post("$base/rooms/$remoteRoomId/messages?key=$apiKey", gson.toJson(fields(values))) != null
+        commitWithServerSyncAt(
+            path = "rooms/$remoteRoomId/messages/${newDocId()}",
+            values = values - Protocol.Field.SYNC_AT,
+            updateMask = null,
+        )
 
-    /** 메시지 편집 전파 — 모바일 pushEdit과 동일 필드(body, editedAt) */
-    fun updateMessage(remoteRoomId: String, docId: String, body: String, editedAt: Long): Boolean =
-        patch(
-            "$base/rooms/$remoteRoomId/messages/$docId?key=$apiKey" +
-                "&updateMask.fieldPaths=body&updateMask.fieldPaths=editedAt" +
-                "&updateMask.fieldPaths=${Protocol.Field.SYNC_AT}",
-            gson.toJson(
-                fields(
-                    mapOf(
-                        "body" to body,
-                        "editedAt" to editedAt,
-                        // 커서를 함께 밀어야 상대 데스크톱의 증분 질의에 다시 걸린다 (B3).
-                        // 이걸로 architecture.md의 S7("30초 윈도 밖 편집 미반영")이 해소된다
-                        Protocol.Field.SYNC_AT to ServerTime(System.currentTimeMillis()),
+    /** Firestore 자동 ID와 같은 규격 — 20자 URL-safe */
+    private fun newDocId(): String {
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+        return (1..20).map { alphabet[secureRandom.nextInt(alphabet.length)] }.joinToString("")
+    }
+
+    private val secureRandom = java.security.SecureRandom()
+
+    /**
+     * `documents:commit`으로 문서를 쓰고 syncAt만 서버 시각으로 세운다.
+     * @param updateMask null이면 문서 전체 쓰기(생성), 아니면 그 필드들만 갱신
+     */
+    private fun commitWithServerSyncAt(
+        path: String,
+        values: Map<String, Any?>,
+        updateMask: List<String>?,
+    ): Boolean {
+        val document = fields(values).apply {
+            addProperty("name", "$documentRoot/$path")
+        }
+        val write = JsonObject().apply {
+            add("update", document)
+            add(
+                "updateTransforms",
+                com.google.gson.JsonArray().apply {
+                    add(
+                        JsonObject().apply {
+                            addProperty("fieldPath", Protocol.Field.SYNC_AT)
+                            addProperty("setToServerValue", "REQUEST_TIME")
+                        }
                     )
+                },
+            )
+            if (updateMask != null) {
+                add(
+                    "updateMask",
+                    JsonObject().apply {
+                        add(
+                            "fieldPaths",
+                            com.google.gson.JsonArray().apply { updateMask.forEach { add(it) } },
+                        )
+                    },
                 )
-            ),
+            }
+        }
+        val body = JsonObject().apply {
+            add("writes", com.google.gson.JsonArray().apply { add(write) })
+        }
+        return post("$base:commit?key=$apiKey", gson.toJson(body)) != null
+    }
+
+    /** commit이 요구하는 문서 절대 이름의 앞부분 */
+    private val documentRoot =
+        "projects/$projectId/databases/(default)/documents"
+
+    /**
+     * 메시지 편집 전파 — 모바일 pushEdit과 동일 필드(body, editedAt).
+     * 커서를 함께 밀어야 상대 데스크톱의 증분 질의에 다시 걸린다 (B3). 그 커서 값도
+     * 서버가 찍는다 (G2) — 로컬 시계로 밀면 편집 한 번이 커서를 앞질러 버린다.
+     */
+    fun updateMessage(remoteRoomId: String, docId: String, body: String, editedAt: Long): Boolean =
+        commitWithServerSyncAt(
+            path = "rooms/$remoteRoomId/messages/$docId",
+            values = mapOf("body" to body, "editedAt" to editedAt),
+            // syncAt은 마스크에 넣지 않는다 — 마스크에 있는데 fields에 없으면 "삭제"로
+            // 읽힌다. 변환(updateTransforms)은 마스크와 무관하게 적용되므로 이걸로 충분하다
+            updateMask = listOf("body", "editedAt"),
         )
 
     /** 메시지 삭제 전파 — 모바일 pushDelete와 동일 */

@@ -89,52 +89,61 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
     /**
      * 로그 내보내기 (A) — 채팅 상단 바에 있던 것을 여기로 옮겼다.
      * 매 세션 쓰는 기능이 아니라 상단 바 자리를 차지할 이유가 없다.
+     *
+     * 화면 스코프가 아니라 앱 스코프에서 돌린다 (K1). 파일을 고른 뒤 설정 화면을
+     * 벗어나면 코루틴이 끊기는데, 특히 PDF는 중단 지점이 많아 **반쯤 기록된 파일**이
+     * 남고 완료 안내도 뜨지 않았다. 아래 [resetLogs]가 같은 이유로 쓰는 경로다 (N1).
      */
-    fun exportTo(uri: Uri, format: ExportFormat, onResult: (Boolean) -> Unit) =
-        viewModelScope.launch {
-            val name = room.value?.name ?: "PbP"
-            // 내보내기는 화면 페이징과 무관하게 전체
-            val messages = withContext(Dispatchers.IO) { repo.allMessages(roomId) }
-            val ok = when (format) {
-                ExportFormat.Text -> withContext(Dispatchers.IO) {
-                    val text = com.pbp.app.export.LogExporter.buildText(name, messages)
-                    runCatching {
-                        app.contentResolver.openOutputStream(uri)!!
-                            .use { it.write(text.toByteArray()) }
-                    }.isSuccess
-                }
+    fun exportTo(uri: Uri, format: ExportFormat, onResult: (Boolean) -> Unit) {
+        app.syncManager.runInAppScope(
+            work = { exportBlocking(uri, format) },
+            onDone = onResult,
+        )
+    }
 
-                ExportFormat.Html -> withContext(Dispatchers.IO) {
-                    val html = com.pbp.app.export.LogExporter.buildHtml(
+    private suspend fun exportBlocking(uri: Uri, format: ExportFormat): Boolean {
+        val name = room.value?.name ?: "PbP"
+        // 내보내기는 화면 페이징과 무관하게 전체
+        val messages = withContext(Dispatchers.IO) { repo.allMessages(roomId) }
+        return when (format) {
+            ExportFormat.Text -> withContext(Dispatchers.IO) {
+                val text = com.pbp.app.export.LogExporter.buildText(name, messages)
+                runCatching {
+                    app.contentResolver.openOutputStream(uri)!!
+                        .use { it.write(text.toByteArray()) }
+                }.isSuccess
+            }
+
+            ExportFormat.Html -> withContext(Dispatchers.IO) {
+                val html = com.pbp.app.export.LogExporter.buildHtml(
+                    roomName = name,
+                    roomIcon = room.value?.icon ?: "",
+                    messages = messages,
+                )
+                runCatching {
+                    app.contentResolver.openOutputStream(uri)!!
+                        .use { it.write(html.toByteArray()) }
+                }.isSuccess
+            }
+
+            // PDF는 같은 HTML을 WebView 인쇄 경로로 뽑는다 — 서식이 그대로 남는다.
+            // WebView는 메인 스레드 전용이라 조립(IO)과 쓰기(Main)를 나눈다
+            ExportFormat.Pdf -> {
+                val html = withContext(Dispatchers.IO) {
+                    com.pbp.app.export.LogExporter.buildHtml(
                         roomName = name,
                         roomIcon = room.value?.icon ?: "",
                         messages = messages,
                     )
-                    runCatching {
-                        app.contentResolver.openOutputStream(uri)!!
-                            .use { it.write(html.toByteArray()) }
-                    }.isSuccess
                 }
-
-                // PDF는 같은 HTML을 WebView 인쇄 경로로 뽑는다 — 서식이 그대로 남는다.
-                // WebView는 메인 스레드 전용이라 조립(IO)과 쓰기(Main)를 나눈다
-                ExportFormat.Pdf -> {
-                    val html = withContext(Dispatchers.IO) {
-                        com.pbp.app.export.LogExporter.buildHtml(
-                            roomName = name,
-                            roomIcon = room.value?.icon ?: "",
-                            messages = messages,
-                        )
+                runCatching {
+                    app.contentResolver.openFileDescriptor(uri, "w")!!.use { pfd ->
+                        com.pbp.app.export.PdfExporter.write(app, html, name, pfd) == null
                     }
-                    runCatching {
-                        app.contentResolver.openFileDescriptor(uri, "w")!!.use { pfd ->
-                            com.pbp.app.export.PdfExporter.write(app, html, name, pfd) == null
-                        }
-                    }.getOrDefault(false)
-                }
+                }.getOrDefault(false)
             }
-            onResult(ok)
         }
+    }
 
     /**
      * 방 로그 전체 리셋 — 로컬·서버·상대 로그까지 삭제.

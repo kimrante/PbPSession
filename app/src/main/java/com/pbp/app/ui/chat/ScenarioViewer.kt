@@ -144,6 +144,15 @@ internal fun ScenarioFloat(
             }
         }
         if (state is ChatViewModel.ScenarioState.Viewing) {
+            if (state.truncated) {
+                // 조용히 버리지 않는다 — 뒷부분이 없는 줄 모르고 읽으면 진행이 끊긴다
+                Spacer(Modifier.height(PbpDimens.gap2))
+                Text(
+                    "문서가 커서 앞부분만 표시합니다",
+                    fontSize = 10.sp,
+                    color = tokens.inkDim,
+                )
+            }
             Spacer(Modifier.height(PbpDimens.gap3))
             NavRow(state, onStep)
         }

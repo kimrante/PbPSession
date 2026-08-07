@@ -32,7 +32,7 @@ body{
   font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
   padding:40px;display:flex;justify-content:center;
 }
-.wrap{display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;max-width:1650px}
+.wrap{display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;max-width:1900px}
 
 /* ── 폰 프레임 ── */
 .phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px;position:relative}
@@ -66,6 +66,7 @@ body{
 .f-head{display:flex;align-items:center}
 .f-label{flex:1;font-size:11px;font-weight:700;color:var(--ink-dim);display:flex;align-items:center;gap:var(--sp-1)}
 .f-x{width:var(--touch);height:var(--touch);margin:-8px -8px -8px 0;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:var(--ink-dim);flex-shrink:0}
+.f-set{width:var(--touch);height:var(--touch);margin:-8px 0;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ink-dim);flex-shrink:0}
 .f-guide{font-size:13px;color:var(--ink);text-align:center;padding:var(--sp-2) 0}
 .f-fieldrow{display:flex;gap:var(--sp-2);align-items:center}
 .f-field{flex:1;background:var(--panel-2);border-radius:var(--r-cell);padding:var(--sp-3);font-size:13px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -165,7 +166,7 @@ body{
         </div>
         <div class="chiprow">
           <div class="chip hot">📖 시나리오</div>
-          <div class="chip">＋ 판정 요청</div>
+          <div class="chip">판정</div>
         </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
@@ -209,6 +210,7 @@ body{
       <div class="dock">
         <div class="f-head">
           <div class="f-label">📖 등대의 일지 — 1장</div>
+          <div class="f-set">⚙</div>
           <div class="f-x">✕</div>
         </div>
         <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다 — 마지막 장에는 "빛이 두 번 꺼졌다"고만 적혀 있다.</div>
@@ -228,7 +230,7 @@ body{
         </div>
         <div class="chiprow">
           <div class="chip hot">📖 시나리오</div>
-          <div class="chip">＋ 판정 요청</div>
+          <div class="chip">판정</div>
         </div>
         <div class="inputrow">
           <div class="ooc">◯ 잡담</div>
@@ -285,6 +287,66 @@ body{
     <div class="cap">③ 잘못된 링크 — 경고 다이얼로그 (Failed)</div>
   </div>
 
+  <!-- ④ 시나리오 뷰어 설정 창 -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar">GM</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">GM</div>
+        </div>
+      </div>
+
+      <div class="chat" style="filter:blur(1px)">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+      </div>
+      <div class="dock" style="filter:blur(1px);opacity:.75">
+        <div class="f-head">
+          <div class="f-label">📖 등대의 일지 — 1장</div>
+          <div class="f-set">⚙</div>
+          <div class="f-x">✕</div>
+        </div>
+        <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다…</div>
+      </div>
+
+      <div class="dim">
+        <div class="dialog" style="text-align:left">
+          <div class="dlg-title" style="text-align:center">시나리오 뷰어 설정</div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink-dim);margin-top:var(--sp-2)">문서</div>
+          <div style="display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell);background:var(--panel-2)">
+            <div style="font-size:15px">📖</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">등대의 일지 — 1장</div>
+              <div style="font-size:10px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">docs.google.com/document/d/1aB…</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;padding:var(--sp-3);border-radius:var(--r-cell);font-size:13px;font-weight:700;color:var(--signature-ink)">다른 문서로 바꾸기</div>
+          <div style="display:flex;align-items:center;padding:var(--sp-3);border-radius:var(--r-cell);font-size:13px;font-weight:700;color:var(--signature-ink)">처음부터 읽기</div>
+          <div style="height:1px;background:var(--line);margin:var(--sp-2) 0"></div>
+          <div style="font-size:11px;font-weight:700;color:var(--ink-dim)">보기</div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3)">
+            <div style="width:34px;height:20px;border-radius:999px;background:var(--postit);position:relative;flex-shrink:0"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:999px;background:var(--panel)"></div></div>
+            <div style="font-size:11px;font-weight:700">읽은 문장까지 진하게</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3)">
+            <div style="width:34px;height:20px;border-radius:999px;background:rgba(20,25,32,.16);position:relative;flex-shrink:0"><div style="position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:999px;background:var(--panel)"></div></div>
+            <div style="font-size:11px;font-weight:700">문단 단위로 보기</div>
+          </div>
+          <div class="dlg-actions">
+            <div class="dlg-btn">닫기</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">④ 헤더 ⚙ 탭 — 뷰어 설정 창</div>
+  </div>
+
   <!-- 주석 -->
   <div class="notes">
     <h3><em>시나리오 뷰어</em> — GM 전용<br>입력창 위 패널 UI 시안</h3>
@@ -306,11 +368,24 @@ body{
     </div>
 
     <div class="note y">
-      <h4>① 진입 — 📖 시나리오 칩 (판정 요청 왼쪽)</h4>
-      <p>GM 프로필 활성 시 칩 행의 <b>첫 번째</b> — 시나리오가 판정 요청보다
-      왼쪽(<code>spacedBy(gap2)</code>). 패널이 열려 있는 동안은 칩을
+      <h4>① 진입 — 📖 시나리오 칩 (판정 왼쪽)</h4>
+      <p>GM 프로필 활성 시 칩 행의 <b>첫 번째</b> — 시나리오가 판정 칩보다
+      왼쪽(<code>spacedBy(gap2)</code>). 판정 칩 문구는 <b>"판정"</b>으로
+      축약("＋ 판정 요청" → "판정"). 패널이 열려 있는 동안은 시나리오 칩을
       진하게(<code>signature 32%</code> 면 + <code>signatureDeep</code>
       테두리) — 열림 상태 표시.</p>
+    </div>
+
+    <div class="note">
+      <h4>④ 뷰어 설정 창 — 헤더 ⚙ 진입</h4>
+      <p>문서가 로드된 상태(Viewing)에서만 헤더에 ⚙(40dp 히트) 노출 —
+      링크 입력 상태에선 설정할 것이 없어 감춘다. 다이얼로그 한 가족 규격
+      (panel · rSheet · 타이틀 18sp 센터 · 닫기 signatureInk). 구성:
+      <b>문서</b>(현재 제목+링크 <code>panel2+rCell</code> 카드, "다른 문서로
+      바꾸기"·"처음부터 읽기" 탭 행 <code>padding(gap3)</code>) ·
+      <b>보기</b>(토글 2종 — 캡처 설정 토글과 동일 부품 34×20:
+      "읽은 문장까지 진하게" 기본 ON, "문단 단위로 보기" 기본 OFF).
+      토글 항목은 제안 — 확정 시 지시서에 반영.</p>
     </div>
 
     <div class="note y">

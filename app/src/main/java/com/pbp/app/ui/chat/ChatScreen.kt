@@ -416,7 +416,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 .consumeWindowInsets(padding)
         ) {
             RoomBackdrop(backgroundKey = room?.backgroundKey ?: PbpPalette.DEFAULT_BACKGROUND) {
-                // ── 상단 바: 타이틀 묶음은 정중앙, 버튼은 좌우 끝 (목업 mockup-chat-header)
+                // ── 상단 바: 타이틀 묶음은 정중앙, 버튼은 좌우 끝 (목업 final-design.html)
                 if (capturing) {
                     CaptureModeBar(
                         subtitle = if (captureEnd == null) "끝 메시지를 탭하세요"

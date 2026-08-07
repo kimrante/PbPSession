@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 디자인 토큰 (docs/PbP-design-spec.md 2장).
+ * 디자인 토큰 (docs/ui-guidelines.md 2장).
  * 다크/화이트 모드는 이 토큰 스왑만으로 구성된다.
  */
 @Immutable
@@ -119,7 +119,7 @@ val PbpLightColors = PbpColors(
 val LocalPbpColors = staticCompositionLocalOf { PbpDarkColors }
 
 /**
- * 통일 스페이싱·반경 토큰 (docs/mockups/trpg-app-mockup-v2.html 0장).
+ * 통일 스페이싱·반경 토큰 (docs/ui-guidelines.md 4장).
  * 여백은 4dp 그리드 6단계, 반경은 4단계만 사용한다 — 이 밖의 매직 넘버 금지.
  * 글자 크기는 18/15/13/11/10sp **5단계**를 리터럴로 쓴다 (9sp·12sp·14sp는 폐기).
  *
@@ -155,7 +155,7 @@ object PbpDimens {
     /**
      * 상단 바 중앙 타이틀 묶음이 좌우 버튼과 겹치지 않게 비워 두는 폭.
      * 좌우에 같은 값을 주므로 타이틀은 버튼 개수와 무관하게 화면 정중앙에 온다
-     * (docs/mockups/mockup-chat-header.html · mockups/mockup-home-header.html).
+     * (docs/mockups/final-design.html).
      */
     val titleInset = 96.dp      // 아이콘 버튼 2개 기준 — 채팅
     val titleInsetWide = 112.dp // 텍스트 버튼 2개 + 오너 아바타 — 방 목록

@@ -43,7 +43,7 @@ import com.pbp.app.ui.theme.PbpPalette
 /** 채팅 다이얼로그 — 메시지 액션·편집 (리뷰 B3) */
 
 /**
- * 길게 누른 메시지의 액션 팝업 (목업 mockup-message-actions).
+ * 길게 누른 메시지의 액션 팝업 (목업 final-design.html).
  * 대상 말풍선 미리보기(옐로 링)를 시트 위에 띄워 무엇을 다루는지 보여준다.
  */
 @Composable

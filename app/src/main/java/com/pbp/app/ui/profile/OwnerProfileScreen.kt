@@ -63,7 +63,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * 오너 프로필 설정 — 프로필 편집과 같은 전체 화면 규격 (목업 mockup-owner-profile 02장).
+ * 오너 프로필 설정 — 프로필 편집과 같은 전체 화면 규격 (목업 final-design.html 02장).
  *
  * 상단 바 56dp(좌 ← / 우 저장 캡슐) · 본문 좌우 16dp · 사진 원형 + 골드 링을 공유하되,
  * 오너는 판정 주체가 아니므로 **캐릭터 값 섹션이 없고 컬러도 1개**다

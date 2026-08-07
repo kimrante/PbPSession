@@ -98,7 +98,7 @@ private fun rendersBubble(message: Message): Boolean {
 
 /** 메시지 1건 렌더링 — GM 서술/인용 분리, 말풍선, 잡담, 다이스, 시스템 */
 /**
- * 캡처 범위 선택 표시 (목업 mockup-capture 03장).
+ * 캡처 범위 선택 표시 (목업 final-design.html 03장).
  * 양 끝 '시작'·'끝' 배지는 마지막 메시지 본문을 가려 v0.7.3에서 뺐다 —
  * 밴드의 둥근 모서리만으로 시작·끝이 충분히 읽힌다.
  * 말풍선 내부는 건드리지 않고 **감싸는 상자에만** 얹으므로, [CaptureMark.NONE]으로
@@ -403,7 +403,7 @@ internal fun BubbleRow(
     // GM 인용은 극중 화자이므로 항상 상대 측(왼쪽)에 표시
     val mine = !message.incoming && overrideName == null
     val body = overrideBody ?: message.body
-    // 대사는 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게 (목업 mockup-quote-bubble).
+    // 대사는 인용 말풍선 — 명조 쌍따옴표를 인용구처럼 크게 (목업 final-design.html).
     // 조각으로 나뉜 경우는 호출부가 알려주고, 통짜 메시지는 본문 전체가 " "인지 본다.
     val quoteInner = when {
         message.isOoc -> null

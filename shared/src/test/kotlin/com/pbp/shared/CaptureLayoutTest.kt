@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 캡처 범위 선택·분할 규칙 (목업 mockup-capture 03장, C2).
+ * 캡처 범위 선택·분할 규칙 (목업 final-design.html 03장, C2).
  * 예전에는 앱 쪽에만 있어 PC 복제본이 검증 없이 굴러갔다.
  */
 class CaptureLayoutTest {

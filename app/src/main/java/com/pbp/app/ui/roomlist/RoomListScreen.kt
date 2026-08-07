@@ -155,7 +155,7 @@ fun RoomListScreen(nav: NavController) {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // 헤더 — 채팅 상단 바와 같은 규격(56dp): 로고+타이틀 묶음이 화면 정중앙,
-            // 버튼은 우측 끝 (목업 mockup-home-header)
+            // 버튼은 우측 끝 (목업 final-design.html)
             Box(Modifier.fillMaxWidth().height(PbpDimens.appBarHeight)) {
                 Row(
                     Modifier.fillMaxSize().padding(horizontal = PbpDimens.gap4),
@@ -408,7 +408,7 @@ private fun RoomCard(
                     )
                 }
             }
-            // 테마 점 — 좌표 하드코딩 대신 우하단 정렬 + 3dp 돌출 (목업 mockup-home-header)
+            // 테마 점 — 좌표 하드코딩 대신 우하단 정렬 + 3dp 돌출 (목업 final-design.html)
             Box(
                 Modifier
                     .align(Alignment.BottomEnd)

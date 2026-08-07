@@ -555,7 +555,7 @@ private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
     }
 }
 
-/** 캡처 범위 선택 표시 — 모바일 CaptureMark와 같은 규칙 (목업 mockup-capture 03장) */
+/** 캡처 범위 선택 표시 — 모바일 CaptureMark와 같은 규칙 (목업 final-design.html 03장) */
 internal enum class CaptureMark { NONE, OUT, IN, START, END, ONLY }
 
 /**
@@ -683,7 +683,7 @@ internal fun BubbleRow(
     // 편집/삭제 대상 여부는 표시 방향(mine)과 무관하게 실제 작성자 기준 (앱과 동일)
     val editable = message.authorUid == myUid
     val body = overrideBody ?: message.body
-    // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 mockup-quote-bubble)
+    // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 final-design.html)
     val quoteInner = when {
         message.isOoc -> null
         quoteBubble -> body
@@ -1158,7 +1158,7 @@ internal fun InputZone(
                                 }
                                 inner()
                             }
-                            // PC는 Ctrl+Enter 힌트를 상시 노출 (trpg-app-mockup-pc-light.html)
+                            // PC는 Ctrl+Enter 힌트를 상시 노출 (docs/mockups/final-design.html)
                             Text(
                                 "Ctrl+Enter 전송", fontSize = 10.sp, color = Tokens.InkDisabled,
                                 modifier = Modifier.padding(start = 8.dp)

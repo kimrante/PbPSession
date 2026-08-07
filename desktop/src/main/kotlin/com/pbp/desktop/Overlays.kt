@@ -113,7 +113,7 @@ internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
 @Composable
 internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Box(
-        // 라이트 모드 딤 — rgba(30,35,45,.38) (목업 mockup-message-actions)
+        // 라이트 모드 딤 — rgba(30,35,45,.38) (목업 final-design.html)
         Modifier.fillMaxSize().background(Tokens.Scrim).clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {

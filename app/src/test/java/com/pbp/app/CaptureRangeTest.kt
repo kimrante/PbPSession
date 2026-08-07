@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * 캡처 범위의 **표시** 상태 (목업 mockup-capture 03장).
+ * 캡처 범위의 **표시** 상태 (목업 final-design.html 03장).
  * 범위 계산 규칙 자체는 :shared CaptureLayoutTest로 옮겼다 — PC 복제본까지 함께 지킨다 (C2).
  */
 class CaptureRangeTest {

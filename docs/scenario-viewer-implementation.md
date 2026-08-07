@@ -5,7 +5,7 @@
 함수·변수명으로 찾을 것.
 
 > **UI 확정 개정 (2026-08-02, 시안 승인)** — 확정 시안:
-> `docs/mockups/mockup-scenario-viewer.html`(.png). 초안의 "플로트 창"을
+> `docs/mockups/final-design.html` ④·⑤ 프레임. 초안의 "플로트 창"을
 > **입력 영역 위 도킹 패널**로 변경하고, 문서 제목 표시·⧉ 입력창 삽입·뷰어 설정
 > 창·칩 순서/문구를 확정했다. V3~V5는 전면 개정, V0~V2·V6은 델타만 추가.
 > UI 수치·색은 전부 `docs/ui-guidelines.md` 기존 토큰 — **신규 등재 수치 0개.**
@@ -230,7 +230,7 @@ val scenarioInsert = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
 ## V4. 입력창 위 패널 — 신규 `app/src/main/java/com/pbp/app/ui/chat/ScenarioViewer.kt` (UI 확정)
 
-확정 시안: `docs/mockups/mockup-scenario-viewer.html` ①·②. 플로트가 아니라
+확정 시안: `docs/mockups/final-design.html` ④ 프레임. 플로트가 아니라
 **입력 영역 위 도킹** — 드래그·그림자·offset 없음.
 
 ### 배선 (`ChatScreen.kt`)

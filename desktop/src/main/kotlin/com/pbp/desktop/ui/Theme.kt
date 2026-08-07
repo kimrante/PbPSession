@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.em
 import com.pbp.shared.PbpMarkup
 
 /**
- * 디자인 토큰 — 기본 디자인은 라이트 모드 (docs/PbP-design-spec.md 0장,
- * trpg-app-mockup-pc-light.html). 색 값은 모바일 PbpLightColors와 동일.
+ * 디자인 토큰 — 기본 디자인은 라이트 모드 (docs/ui-guidelines.md 1장,
+ * docs/mockups/final-design.html). 색 값은 모바일 PbpLightColors와 동일.
  */
 object Tokens {
     /*

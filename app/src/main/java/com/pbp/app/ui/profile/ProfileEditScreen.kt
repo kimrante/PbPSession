@@ -324,7 +324,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                 Spacer(Modifier.height(PbpDimens.gap5))
 
                 FieldLabel("캐릭터 값")
-                // 값 목록은 패널 카드로 묶는다 (목업 mockup-profile-values)
+                // 값 목록은 패널 카드로 묶는다 (목업 final-design.html)
                 Column(
                     Modifier
                         .fillMaxWidth()

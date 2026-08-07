@@ -67,12 +67,12 @@ internal fun LeftPane(
     ownerImagePath: String?,
     onOwnerProfile: () -> Unit,
 ) {
-    // PC 규격: 사이드바 280dp 고정 (trpg-app-mockup-pc-light.html)
+    // PC 규격: 사이드바 280dp 고정 (docs/mockups/final-design.html)
     Column(
         Modifier.width(DesktopDimens.sidebar).fillMaxHeight()
             .background(Brush.verticalGradient(listOf(Tokens.SidebarTop, Tokens.SidebarBottom))),
     ) {
-        // 헤더 — 로고+워드마크 1행, 부제 2행. 묶음 전체가 정중앙 (목업 mockup-home-header).
+        // 헤더 — 로고+워드마크 1행, 부제 2행. 묶음 전체가 정중앙 (목업 final-design.html).
         // 버튼은 우측 끝에 겹쳐 두므로 타이틀 중심은 버튼 개수와 무관하다.
         Box(Modifier.fillMaxWidth().height(DesktopDimens.appBar)) {
             Row(

@@ -12,7 +12,7 @@
   GmSpeech/CharacterCodec/ProfileStats + Protocol(와이어 상수)/Palette(색)/LogExport(HTML 렌더).
   양 모듈이 같은 코드를 쓰고 테스트도 여기 모여 있다.
 
-기준 문서: [PbP-design-spec.md](PbP-design-spec.md) · 목업 [다크](mockups/trpg-app-mockup.html) / [화이트](mockups/trpg-app-mockup-light.html)
+기준 문서: [ui-guidelines.md](ui-guidelines.md) (UI 규범) · 최종 시안 [final-design.html](mockups/final-design.html)
 
 ## 패키지 구조
 

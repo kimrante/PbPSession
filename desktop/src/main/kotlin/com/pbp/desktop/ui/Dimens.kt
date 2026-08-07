@@ -33,7 +33,7 @@ object DesktopDimens {
     /** 상단 바의 오너 아바타 */
     val avatarBar = 32.dp
 
-    // ── PC 전용 (trpg-app-mockup-pc-light.html) ──
+    // ── PC 전용 (docs/mockups/final-design.html) ──
     /** 좌측 사이드바 고정 폭 */
     val sidebar = 280.dp
     /** 채팅 본문 최대 폭 (초광폭에서 말풍선이 늘어지지 않게) */

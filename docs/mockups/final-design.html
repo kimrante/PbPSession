@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PbP · 최종 시안 — 전 화면 확정 디자인</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gowun+Batang:wght@400;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   PbP 최종 시안 문서 — UI/UX 문서 3종 체계의 '시안' 문서.
+   ① UI 가이드: docs/ui-guidelines.md (규범 — 토큰·규격·원칙)
+   ② 최종 시안: 이 파일 (규범을 적용한 화면 스냅샷, 항상 최신 확정판 유지)
+   ③ 작업 지시서: docs/scenario-viewer-implementation.md (진행 중 작업)
+   과거 개별 목업(trpg-app-mockup*, mockup-* 시리즈)은 이 문서로 통합·대체됨.
+   모든 수치는 가이드 4장 토큰과 1:1 — 매직 넘버 없음.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#f4f2ec; --panel:#ffffff; --panel-2:#f7f4ec;
+  --line:rgba(20,25,32,.08); --ink:#23272e;
+  --ink-sub:rgba(20,25,32,.72); --ink-dim:#6e7683;
+  --postit:#ffd05c; --postit-deep:#efb945;
+  --signature-ink:#a3781a; --on-signature:#1a1a1a;
+  --bubble-me:#ffd9a8; --bubble-you:#bfe3f6; --bubble-ink:#10151c;
+  --narr-bg:rgba(255,255,255,.7); --narr-ink:#3d3628;
+  --bar-scrim:rgba(0,0,0,.06); --chatbar:rgba(255,255,255,.93);
+  --theme:#5f9ec7; --ink-faint:rgba(20,25,32,.08); --ink-disabled:rgba(20,25,32,.34);
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-cell:12px; --r-card:16px; --r-sheet:20px; --r-tail:4px; --r-pill:999px;
+  --appbar-h:56px; --touch:40px; --avatar-chat:38px; --avatar-strip:36px; --avatar-bar:32px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#e9e5db;color:var(--ink);
+  font-family:'Noto Sans KR',system-ui,sans-serif,'Noto Color Emoji';
+  padding:40px;display:flex;justify-content:center;
+}
+.wrap{display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;max-width:2300px}
+
+/* ── 폰 프레임 ── */
+.phone{width:340px;flex-shrink:0;background:#05070a;border-radius:38px;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 70px rgba(40,45,55,.28), inset 0 0 0 3px #000;padding:10px;position:relative}
+.phone .cap{position:absolute;left:50%;transform:translateX(-50%);bottom:-32px;font-size:11px;color:#8a8577;white-space:nowrap;letter-spacing:.06em}
+.screen{border-radius:29px;overflow:hidden;height:704px;display:flex;flex-direction:column;position:relative;background:linear-gradient(180deg,#fbf9f4,#f0ede5)}
+.screen.room{background:linear-gradient(rgba(244,242,236,.55),rgba(244,242,236,.25),rgba(244,242,236,.55)),
+             linear-gradient(178deg,#26374d 0%,#1a2739 42%,#101a28 100%)}
+.statusbar{height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:11px;color:rgba(20,25,32,.8);font-weight:700}
+
+/* ── 홈 상단 바 (브랜드 센터) ── */
+.appbar{height:var(--appbar-h);flex-shrink:0;position:relative;display:flex;align-items:center;padding:0 var(--sp-2)}
+.appbar.veiled{background:var(--bar-scrim)}
+.icon-btn{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--ink);flex-shrink:0}
+.appbar .grow{flex:1}
+.textbtn{font-size:11px;font-weight:700;color:var(--ink-dim);height:var(--touch);display:flex;align-items:center;padding:0 var(--sp-2);border-radius:var(--r-pill)}
+.owner{width:var(--avatar-bar);height:var(--avatar-bar);border-radius:var(--r-pill);margin-left:var(--sp-1);background:linear-gradient(150deg,#c07b1f,#8a5a14);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);flex-shrink:0}
+.brand-lock{position:absolute;left:112px;right:112px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);pointer-events:none}
+.wordmark{display:flex;align-items:center;gap:var(--sp-2)}
+.applogo{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--postit),var(--postit-deep));display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.brand-title{font-family:'Gowun Batang',serif;font-size:18px;font-weight:700;color:var(--ink);line-height:1}
+.bar-sub{font-size:11px;font-weight:500;color:var(--ink-sub);line-height:1;white-space:nowrap}
+/* 채팅 상단 바 (타이틀 센터 + 우측 ⚙·현재 프로필) */
+.me-avatar{width:var(--avatar-bar);height:var(--avatar-bar);border-radius:var(--r-pill);margin-left:var(--sp-1);flex-shrink:0;background:linear-gradient(150deg,#8a6a3c,#5e4526);display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid var(--postit)}
+.me-avatar.gm{font-family:'Gowun Batang',serif;font-size:12px;font-weight:700;color:#f4e8c8}
+.title-lock{position:absolute;left:96px;right:96px;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);pointer-events:none}
+.bar-title{font-family:'Gowun Batang',serif;font-size:15px;font-weight:700;color:var(--ink);line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+
+/* ── 방 목록 ── */
+.roomlist{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4)}
+.room-card{display:flex;align-items:center;gap:var(--sp-3);background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--sp-3) var(--sp-4)}
+.thumb{width:48px;height:48px;border-radius:var(--r-cell);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
+.thumb .dot{position:absolute;right:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;border:3px solid #fbf9f4}
+.rc-main{flex:1;min-width:0}
+.rc-name{font-size:15px;font-weight:700;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-prev{font-size:11px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-side{display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-1);flex-shrink:0}
+.rc-time{font-size:10px;color:var(--ink-dim)}
+.badge{min-width:18px;height:18px;border-radius:var(--r-pill);background:var(--postit);color:var(--on-signature);font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.fab{position:absolute;right:var(--sp-4);bottom:var(--sp-5);width:56px;height:56px;border-radius:var(--r-card);background:var(--postit);color:var(--on-signature);font-size:24px;font-weight:700;display:flex;align-items:center;justify-content:center;transform:rotate(-4deg);box-shadow:0 10px 24px rgba(224,177,62,.45)}
+
+/* ── 채팅 본문 ── */
+.chat{flex:1;overflow:hidden;padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3);position:relative}
+.narr{background:var(--narr-bg);border-radius:var(--r-tail) var(--r-card) var(--r-card) var(--r-tail);padding:var(--sp-3) var(--sp-4);font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;color:var(--narr-ink)}
+.mrow{display:flex;gap:var(--sp-2);align-items:flex-start}
+.mrow.me{justify-content:flex-end}
+.m-avatar{width:var(--avatar-chat);height:var(--avatar-chat);border-radius:var(--r-pill);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:17px;background:var(--panel-2);border:1.5px solid var(--line)}
+.mname{font-size:11px;font-weight:700;margin-bottom:var(--sp-1);color:#33719c}
+.bubble{max-width:240px;padding:var(--sp-2) var(--sp-3);font-size:13px;line-height:1.55;color:var(--bubble-ink)}
+.bubble.you{background:var(--bubble-you);border-radius:var(--r-tail) var(--r-card) var(--r-card) var(--r-card)}
+.bubble.me{background:var(--bubble-me);border-radius:var(--r-card) var(--r-tail) var(--r-card) var(--r-card)}
+.mtime{font-size:10px;color:var(--ink-dim);align-self:flex-end;flex-shrink:0}
+
+/* ── 시나리오 패널 (입력 영역 위 도킹) ── */
+.dock{flex-shrink:0;background:var(--chatbar);border-top:1px solid var(--line);padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2)}
+.f-head{display:flex;align-items:center}
+.f-label{flex:1;font-size:11px;font-weight:700;color:var(--ink-dim);display:flex;align-items:center;gap:var(--sp-1)}
+.f-x,.f-set{width:var(--touch);height:var(--touch);margin:-8px 0;border-radius:var(--r-pill);display:flex;align-items:center;justify-content:center;color:var(--ink-dim);flex-shrink:0}
+.f-x{margin-right:-8px;font-size:13px;font-weight:900}
+.f-set{font-size:14px}
+.f-sentence{font-family:'Gowun Batang',serif;font-size:13px;line-height:1.85;color:var(--ink);padding:var(--sp-2) 0;text-align:center}
+.f-foot{display:flex;align-items:center;gap:var(--sp-2)}
+.f-count{flex:1;text-align:center;font-size:10px;color:var(--ink-dim)}
+.f-nav{width:var(--touch);height:var(--touch);border-radius:var(--r-pill);border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:var(--ink);flex-shrink:0}
+
+/* ── 입력 영역 ── */
+.inputzone{flex-shrink:0;background:var(--chatbar);padding:var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-2)}
+.strip{display:flex;gap:var(--sp-3)}
+.strip .p{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--ink-dim)}
+.strip .a{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);background:var(--panel-2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.strip .on .a{border:2px solid var(--postit)}
+.strip .on{color:var(--signature-ink);font-weight:700}
+.strip .gm .a{font-family:'Gowun Batang',serif;font-size:12px;font-weight:700;color:var(--signature-ink)}
+.chiprow{display:flex;gap:var(--sp-2)}
+.chip{font-size:11px;font-weight:700;color:var(--signature-ink);background:rgba(255,208,92,.14);border:1px solid rgba(255,208,92,.4);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3)}
+.chip.hot{background:rgba(255,208,92,.32);border-color:var(--postit-deep)}
+.inputrow{display:flex;gap:var(--sp-2);align-items:center}
+.ooc{display:flex;align-items:center;gap:var(--sp-2);border:1px solid var(--line);border-radius:var(--r-pill);padding:var(--sp-2) var(--sp-3);font-size:10px;font-weight:700;color:var(--ink-dim);background:rgba(20,25,32,.06)}
+.field{flex:1;background:var(--panel-2);border-radius:var(--r-cell);padding:var(--sp-3);font-size:13px;color:var(--ink-dim)}
+.send{width:var(--touch);height:var(--touch);border-radius:var(--r-cell);background:var(--theme);display:flex;align-items:center;justify-content:center;color:var(--bubble-ink);font-size:15px}
+
+/* ── 프로필 전환 사이드바 ── */
+.dim{position:absolute;inset:0;background:rgba(30,35,45,.38)}
+.dim.center{display:flex;align-items:center;justify-content:center;padding:var(--sp-5)}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:264px;background:var(--panel);border-radius:var(--r-sheet) 0 0 var(--r-sheet);box-shadow:-16px 0 40px rgba(20,25,32,.25);display:flex;flex-direction:column;padding:var(--sp-5) var(--sp-4)}
+.dr-title{font-size:18px;font-weight:700;text-align:center}
+.dr-sub{font-size:11px;color:var(--ink-dim);text-align:center;margin-top:var(--sp-1)}
+.dr-list{margin-top:var(--sp-4);display:flex;flex-direction:column}
+.dr-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell)}
+.dr-row.on{background:rgba(255,208,92,.14);border:1px solid rgba(255,208,92,.4)}
+.dr-row .a{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);flex-shrink:0;background:var(--panel-2);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.dr-row.on .a{border:2px solid var(--postit)}
+.dr-main{flex:1;min-width:0}
+.dr-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dr-row.on .dr-name{color:var(--signature-ink)}
+.dr-tag{font-size:11px;color:var(--ink-dim)}
+.dr-check{font-size:13px;font-weight:900;color:var(--signature-ink)}
+.dr-div{height:1px;background:var(--line);margin:var(--sp-2) 0}
+.dr-add{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell);color:var(--signature-ink);font-size:13px;font-weight:700}
+.dr-add .plus{width:var(--avatar-strip);height:var(--avatar-strip);border-radius:var(--r-pill);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink-dim);font-size:15px;flex-shrink:0}
+.dr-hint{margin-top:auto;font-size:10px;color:var(--ink-dim);text-align:center;line-height:1.7}
+
+/* ── 다이얼로그 (한 가족) ── */
+.dialog{width:100%;background:var(--panel);border-radius:var(--r-sheet);padding:var(--sp-5);display:flex;flex-direction:column;gap:var(--sp-2);box-shadow:0 20px 50px rgba(20,25,32,.25)}
+.dlg-title{font-size:18px;font-weight:700;text-align:center}
+.dlg-label{font-size:11px;font-weight:700;color:var(--ink-dim)}
+.dlg-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-cell)}
+.dlg-row.card{background:var(--panel-2)}
+.dlg-row.act{font-size:13px;font-weight:700;color:var(--signature-ink)}
+.dlg-div{height:1px;background:var(--line);margin:var(--sp-2) 0}
+.toggle-row{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);font-size:11px;font-weight:700}
+.tg{width:34px;height:20px;border-radius:999px;position:relative;flex-shrink:0}
+.tg.on{background:var(--postit)} .tg.off{background:rgba(20,25,32,.16)}
+.tg i{position:absolute;top:2px;width:16px;height:16px;border-radius:999px;background:var(--panel)}
+.tg.on i{right:2px} .tg.off i{left:2px}
+.dlg-actions{display:flex;justify-content:center;margin-top:var(--sp-2)}
+.dlg-btn{height:var(--touch);display:flex;align-items:center;padding:0 var(--sp-4);border-radius:var(--r-pill);font-size:11px;font-weight:700;color:var(--signature-ink)}
+
+/* ── 주석 ── */
+.notes{flex:1;min-width:300px;max-width:420px;display:flex;flex-direction:column;gap:14px}
+.notes h3{font-family:'Gowun Batang',serif;font-size:20px;line-height:1.4}
+.notes h3 em{font-style:normal;color:var(--signature-ink)}
+.note{border-left:2px solid var(--theme);background:#fff;padding:12px 16px;border-radius:0 8px 8px 0;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.note h4{font-size:13px;color:#33719c;margin-bottom:3px;font-weight:700}
+.note p{font-size:12.5px;color:var(--ink-dim);line-height:1.7}
+.note.y{border-left-color:var(--postit-deep)}
+.note.y h4{color:var(--signature-ink)}
+.note code{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11.5px;color:var(--signature-ink)}
+.d10{display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ① 방 목록 -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar">
+        <div class="brand-lock">
+          <div class="wordmark">
+            <div class="applogo"><svg class="d10" viewBox="0 0 100 104" width="13" height="13"><g stroke="#ffd05c" stroke-width="2.8" stroke-linejoin="round"><path d="M50,6 L9,54 L33,60 Z" fill="#23272e"/><path d="M9,54 L50,98 L33,60 Z" fill="#181c22"/><path d="M50,6 L91,54 L67,60 Z" fill="#2a2f38"/><path d="M91,54 L50,98 L67,60 Z" fill="#1d222a"/><path d="M50,6 L67,60 L50,98 L33,60 Z" fill="#23272e"/></g></svg></div>
+            <div class="brand-title">PbP</div>
+          </div>
+          <div class="bar-sub">0.13.0</div>
+        </div>
+        <div class="grow"></div>
+        <div class="textbtn">Aa</div>
+        <div class="textbtn">참여</div>
+        <div class="owner">카</div>
+      </div>
+      <div class="roomlist">
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a8c4da,#7d97ac)">🌊<i class="dot" style="background:#5f9ec7"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">등대에서 만나요</div>
+            <div class="rc-prev">카야 · 등불이 꺼지기 전에 도착할게.</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">방금</span><span class="badge">2</span></div>
+        </div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#c3b1d6,#9c88b4)">🕯️<i class="dot" style="background:#8a6bb0"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">라일락 관 살인사건</div>
+            <div class="rc-prev">🎲 1d100&lt;=65 → 43 성공</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">1시간 전</span></div>
+        </div>
+        <div class="room-card">
+          <div class="thumb" style="background:linear-gradient(160deg,#a9c9b4,#7fa48c)">🌲<i class="dot" style="background:#5f9e78"></i></div>
+          <div class="rc-main">
+            <div class="rc-name">이끼의 숲 단편</div>
+            <div class="rc-prev">잡담 · 오늘은 여기까지 할까요?</div>
+          </div>
+          <div class="rc-side"><span class="rc-time">어제</span></div>
+        </div>
+      </div>
+      <div class="fab">＋</div>
+    </div>
+    <div class="cap">① 방 목록 — 브랜드 센터 · 카드 · 포스트잇 FAB</div>
+  </div>
+
+  <!-- ② 채팅방 (플레이어 시점) -->
+  <div class="phone">
+    <div class="screen room">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar veiled">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar">🦊</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">PL</div>
+        </div>
+      </div>
+      <div class="chat">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+        <div class="mrow">
+          <div class="m-avatar">🌊</div>
+          <div>
+            <div class="mname">카야</div>
+            <div class="bubble you">등불이 꺼지기 전에 도착할게. 먼저 올라가 있어.</div>
+          </div>
+          <div class="mtime">16:58</div>
+        </div>
+        <div class="mrow me">
+          <div class="mtime">16:59</div>
+          <div class="bubble me">알겠어. 계단 조심하고 — 세 번째 칸이 젖어 있어.</div>
+        </div>
+      </div>
+      <div class="inputzone">
+        <div class="strip">
+          <div class="p on"><div class="a">🦊</div>세이시로</div>
+          <div class="p"><div class="a">🕯️</div>코우</div>
+          <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
+        </div>
+        <div class="inputrow">
+          <div class="ooc">◯ 잡담</div>
+          <div class="field">**굵게** · (등대)[等臺] · 1d100</div>
+          <div class="send">➤</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">② 채팅방 — 상단 바 ⚙ 우측 현재 프로필</div>
+  </div>
+
+  <!-- ③ 프로필 전환 사이드바 -->
+  <div class="phone">
+    <div class="screen room">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar veiled">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar">🦊</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">PL</div>
+        </div>
+      </div>
+      <div class="chat" style="filter:blur(1px)">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+        <div class="mrow">
+          <div class="m-avatar">🌊</div>
+          <div>
+            <div class="mname">카야</div>
+            <div class="bubble you">등불이 꺼지기 전에 도착할게.</div>
+          </div>
+        </div>
+      </div>
+      <div class="dim"></div>
+      <div class="drawer">
+        <div class="dr-title">프로필 전환</div>
+        <div class="dr-sub">지금 말하는 캐릭터를 고르세요</div>
+        <div class="dr-list">
+          <div class="dr-row on">
+            <div class="a">🦊</div>
+            <div class="dr-main">
+              <div class="dr-name">가류 세이시로</div>
+              <div class="dr-tag">캐릭터 · 사용 중</div>
+            </div>
+            <div class="dr-check">✓</div>
+          </div>
+          <div class="dr-row">
+            <div class="a">🕯️</div>
+            <div class="dr-main">
+              <div class="dr-name">코우</div>
+              <div class="dr-tag">캐릭터</div>
+            </div>
+          </div>
+          <div class="dr-row">
+            <div class="a" style="font-family:'Gowun Batang',serif;font-weight:700;color:var(--signature-ink);font-size:13px">GM</div>
+            <div class="dr-main">
+              <div class="dr-name">서술자</div>
+              <div class="dr-tag">GM · 명조 서술</div>
+            </div>
+          </div>
+          <div class="dr-div"></div>
+          <div class="dr-add"><div class="plus">＋</div>프로필 추가</div>
+        </div>
+        <div class="dr-hint">행을 길게 누르면 프로필 편집<br>바깥을 탭하면 닫기</div>
+      </div>
+    </div>
+    <div class="cap">③ 프로필 아이콘 탭 — 우측 사이드바 전환</div>
+  </div>
+
+  <!-- ④ 시나리오 뷰어 (GM 시점, Viewing) -->
+  <div class="phone">
+    <div class="screen room">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar veiled">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar gm">GM</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">GM</div>
+        </div>
+      </div>
+      <div class="chat">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+        <div class="mrow">
+          <div class="m-avatar">🌊</div>
+          <div>
+            <div class="mname">카야</div>
+            <div class="bubble you">등불이 꺼지기 전에 도착할게.</div>
+          </div>
+        </div>
+      </div>
+      <div class="dock">
+        <div class="f-head">
+          <div class="f-label">📖 등대의 일지 — 1장</div>
+          <div class="f-set">⧉</div>
+          <div class="f-set">⚙</div>
+          <div class="f-x">✕</div>
+        </div>
+        <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다 — 마지막 장에는 "빛이 두 번 꺼졌다"고만 적혀 있다.</div>
+        <div class="f-foot">
+          <div class="f-count">17 / 128</div>
+          <div class="f-nav">‹</div>
+          <div class="f-nav">›</div>
+        </div>
+      </div>
+      <div class="inputzone">
+        <div class="strip">
+          <div class="p on gm"><div class="a">GM</div>서술자</div>
+          <div class="p"><div class="a">🦊</div>세이시로</div>
+          <div class="p"><div class="a" style="border-style:dashed">＋</div>추가</div>
+        </div>
+        <div class="chiprow">
+          <div class="chip hot">📖 시나리오</div>
+          <div class="chip">🎲 판정</div>
+        </div>
+        <div class="inputrow">
+          <div class="ooc">◯ 잡담</div>
+          <div class="field">**굵게** · (등대)[等臺] · 1d100</div>
+          <div class="send">➤</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">④ 시나리오 뷰어 — 입력창 위 도킹 패널 (GM)</div>
+  </div>
+
+  <!-- ⑤ 시나리오 뷰어 설정 창 -->
+  <div class="phone">
+    <div class="screen room">
+      <div class="statusbar"><span>21:41</span><span>▲ ● ▮</span></div>
+      <div class="appbar veiled">
+        <div class="icon-btn" style="font-size:20px">←</div>
+        <div class="icon-btn">?</div>
+        <div class="grow"></div>
+        <div class="icon-btn">⚙</div>
+        <div class="me-avatar gm">GM</div>
+        <div class="title-lock">
+          <div class="bar-title">등대에서 만나요</div>
+          <div class="bar-sub">GM</div>
+        </div>
+      </div>
+      <div class="chat" style="filter:blur(1px)">
+        <div class="narr">파도가 등대의 발치를 두드린다. 계단 끝, 젖은 발자국이 아직 마르지 않았다.</div>
+      </div>
+      <div class="dock" style="filter:blur(1px);opacity:.75">
+        <div class="f-head">
+          <div class="f-label">📖 등대의 일지 — 1장</div>
+          <div class="f-set">⧉</div>
+          <div class="f-set">⚙</div>
+          <div class="f-x">✕</div>
+        </div>
+        <div class="f-sentence">등대지기의 일지는 사흘 전에서 멈춰 있다…</div>
+      </div>
+      <div class="dim center">
+        <div class="dialog" style="text-align:left">
+          <div class="dlg-title">시나리오 뷰어 설정</div>
+          <div class="dlg-label" style="margin-top:var(--sp-2)">문서</div>
+          <div class="dlg-row card">
+            <div style="font-size:15px">📖</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">등대의 일지 — 1장</div>
+              <div style="font-size:10px;color:var(--ink-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">docs.google.com/document/d/1aB…</div>
+            </div>
+          </div>
+          <div class="dlg-row act">다른 문서로 바꾸기</div>
+          <div class="dlg-row act">처음부터 읽기</div>
+          <div class="dlg-div"></div>
+          <div class="dlg-label">보기</div>
+          <div class="toggle-row"><div class="tg on"><i></i></div>읽은 문장까지 진하게</div>
+          <div class="toggle-row"><div class="tg off"><i></i></div>문단 단위로 보기</div>
+          <div class="dlg-actions"><div class="dlg-btn">닫기</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="cap">⑤ 뷰어 설정 창 — 다이얼로그 한 가족</div>
+  </div>
+
+  <!-- 주석 -->
+  <div class="notes">
+    <h3>PbP <em>최종 시안</em><br>전 화면 확정 디자인</h3>
+
+    <div class="note y">
+      <h4>문서 위상 — UI/UX 3종 체계</h4>
+      <p>① 규범 = <code>docs/ui-guidelines.md</code> (토큰·규격·원칙) ·
+      ② 시안 = <b>이 문서</b> (규범을 적용한 최신 확정 스냅샷) ·
+      ③ 지시서 = <code>docs/scenario-viewer-implementation.md</code> (진행 중 작업).
+      과거 개별 목업(trpg-app-mockup 시리즈, mockup-* 단건들)은 이 문서로
+      통합·대체. 새 시안은 이 파일에 프레임을 추가·교체하는 방식으로 유지한다.</p>
+    </div>
+
+    <div class="note">
+      <h4>① 방 목록</h4>
+      <p>브랜드 묶음 정중앙(<code>titleInsetWide 112</code>), 우측 Aa·참여·오너
+      아바타(32). 카드 = <code>panel + line 1 + rCard</code>, 내부 16×12,
+      썸네일 48 + 테마 점 14(+3 링, 우하단 3dp 돌출). 미확인 배지 =
+      min 18×18 pill. FAB 56 · <code>rCard</code> · −4°(브랜드 예외).</p>
+    </div>
+
+    <div class="note">
+      <h4>② 채팅방 상단 바</h4>
+      <p>좌 ←·? / 우 ⚙·<b>현재 프로필</b>(avatarBar 32 + 옐로 링 2) —
+      내보내기 ↓는 방 설정 '공유·기타' 행으로 이동(v0.12.0). 타이틀 묶음
+      정중앙 <code>titleInset 96</code>. 배경 이미지 위 <code>barScrim</code>.</p>
+    </div>
+
+    <div class="note">
+      <h4>③ 프로필 전환 사이드바</h4>
+      <p>우측 드로어 <code>drawerWidth 264</code>, panel 면 + 좌측 rSheet
+      모서리, 스크림 38%. 행 = ManagerRow 규격(<code>padding gap3 + rCell</code>,
+      avatarStrip 36 + 이름 15 + 태그 11). 활성 행 = signature 14% 면 +
+      signatureInk + ✓. 행 탭 전환·길게 편집·바깥 탭 닫기.</p>
+    </div>
+
+    <div class="note">
+      <h4>④ 시나리오 뷰어 (GM 전용)</h4>
+      <p>입력 영역 위 <b>도킹 패널</b> — chatBarBg 한 면, 위 line 1dp.
+      칩 행: <code>📖 시나리오</code>(첫 번째, 열림 시 진하게) ·
+      <code>🎲 판정</code>. 헤더 = 📖 문서 제목 | ⧉(현재 문장을 입력창에
+      삽입) | ⚙(설정) | ✕. 문장 = 명조 13sp 행간 1.85 센터. 하단 =
+      진행 표시 + ‹ › 40 pill. 상세 사양은 지시서 V3~V5.</p>
+    </div>
+
+    <div class="note">
+      <h4>⑤ 다이얼로그 한 가족</h4>
+      <p>모든 다이얼로그 공통: <code>panel · rSheet 20 · 타이틀 18sp 센터 ·
+      본문 13 · 내부 24 · 확인 signatureInk/파괴 danger · 취소 inkDim</code>.
+      뷰어 설정 창 구성: 문서 카드(panel2+rCell) · 탭 행(gap3) ·
+      보기 토글 2종(캡처 설정과 동일 부품 34×20).</p>
+    </div>
+
+    <div class="note y">
+      <h4>수치 출처</h4>
+      <p>이 문서의 모든 CSS 변수는 가이드 2~4장 토큰과 1:1 매핑 — 매직 넘버
+      없음. 구현과 시안이 어긋나면 <b>가이드가 우선</b>하고, 이 문서를
+      가이드에 맞춰 고친다.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

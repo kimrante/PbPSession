@@ -313,7 +313,23 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     val scenario = kotlinx.coroutines.flow.MutableStateFlow<ScenarioState>(ScenarioState.AskLink)
 
-    fun loadScenario(url: String) = viewModelScope.launch {
+    /**
+     * 칩을 눌러 패널을 열 때 (V3).
+     *
+     * 지난번에 읽던 문서가 기억돼 있으면 **그 문서를 그 자리에서** 다시 연다.
+     * 문서 본문은 저장하지 않는다 — 1MB짜리를 설정 파일에 넣을 이유가 없고,
+     * 원본이 바뀌었을 수도 있어 어차피 새로 받는 편이 맞다.
+     *
+     * 이미 읽고 있던 중이면(화면을 껐다 켠 정도) 아무것도 하지 않는다.
+     */
+    fun openScenario() {
+        if (scenario.value !is ScenarioState.AskLink) return
+        val saved = ScenarioSettings.savedLink(app, roomId) ?: return
+        loadScenario(saved, startIndex = ScenarioSettings.savedIndex(app, roomId))
+    }
+
+    /** @param startIndex 되살릴 문장 번호. 문서가 짧아졌으면 범위 안으로 당겨진다 */
+    fun loadScenario(url: String, startIndex: Int = 0) = viewModelScope.launch {
         scenario.value = ScenarioState.Loading
         val result = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
         scenario.value = when (result) {
@@ -323,6 +339,9 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
                 val starts = paragraphs.map { paragraph ->
                     counted.also { counted += ScenarioDoc.splitSentences(paragraph).size }
                 }
+                // 원본이 줄었을 수 있다 — 기억한 자리를 그대로 믿지 않는다
+                val index = startIndex.coerceIn(0, result.sentences.lastIndex.coerceAtLeast(0))
+                ScenarioSettings.rememberPlace(app, roomId, url.trim(), index)
                 ScenarioState.Viewing(
                     title = result.title,
                     url = url.trim(),
@@ -330,7 +349,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
                     sentences = result.sentences,
                     paragraphs = paragraphs,
                     paragraphStarts = starts,
-                    index = 0,
+                    index = index,
                     paragraphMode = ScenarioSettings.paragraphMode,
                     truncated = result.truncated,
                 )
@@ -350,19 +369,24 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         } else {
             current.index + delta
         }
-        scenario.value = current.copy(
-            index = next.coerceIn(0, current.sentences.lastIndex.coerceAtLeast(0)),
-        )
+        val moved = next.coerceIn(0, current.sentences.lastIndex.coerceAtLeast(0))
+        ScenarioSettings.rememberPlace(app, roomId, current.url, moved)
+        scenario.value = current.copy(index = moved)
     }
 
-    /** "다른 문서로 바꾸기" — 패널을 닫는 것으로는 초기화되지 않는다 */
+    /**
+     * "다른 문서로 바꾸기" — 패널을 닫는 것으로는 초기화되지 않는다.
+     * 기억해 둔 문서도 함께 지운다: 안 지우면 다음에 열 때 옛 문서가 되살아난다.
+     */
     fun scenarioReset() {
+        ScenarioSettings.forgetPlace(app, roomId)
         scenario.value = ScenarioState.AskLink
     }
 
     /** "처음부터 읽기" — 문서는 그대로 두고 자리만 맨 앞으로 */
     fun scenarioRestart() {
         val current = scenario.value as? ScenarioState.Viewing ?: return
+        ScenarioSettings.rememberPlace(app, roomId, current.url, 0)
         scenario.value = current.copy(index = 0)
     }
 
@@ -821,7 +845,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     typingUntil = peerState.typingUntil,
                     gmActive = gmActive,
                     onJudgeRequest = { judgeSheetOpen = true },
-                    onScenarioViewer = { scenarioOpen = true },
+                    onScenarioViewer = {
+                        scenarioOpen = true
+                        vm.openScenario() // 지난번 문서가 있으면 그 자리에서 다시 연다
+                    },
                     scenarioOpen = scenarioOpen && gmActive,
                     insertFlow = vm.scenarioInsert,
                     onTyping = vm::notifyTyping,

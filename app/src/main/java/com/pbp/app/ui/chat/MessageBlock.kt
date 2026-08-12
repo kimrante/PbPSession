@@ -306,6 +306,10 @@ internal fun MessageBlock(
                                 showTime = showTime && index == lastQuote,
                                 showRead = showRead && index == lastQuote,
                                 overrideBody = part.text,
+                                // 조각으로 넘어온 대사는 그 자체가 인용이다 — 알려 주지
+                                // 않으면 overrideName이 있다는 이유로 장식 따옴표가 빠져
+                                // GM 대사만 밋밋한 말풍선으로 나왔다
+                                quoteBubble = true,
                                 overrideName = "GM",
                                 overrideBubbleColor = PbpPalette.gmQuoteBubble,
                                 themeColor = themeColor,

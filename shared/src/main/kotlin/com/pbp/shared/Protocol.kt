@@ -104,6 +104,12 @@ object Protocol {
         const val NAME = "name"
         const val EMOJI = "emoji"
         const val NAME_COLOR = "nameColor"
+
+        /**
+         * 프로필 이미지의 아바타 id (방 avatars 문서 키). 메시지가 쓰는 것과 같은 값이라
+         * 이미 올라가 있는 이미지를 그대로 가리킨다 — 새로 올리는 일이 거의 없다.
+         */
+        const val AVATAR_ID = "avatarId"
         const val STATS = "stats"
         const val UPDATED_AT = "updatedAt"
         const val DATA = "data"

@@ -44,6 +44,8 @@ data class JudgeCandidate(
      */
     val id: String?,
     val name: String,
+    /** 프로필 이미지 로컬 경로. 없으면 이모지로 떨어진다 */
+    val imagePath: String?,
     val emoji: String,
     val nameColor: Long?,
     /** 값 **이름**만. 숫자는 굴리는 쪽 기기에만 있다 */
@@ -219,7 +221,11 @@ private fun CandidateRow(candidate: JudgeCandidate, onClick: () -> Unit) {
             .padding(PbpDimens.gap3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Avatar(emoji = candidate.emoji, imagePath = null, size = PbpDimens.avatarStrip)
+        Avatar(
+            emoji = candidate.emoji,
+            imagePath = candidate.imagePath,
+            size = PbpDimens.avatarStrip,
+        )
         Spacer(Modifier.width(PbpDimens.gap3))
         Column(Modifier.weight(1f)) {
             Text(

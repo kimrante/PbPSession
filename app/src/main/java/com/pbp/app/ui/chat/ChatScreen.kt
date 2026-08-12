@@ -383,6 +383,22 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     }
 
     /**
+     * 상대 캐릭터의 아바타 id → 로컬 파일 경로. 판정 요청 목록에 얼굴을 띄우려고
+     * 필요한 만큼만 받아 둔다 — 이미 받은 아바타는 파일 캐시에서 바로 나온다.
+     */
+    val peerAvatarPaths = kotlinx.coroutines.flow.MutableStateFlow<Map<String, String>>(emptyMap())
+
+    fun resolvePeerAvatars(avatarIds: List<String>) = safeLaunch(app) {
+        val remote = room.value?.remoteId ?: return@safeLaunch
+        val missing = avatarIds.distinct().filterNot { it in peerAvatarPaths.value }
+        if (missing.isEmpty()) return@safeLaunch
+        val found = missing.mapNotNull { id ->
+            app.syncManager.avatarPath(remote, id)?.let { id to it }
+        }
+        if (found.isNotEmpty()) peerAvatarPaths.value = peerAvatarPaths.value + found
+    }
+
+    /**
      * "다른 문서로 바꾸기" — 패널을 닫는 것으로는 초기화되지 않는다.
      * 기억해 둔 문서도 함께 지운다: 안 지우면 다음에 열 때 옛 문서가 되살아난다.
      */
@@ -903,14 +919,23 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         // 중복 제거는 **고유 id 기준**이다. 이름으로 걸렀더니 같은 방에 같은 이름의
         // 프로필이 둘 있으면 뒤엣것이 통째로 사라져 판정 대상으로 고를 수조차 없었다.
         // id가 없는 구버전 상대의 캐릭터만 예전처럼 이름으로 거른다
-        val candidates = remember(profiles, peerState.peerCharacters) {
+        // 상대 캐릭터의 얼굴은 아바타 id를 파일로 풀어야 나온다 — 목록이 뜨는 김에 받는다
+        val peerAvatars by vm.peerAvatarPaths.collectAsState()
+        LaunchedEffect(peerState.peerCharacters) {
+            vm.resolvePeerAvatars(peerState.peerCharacters.mapNotNull { it.avatarId })
+        }
+        val candidates = remember(profiles, peerState.peerCharacters, peerAvatars) {
             (
                 profiles.filterNot { it.isGm }.map {
                     JudgeCandidate(
-                        it.characterId, it.name, it.emoji, it.nameColor, numericStatNames(it),
+                        it.characterId, it.name, it.imagePath, it.emoji, it.nameColor,
+                        numericStatNames(it),
                     )
                 } + peerState.peerCharacters.map {
-                    JudgeCandidate(it.id, it.name, it.emoji, it.nameColor, it.stats)
+                    JudgeCandidate(
+                        it.id, it.name, it.avatarId?.let(peerAvatars::get), it.emoji,
+                        it.nameColor, it.stats,
+                    )
                 }
                 ).distinctBy { it.id ?: "name:${it.name}" }
         }

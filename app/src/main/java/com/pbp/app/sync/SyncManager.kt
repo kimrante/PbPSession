@@ -238,6 +238,8 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     data class PeerCharacter(
         /** 상대가 붙인 고유 id. 구버전 상대는 없다(null) — 그때만 이름으로 다룬다 */
         val id: String?,
+        /** 프로필 이미지의 아바타 id — 받는 쪽이 파일로 풀어 쓴다 */
+        val avatarId: String?,
         val name: String,
         val emoji: String,
         val nameColor: Long?,
@@ -309,6 +311,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 ?: return@mapNotNull null
             PeerCharacter(
                 id = (map[Protocol.Character.ID] as? String)?.takeIf { it.isNotBlank() },
+                avatarId = (map[Protocol.Character.AVATAR_ID] as? String)?.takeIf { it.isNotBlank() },
                 name = name,
                 emoji = map[Protocol.Character.EMOJI] as? String ?: "",
                 nameColor = (map[Protocol.Character.NAME_COLOR] as? Number)?.toLong(),
@@ -329,6 +332,14 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 읽음 확인·입력 중이 쓰는 members 리스너에 얹히므로 **추가 읽기가 0**이다.
      * 명단이 그대로면 쓰지 않는다 — 프로필은 자주 바뀌지 않아 실제 쓰기는 거의 없다.
      */
+    /** 프로필 이미지를 방 avatars에 올려 두고 그 id를 돌려준다 (판정 후보 목록용) */
+    suspend fun avatarIdFor(remoteRoomId: String, imagePath: String): String? =
+        runCatching { avatars.ensureUploaded(remoteRoomId, imagePath) }.getOrNull()
+
+    /** 받아 둔 아바타 id를 로컬 파일 경로로 — 없으면 내려받는다 */
+    suspend fun avatarPath(remoteRoomId: String, avatarId: String): String? =
+        runCatching { avatars.resolve(remoteRoomId, avatarId) }.getOrNull()
+
     suspend fun pushCharacters(remoteRoomId: String, characters: List<Map<String, Any?>>) {
         // payload 전체를 그대로 비교한다 — 이름·값만 보다가 emoji·이름색만 바꾸면
         // 전파되지 않았다 (B4). 필드가 늘어도 여기를 고칠 일이 없다

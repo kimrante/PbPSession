@@ -157,6 +157,10 @@ class PbpRepository(private val db: AppDatabase) {
             mapOf(
                 // 이름이 겹쳐도 상대가 이 캐릭터를 정확히 가리킬 수 있게
                 com.pbp.shared.Protocol.Character.ID to profile.characterId,
+                // 상대의 판정 요청 목록에 얼굴이 뜨도록 (메시지와 같은 아바타를 가리킨다)
+                com.pbp.shared.Protocol.Character.AVATAR_ID to profile.imagePath?.let { path ->
+                    syncManager?.avatarIdFor(remoteId, path)
+                },
                 com.pbp.shared.Protocol.Character.NAME to profile.name,
                 com.pbp.shared.Protocol.Character.EMOJI to profile.emoji,
                 com.pbp.shared.Protocol.Character.NAME_COLOR to profile.nameColor,

@@ -668,11 +668,22 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         judgeCandidates = null
         scope.launch {
             val peers = withContext(Dispatchers.IO) { firestore.listPeerCharacters(room.remoteId) }
+            // 얼굴을 먼저 받아 둔다 — 목록이 뜬 뒤에 하나씩 채우면 깜빡인다
+            val faces = withContext(Dispatchers.IO) {
+                peers.mapNotNull { it.avatarId }.distinct().mapNotNull { id ->
+                    fetchAvatarCached(firestore, room.remoteId, id)?.let { bytes ->
+                        runCatching {
+                            org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+                        }.getOrNull()?.let { id to it }
+                    }
+                }.toMap()
+            }
             // 오너 프로필은 캐릭터가 아니라 애초에 이 목록에 들어오지 않는다
             val mine = profiles.filterNot { it.isGm }.map { profile ->
                 JudgeCandidate(
                     id = profile.characterId,
                     name = profile.name,
+                    avatar = profile.imagePath?.let(::loadLocalBitmap),
                     emoji = profile.emoji,
                     nameColor = profile.nameColor,
                     // 주사위가 굴러가야 하므로 숫자 값만 고를 수 있다
@@ -681,7 +692,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         .keys.toList(),
                 )
             }
-            val peerCandidates = peers.map { JudgeCandidate(it.id, it.name, it.emoji, null, it.stats) }
+            val peerCandidates = peers.map {
+                JudgeCandidate(it.id, it.name, it.avatarId?.let(faces::get), it.emoji, null, it.stats)
+            }
             // 이름이 아니라 고유 id로 거른다 — 이름으로 걸렀더니 같은 이름의 캐릭터가
             // 둘일 때 뒤엣것이 목록에서 통째로 사라졌다
             judgeCandidates = (mine + peerCandidates).distinctBy { it.id ?: "name:${it.name}" }

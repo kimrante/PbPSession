@@ -186,3 +186,10 @@ internal fun rememberLocalBitmap(path: String?): ImageBitmap? {
     }
     return bitmap
 }
+
+/** 컴포저블 밖에서 로컬 이미지를 읽는다 — 판정 후보 목록을 미리 채울 때 쓴다 */
+internal fun loadLocalBitmap(path: String): androidx.compose.ui.graphics.ImageBitmap? =
+    runCatching {
+        org.jetbrains.skia.Image.makeFromEncoded(java.io.File(path).readBytes())
+            .toComposeImageBitmap()
+    }.getOrNull()

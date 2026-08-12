@@ -44,6 +44,8 @@ internal data class JudgeCandidate(
     /** 고유 id. 구버전 상대의 캐릭터에는 없다(null) */
     val id: String?,
     val name: String,
+    /** 얼굴 — 내 프로필은 로컬 경로에서, 상대 캐릭터는 받아 둔 아바타에서 온다 */
+    val avatar: androidx.compose.ui.graphics.ImageBitmap? = null,
     val emoji: String,
     val nameColor: Long?,
     val stats: List<String>,
@@ -111,7 +113,7 @@ internal fun JudgeRequestOverlay(
                 GhostButton("취소", Modifier.fillMaxWidth(), onDismiss)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CandidateAvatar(target.emoji)
+                    CandidateAvatar(target.emoji, target.avatar)
                     Spacer(Modifier.width(DesktopDimens.gap2))
                     Text(
                         target.name, fontSize = 13.sp, fontWeight = FontWeight.Bold,
@@ -241,7 +243,7 @@ private fun CandidateRow(candidate: JudgeCandidate, onClick: () -> Unit) {
             .padding(DesktopDimens.gap3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CandidateAvatar(candidate.emoji)
+        CandidateAvatar(candidate.emoji, candidate.avatar)
         Spacer(Modifier.width(DesktopDimens.gap3))
         Column(Modifier.weight(1f)) {
             Text(
@@ -261,7 +263,10 @@ private fun CandidateRow(candidate: JudgeCandidate, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CandidateAvatar(emoji: String) {
+private fun CandidateAvatar(
+    emoji: String,
+    avatar: androidx.compose.ui.graphics.ImageBitmap? = null,
+) {
     Box(
         Modifier.size(DesktopDimens.avatarStrip)
             .clip(CircleShape)
@@ -269,7 +274,17 @@ private fun CandidateAvatar(emoji: String) {
             .border(1.dp, Tokens.Line, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text(emoji.ifBlank { "🙂" }, fontSize = 15.sp)
+        // 얼굴이 있으면 얼굴 — 이모지는 없을 때의 자리표시다
+        if (avatar != null) {
+            androidx.compose.foundation.Image(
+                bitmap = avatar,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.matchParentSize().clip(CircleShape),
+            )
+        } else {
+            Text(emoji.ifBlank { "🙂" }, fontSize = 15.sp)
+        }
     }
 }
 

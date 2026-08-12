@@ -432,6 +432,8 @@ internal fun MessageBlock(
                             message = message, myUid = myUid, room = room,
                             avatarCache = avatarCache, firestore = firestore,
                             overrideBody = part.text, overrideName = "GM",
+                            // 조각으로 넘어온 대사는 그 자체가 인용이다 (모바일과 같은 규칙)
+                            quoteBubble = true,
                             overrideBubbleColor = Tokens.gmQuoteBubble,
                             showTime = showTime && index == lastQuote,
                             onLongPress = onLongPress,

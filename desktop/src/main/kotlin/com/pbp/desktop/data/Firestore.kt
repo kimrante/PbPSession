@@ -15,6 +15,8 @@ import com.pbp.shared.Protocol
 /** @param id 상대가 붙인 고유 id — 이름이 겹쳐도 섞이지 않는다. 구버전 상대는 null */
 data class PeerCharacter(
     val id: String?,
+    /** 프로필 이미지의 아바타 id — 방 avatars에서 받아 얼굴로 쓴다 */
+    val avatarId: String?,
     val name: String,
     val emoji: String,
     val stats: List<String>,
@@ -458,6 +460,8 @@ class FirestoreRest(
                     .orEmpty()
                 out += PeerCharacter(
                     id = fields.getAsJsonObject(Protocol.Character.ID)
+                        ?.get("stringValue")?.asString?.takeIf { it.isNotBlank() },
+                    avatarId = fields.getAsJsonObject(Protocol.Character.AVATAR_ID)
                         ?.get("stringValue")?.asString?.takeIf { it.isNotBlank() },
                     name = name,
                     emoji = fields.getAsJsonObject(Protocol.Character.EMOJI)

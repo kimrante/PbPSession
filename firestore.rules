@@ -22,8 +22,13 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       allow create: if signedIn();
-      // 테마·배경 변경은 방 멤버 누구나 (앱 정책과 동일)
-      allow update: if isMember(roomId);
+      // 테마·배경 변경은 방 멤버 누구나 (앱 정책과 동일). 단 **바꿀 수 있는 필드는
+      // 정해진 것뿐** (SV8) — 예전에는 멤버가 방 문서에 임의의 큰 필드를 계속 붙여
+      // 1MB까지 부풀릴 수 있었다. 앱이 실제로 고쳐 쓰는 것은 아래 다섯뿐이다
+      // (배경은 각자 기기 설정이라 공유하지 않는다)
+      allow update: if isMember(roomId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['themeColor', 'logsClearedAt', 'inviteCode', 'name', 'rule']);
       allow delete: if false;
 
       match /messages/{messageId} {
@@ -33,14 +38,25 @@ service cloud.firestore {
         // Functions의 발신자 제외도 우회된다
         allow create: if isMember(roomId) &&
           request.resource.data.authorUid == request.auth.uid;
-        // 수정은 작성자 본인만
-        allow update: if isMember(roomId) && resource.data.authorUid == request.auth.uid;
+        // 수정은 작성자 본인만. 고치면서 **작성자를 상대 것으로 바꿔치기하는 것도
+        // 막는다** (SV5) — create만 막아 두고 update에 같은 구멍이 남아 있었다
+        allow update: if isMember(roomId) &&
+          resource.data.authorUid == request.auth.uid &&
+          request.resource.data.authorUid == resource.data.authorUid;
         // 삭제는 멤버 누구나 — '방 로그 초기화'가 상대 메시지도 지워야 하므로
         allow delete: if isMember(roomId);
       }
 
       match /avatars/{avatarId} {
-        allow read, write: if isMember(roomId);
+        allow read: if isMember(roomId);
+        // 축소본 하나만 담는 문서다 (SV9) — 다른 필드나 대용량 쓰기로 저장 비용을
+        // 부풀리지 못하게 모양과 크기를 못 박는다. 256px 축소본은 base64로 해도
+        // 10만 자 언저리라 상한에 한참 못 미친다
+        allow create, update: if isMember(roomId) &&
+          request.resource.data.keys().hasOnly(['data']) &&
+          request.resource.data.data is string &&
+          request.resource.data.data.size() < 700000;
+        allow delete: if isMember(roomId);
       }
 
       match /members/{memberId} {
@@ -48,8 +64,9 @@ service cloud.firestore {
         allow read: if isMember(roomId);
         // 멤버 등록·토큰 갱신은 본인 문서만 (방 문서 ID를 아는 사람 = 초대받은 사람)
         allow create, update: if signedIn() && request.auth.uid == memberId;
-        // 본인 탈퇴 + 구버전(deviceId 키) 멤버 문서 정리는 멤버가 수행
-        allow delete: if isMember(roomId) || (signedIn() && request.auth.uid == memberId);
+        // 탈퇴도 본인 문서만 (SV6) — 멤버 누구나 지울 수 있던 때에는 상대의
+        // fcmToken을 날려 푸시를 끊고, 상대를 방에서 쫓아낼 수 있었다
+        allow delete: if signedIn() && request.auth.uid == memberId;
       }
     }
 
@@ -57,8 +74,14 @@ service cloud.firestore {
     match /inviteCodes/{code} {
       allow get: if signedIn();
       allow list: if false;
-      allow create: if signedIn();
-      allow update, delete: if false;
+      // 자기 방의 코드만 (SV3) — 익명 로그인만으로 '지울 수 없는 문서'를 무한히
+      // 쌓던 길을 막는다. 앱도 멤버로 등록한 뒤에 매핑을 만든다
+      allow create: if isMember(request.resource.data.roomId);
+      allow update: if false;
+      // 참가에 쓰인 코드는 참가자가 소비한다 (SV2) — 한 번 쓰면 그 코드로는 더
+      // 들어올 수 없다. 그 방의 멤버만 지울 수 있어 남의 방 코드를 지우는
+      // 훼방은 되지 않는다
+      allow delete: if isMember(resource.data.roomId);
     }
 
     match /{document=**} {

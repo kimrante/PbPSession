@@ -33,7 +33,11 @@ exports.notifyNewMessage = onDocumentCreated(
       : (data.createdAt || 0);
     if (syncAtMs < Date.now() - 2 * 60 * 1000) return;
 
-    const senderName = data.senderName || "상대";
+    // 보낸 이 이름은 클라이언트가 정한 값이다 (SV10) — 문자열인지 보고 길이를 자른다.
+    // 방에 표시명을 두는 곳이 없어 서버가 대신 정할 수는 없지만, 초장문을 알림에
+    // 그대로 싣는 것은 막는다
+    const senderName =
+      (typeof data.senderName === "string" ? data.senderName : "").slice(0, 40) || "상대";
     const authorUid = data.authorUid || "";
     const roomId = event.params.roomId;
 

@@ -922,7 +922,25 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onSend = ::sendMessage,
                 onSwitchProfile = ::switchProfile,
                 onAddProfile = { overlay = OverlayKind.NewProfile },
-                onShowCode = { overlay = OverlayKind.ShowCode },
+                onShowCode = {
+                    overlay = OverlayKind.ShowCode
+                    // 참가에 쓰인 코드는 사라진다 (SV2) — 죽은 코드를 계속 보여 주지
+                    // 않도록, 열 때 살아 있는지 보고 없으면 새로 발급한다
+                    scope.launch(Dispatchers.IO) {
+                        val fresh = firestore.refreshInviteCode(room.remoteId, room.inviteCode)
+                        if (fresh != null && fresh != room.inviteCode) {
+                            withContext(Dispatchers.Main) {
+                                rooms = rooms.map {
+                                    if (it.remoteId == room.remoteId) it.copy(inviteCode = fresh) else it
+                                }
+                                if (selected?.remoteId == room.remoteId) {
+                                    selected = selected?.copy(inviteCode = fresh)
+                                }
+                                persist()
+                            }
+                        }
+                    }
+                },
                 onOpenSettings = { overlay = OverlayKind.RoomSettings },
                 onMessageLongPress = { messageAction = it },
                 onEditProfile = { editProfileIndex = it },
@@ -995,6 +1013,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                                 ),
                             )
                         }
+                        // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이다
+                        firestore.consumeInviteCode(code.trim().uppercase())
                         // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
                         // 겹치면 한쪽 갱신이 통째로 사라진다 (resetRoomLogs의 M2와 같은 이유)
                         withContext(Dispatchers.Main) {

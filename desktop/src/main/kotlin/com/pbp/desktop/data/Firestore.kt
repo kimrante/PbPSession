@@ -523,11 +523,40 @@ class FirestoreRest(
 
     /** 초대 코드 → 방 매핑 문서 생성 (방 생성 시) */
     fun createInviteCode(code: String, remoteRoomId: String): Boolean = patch(
-        "$base/inviteCodes/$code?key=$apiKey",
+        "$base/inviteCodes/${encodePath(code)}?key=$apiKey",
         gson.toJson(
             fields(mapOf("roomId" to remoteRoomId, "createdAt" to System.currentTimeMillis()))
         ),
     )
+
+    /** 이 코드가 가리키는 방. 매핑이 없으면(=참가에 쓰여 사라졌으면) null */
+    private fun inviteCodeRoom(code: String): String? =
+        get("$base/inviteCodes/${encodePath(code)}?key=$apiKey")?.str("roomId")
+
+    /**
+     * 참가에 쓰인 코드를 없앤다 (SV2) — 코드는 1회용이라, 나중에 그 코드를 손에 넣은
+     * 제3자는 방을 찾지 못한다.
+     */
+    fun consumeInviteCode(code: String) {
+        deleteDoc("$base/inviteCodes/${encodePath(code)}?key=$apiKey")
+    }
+
+    /**
+     * 지금 보여 줄 초대 코드. 쓰인 코드는 사라지므로(SV2) 죽은 코드를 계속 띄우지
+     * 않도록, 살아 있으면 그대로 두고 없으면 새로 발급해 방 문서까지 맞춘다.
+     *
+     * @return 보여 줄 코드. 발급에 실패하면 null
+     */
+    fun refreshInviteCode(remoteRoomId: String, current: String?): String? {
+        if (current != null && inviteCodeRoom(current) == remoteRoomId) return current
+        val fresh = com.pbp.shared.Identifiers.newInviteCode()
+        if (!createInviteCode(fresh, remoteRoomId)) return null
+        patch(
+            "$base/rooms/$remoteRoomId?key=$apiKey&updateMask.fieldPaths=inviteCode",
+            gson.toJson(fields(mapOf("inviteCode" to fresh))),
+        )
+        return fresh
+    }
 
     fun getRoom(remoteId: String): RoomMeta? = runCatching {
         getRoomInternal(remoteId)
@@ -779,14 +808,11 @@ class FirestoreRest(
 
     /**
      * 방 나가기 — 내 멤버 문서 정리 (유령 푸시 방지, 모바일 leaveRoom과 동일).
-     * 레거시(deviceId) 문서를 먼저 지운다 — 내 문서를 먼저 지우면 멤버가 아니게 되어
-     * 이어지는 삭제가 규칙에 거부된다 (R5)
+     * 지울 수 있는 것은 내 멤버 문서뿐이다 (SV6) — 상대 문서까지 지울 수 있던 때에는
+     * 상대의 푸시를 끊고 방에서 쫓아낼 수 있었다.
      */
     fun leaveRoom(remoteRoomId: String, deviceId: String) {
         val myUid = uid ?: deviceId
-        if (myUid != deviceId) {
-            deleteDoc("$base/rooms/$remoteRoomId/members/$deviceId?key=$apiKey")
-        }
         deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
     }
 

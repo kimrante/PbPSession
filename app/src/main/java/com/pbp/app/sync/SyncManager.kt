@@ -473,6 +473,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             val existingMapping = codeDoc.get().await()
             when {
                 !existingMapping.exists() -> {
+                    // 참가에 쓰인 코드는 사라진다 (SV2). 그대로 되살리면 1회용이
+                    // 무의미해지므로, 예전에 나눠 준 코드라면 새 코드로 바꿔 발급한다
+                    if (code == room.inviteCode && room.remoteId != null) {
+                        code = randomCode()
+                        return@repeat
+                    }
                     codeDoc.set(
                         mapOf("roomId" to roomDoc.id, "createdAt" to System.currentTimeMillis())
                     ).await()
@@ -572,6 +578,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         push(roomDoc.id, listOf(insertedGreeting))
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
         registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
+        // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이라, 이후 그 코드를 손에
+        // 넣은 제3자는 방을 찾지 못한다. 참가가 끝난 다음이라야 실패해도 잃는 게 없다
+        runCatching {
+            firestore.collection("inviteCodes").document(code).delete().await()
+        }
         roomId
     }.getOrNull()
 
@@ -971,14 +982,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         scope.launch {
             runCatching {
                 ensureAuth()
-                val members = firestore.collection("rooms").document(remoteRoomId)
-                    .collection("members")
-                // 레거시(deviceId) 문서를 먼저 — 내 문서를 먼저 지우면 멤버가 아니게 되어
-                // 이어지는 삭제가 규칙에 거부되고 fcmToken이 남아 유령 푸시가 계속된다 (R5)
-                if (myUid != deviceId) {
-                    runCatching { members.document(deviceId).delete().await() }
-                }
-                members.document(myUid).delete().await()
+                // 지울 수 있는 것은 내 멤버 문서뿐이다 (SV6) — 상대 문서를 지울 수 있던
+                // 때에는 상대의 푸시를 끊고 방에서 쫓아낼 수 있었다
+                firestore.collection("rooms").document(remoteRoomId)
+                    .collection("members").document(myUid).delete().await()
             }
         }
     }
@@ -1056,12 +1063,5 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 com.google.firebase.firestore.SetOptions.merge(),
             )
             .await()
-        // 구버전 deviceId 키 멤버 문서 정리 — 같은 토큰으로 이중 푸시 방지
-        if (myUid != deviceId) {
-            runCatching {
-                firestore.collection("rooms").document(remote)
-                    .collection("members").document(deviceId).delete().await()
-            }
-        }
     }
 }

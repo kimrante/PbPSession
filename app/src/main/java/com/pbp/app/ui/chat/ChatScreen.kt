@@ -57,6 +57,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
+import com.pbp.app.ui.common.safeLaunch
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
 import com.pbp.app.data.CaptureSettings
@@ -147,36 +148,38 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
      * 입력 중 알림 — 입력창에서 **실제로 글자가 바뀔 때만** 부른다.
      * 포커스만 있는 상태, 써 둔 글을 그대로 두는 상태는 입력 중이 아니다.
      */
-    fun notifyTyping() = viewModelScope.launch {
-        val name = profiles.value.find { it.id == room.value?.activeProfileId }?.name ?: return@launch
+    fun notifyTyping() = safeLaunch(app) {
+        val name = profiles.value.find { it.id == room.value?.activeProfileId }?.name ?: return@safeLaunch
         repo.pushTyping(roomId, name)
     }
 
     /** 전송·비움·포커스 해제 때 즉시 끈다 */
-    fun notifyTypingStopped() = viewModelScope.launch { repo.clearTyping(roomId) }
+    fun notifyTypingStopped() = safeLaunch(app) { repo.clearTyping(roomId) }
 
-    fun markRead() = viewModelScope.launch { repo.markRead(roomId) }
+    fun markRead() = safeLaunch(app) { repo.markRead(roomId) }
 
     // ── 판정 요청 ────────────────────────────────────────
     init {
         // 이 기기의 캐릭터 명단을 상대에게 알린다 — 명단이 그대로면 쓰지 않는다 (J0).
         // 상대 GM의 요청 목록에 내 캐릭터가 뜨려면 이게 먼저 건너가야 한다.
-        viewModelScope.launch {
+        // collect 자체를 감싼다 (Z3) — 방을 열어 두는 내내 도는 쓰기라, 여기서 터지면
+        // "방에 들어가면 앱이 꺼진다"가 된다
+        safeLaunch(app) {
             profiles.collect { list -> repo.pushCharacters(roomId, list) }
         }
     }
 
-    fun sendJudgeRequest(targetName: String, statName: String) = viewModelScope.launch {
-        val gm = profiles.value.find { it.id == room.value?.activeProfileId } ?: return@launch
+    fun sendJudgeRequest(targetName: String, statName: String) = safeLaunch(app) {
+        val gm = profiles.value.find { it.id == room.value?.activeProfileId } ?: return@safeLaunch
         repo.sendJudgeRequest(roomId, gm, targetName, statName)
     }
 
     /** @param onNeedValue 대상 캐릭터에 그 값이 없을 때 — 값 이름을 돌려준다 (J6) */
-    fun rollJudge(request: Message, onNeedValue: (String) -> Unit) = viewModelScope.launch {
+    fun rollJudge(request: Message, onNeedValue: (String) -> Unit) = safeLaunch(app) {
         repo.rollJudge(request)?.let(onNeedValue)
     }
 
-    fun addStatAndRoll(request: Message, statName: String, value: Int) = viewModelScope.launch {
+    fun addStatAndRoll(request: Message, statName: String, value: Int) = safeLaunch(app) {
         repo.addStatAndRoll(request, statName, value)
     }
 
@@ -228,30 +231,30 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         onDone(null)
     }
 
-    fun send(text: String, isOoc: Boolean) = viewModelScope.launch {
+    fun send(text: String, isOoc: Boolean) = safeLaunch(app) {
         val sender = profiles.value.find { it.id == room.value?.activeProfileId }
         if (sender == null) {
             // 프로필 삭제 직후의 좁은 레이스 — 입력이 조용히 버려지지 않게 알린다 (L6)
             Toast.makeText(app, "발화 프로필이 없어 전송하지 못했습니다", Toast.LENGTH_SHORT).show()
-            return@launch
+            return@safeLaunch
         }
         repo.sendMessage(roomId, sender, text, isOoc)
         repo.markRead(roomId)
     }
 
-    fun switchTo(profile: CharacterProfile) = viewModelScope.launch {
-        if (room.value?.activeProfileId == profile.id) return@launch
+    fun switchTo(profile: CharacterProfile) = safeLaunch(app) {
+        if (room.value?.activeProfileId == profile.id) return@safeLaunch
         repo.switchProfile(roomId, profile)
     }
 
-    fun edit(messageId: Long, body: String) = viewModelScope.launch {
+    fun edit(messageId: Long, body: String) = safeLaunch(app) {
         repo.editMessage(messageId, body)
     }
 
-    fun delete(message: Message) = viewModelScope.launch { repo.deleteMessage(message) }
+    fun delete(message: Message) = safeLaunch(app) { repo.deleteMessage(message) }
 
     fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
-        viewModelScope.launch { repo.createFromCode(imported) }
+        safeLaunch(app) { repo.createFromCode(imported) }
 
     /** 방을 떠나면 캡처 결과도 정리한다 — 화면 밖에 있어도 메모리는 이 방의 것이다 */
     override fun onCleared() {
@@ -331,7 +334,12 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     /** @param startIndex 되살릴 문장 번호. 문서가 짧아졌으면 범위 안으로 당겨진다 */
     fun loadScenario(url: String, startIndex: Int = 0) = viewModelScope.launch {
         scenario.value = ScenarioState.Loading
-        val result = withContext(Dispatchers.IO) { ScenarioFetcher.fetch(url) }
+        // HttpURLConnection 계열은 드물게 IOException이 아닌 예외를 던진다(제조사
+        // 네트워크 스택·프록시 설정 등). fetch 안을 고치는 것보다 여기 한 줄이 싸다 (Z5)
+        val result = withContext(Dispatchers.IO) {
+            runCatching { ScenarioFetcher.fetch(url) }
+                .getOrDefault(ScenarioFetcher.Result.Error.NETWORK)
+        }
         scenario.value = when (result) {
             is ScenarioFetcher.Result.Ok -> {
                 val paragraphs = ScenarioDoc.splitParagraphs(result.text)
@@ -491,9 +499,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         var running = 0
         messages.map { message -> running.also { running += renderedPartCount(message) } }
     }
-    // 범위 안 메시지가 상대에 의해 삭제되면 시작점이 사라질 수 있다 — 모드를 닫는다
-    LaunchedEffect(captureIdx == null, capturing) {
-        if (capturing && captureIdx == null) {
+    // 범위 안 메시지가 상대에 의해 삭제되면 시작점이 사라질 수 있다 — 모드를 닫는다.
+    // **아직 안 불러온 상태와 구분해야 한다** (Y1): captureStart는 rememberSaveable이라
+    // 프로세스 재생성 뒤 복원되는데, 첫 컴포지션의 messages는 stateIn 초기값(빈 목록)이다.
+    // 가드가 없으면 "삭제되어 취소했습니다"라는 틀린 안내와 함께 모드가 풀렸다
+    LaunchedEffect(captureIdx == null, capturing, messages.isNotEmpty()) {
+        if (capturing && captureIdx == null && messages.isNotEmpty()) {
             captureStart = null
             captureEnd = null
             Toast.makeText(context, "선택한 메시지가 삭제되어 캡처를 취소했습니다", Toast.LENGTH_SHORT).show()
@@ -502,6 +513,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     val exitCapture = {
         captureStart = null
         captureEnd = null
+    }
+    // 끝점이 정해졌는가 — **살아 있는 조각인지**로 판정한다 (Y2). 끝점 메시지만
+    // 사라지면 captureIdx는 시작점 1건으로 줄어드는데 captureEnd는 사라진 키를 그대로
+    // 들고 있어, 화면만 "범위 확정"으로 남고 실제 선택은 1조각이었다
+    val endPicked = remember(pieceKeys, captureEnd) {
+        captureEnd != null && pieceKeys.contains(captureEnd)
     }
     // 목업 03장의 탭 규칙: ① 시작만 있으면 그 자리가 끝 ② 양 끝을 다시 탭하면 그 끝만 이동
     // ③ 범위 밖은 가까운 끝이 늘어난다. 어느 경우에도 범위가 초기화되지 않는다.
@@ -583,7 +600,7 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 // ── 상단 바: 타이틀 묶음은 정중앙, 버튼은 좌우 끝 (목업 final-design.html)
                 if (capturing) {
                     CaptureModeBar(
-                        subtitle = if (captureEnd == null) "끝 메시지를 탭하세요"
+                        subtitle = if (!endPicked) "끝 메시지를 탭하세요"
                         else "양 끝을 다시 탭해 조절할 수 있어요",
                         onClose = exitCapture,
                     )
@@ -802,12 +819,12 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     }
                     CaptureBar(
                         count = pickedPieces.size,
-                        dateRange = if (captureEnd == null) null else dateRangeLabel(picked),
+                        dateRange = if (!endPicked) null else dateRangeLabel(picked),
                         startLabel = picked.firstOrNull()?.let {
                             "시작 " + com.pbp.shared.CaptureLayout.dateOnly(it.createdAt) +
                                 " · " + (it.senderName ?: "이름 없음")
                         },
-                        estimatedPx = if (captureEnd == null) null else estimatedPx,
+                        estimatedPx = if (!endPicked) null else estimatedPx,
                         overLimit = pickedPieces.size > ChatViewModel.PAGE_SIZE,
                         rendering = captureRendering,
                         onMake = {

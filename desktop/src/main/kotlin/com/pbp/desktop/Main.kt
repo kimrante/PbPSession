@@ -565,8 +565,14 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         captureError = null
         val range = captureIdx ?: return
         val next = captureRangeAfterTap(range, tapped)
-        captureStart = messages[next.first].docId
-        captureEnd = messages[next.last].docId
+        // 클릭 처리는 리컴포지션 밖(프레임 사이)에서 돈다 — range는 직전 컴포지션의
+        // 값이고 messages는 지금 값이다. 목록이 줄어드는 회차(상대의 로그 초기화가
+        // 메타 폴로 적용되는 순간)와 겹치면 범위를 벗어나 프로세스가 즉사했다 (X1).
+        // 둘 다 확보한 뒤에 대입한다 — 한쪽만 갱신되면 시작·끝이 다른 세대로 어긋난다
+        val start = messages.getOrNull(next.first)?.docId ?: return
+        val end = messages.getOrNull(next.last)?.docId ?: return
+        captureStart = start
+        captureEnd = end
     }
 
     /** 캡처 이미지를 만들어 PNG로 저장 — 기존 로그 내보내기와 같은 FileDialog */
@@ -917,7 +923,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     persist()
                 },
                 captureExcludeOoc = captureExcludeOoc,
-                captureEndPicked = captureEnd != null,
+                // 끝점 메시지가 사라졌는데 키만 남아 있으면 "범위 확정"으로 보인다 (Y2)
+                captureEndPicked = captureEnd != null && messages.any { it.docId == captureEnd },
                 captureError = captureError,
                 onJudgeRoll = ::rollJudge,
                 onJudgeRequest = ::openJudgeRequest,

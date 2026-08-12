@@ -51,6 +51,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
+import com.pbp.app.ui.common.safeLaunch
 import com.pbp.app.PbpApp
 import com.pbp.app.data.Images
 import com.pbp.app.ui.common.HexColorDialog
@@ -72,14 +73,17 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
     val room = repo.observeRoom(roomId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun setThemeColor(color: Long) = viewModelScope.launch { repo.setThemeColor(roomId, color) }
+    fun setThemeColor(color: Long) = safeLaunch(app) { repo.setThemeColor(roomId, color) }
 
-    fun setBackground(key: String) = viewModelScope.launch { repo.setBackground(roomId, key) }
+    fun setBackground(key: String) = safeLaunch(app) { repo.setBackground(roomId, key) }
 
-    fun importBackground(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
-        // 배경은 최대 1600px로 축소 저장
-        Images.importDownscaled(app, uri, "backgrounds", maxSize = com.pbp.app.data.ImageSizes.BACKGROUND)
-            ?.let { repo.setBackground(roomId, it) }
+    fun importBackground(uri: Uri) = safeLaunch(app) {
+        withContext(Dispatchers.IO) {
+            // 배경은 최대 1600px로 축소 저장
+            Images.importDownscaled(
+                app, uri, "backgrounds", maxSize = com.pbp.app.data.ImageSizes.BACKGROUND,
+            )?.let { repo.setBackground(roomId, it) }
+        }
     }
 
     fun share(onResult: (String?) -> Unit) = viewModelScope.launch {

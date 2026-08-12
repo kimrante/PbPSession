@@ -132,4 +132,16 @@ class PbpMarkupTest {
         assertTrue(spans.all { it.strike })
         assertTrue(nodes.any { it is PbpMarkup.Node.Value && it.text == "50" })
     }
+
+    @Test
+    fun `마커가 수백 개인 초장문도 금방 끝난다 — 예전에는 조각마다 뒤를 다시 이었다`() {
+        // 마커 500개 × 본문 2,000자 남짓. O(n²)이던 시절에는 수 초가 걸려
+        // 첫 컴포지션이 멎고 시스템이 ANR로 앱을 죽였다 (Z4)
+        val body = (1..500).joinToString(separator = " ") { "값 {{$it}} 뒤" }
+        val started = System.nanoTime()
+        val nodes = PbpMarkup.parse(body)
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+        assertEquals(500, nodes.count { it is Node.Value })
+        assertTrue("파싱에 ${elapsedMs}ms — 너무 느리다", elapsedMs < 500)
+    }
 }

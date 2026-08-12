@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
+import com.pbp.app.ui.common.safeLaunch
 import com.pbp.app.PbpApp
 import com.pbp.app.R
 import com.pbp.app.data.ChatRoom
@@ -92,13 +93,13 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .map { list -> list.associate { it.roomId to it.count } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    fun createRoom(name: String, rule: String) = viewModelScope.launch {
+    fun createRoom(name: String, rule: String) = safeLaunch(app) {
         repo.createRoom(name.trim().ifEmpty { "새 세션" }, rule = rule)
     }
 
-    fun deleteRoom(room: ChatRoom) = viewModelScope.launch { repo.deleteRoom(room) }
+    fun deleteRoom(room: ChatRoom) = safeLaunch(app) { repo.deleteRoom(room) }
 
-    fun joinRoom(code: String, onResult: (Long?) -> Unit) = viewModelScope.launch {
+    fun joinRoom(code: String, onResult: (Long?) -> Unit) = safeLaunch(app) {
         onResult(app.syncManager.joinRoom(code.trim().uppercase()))
     }
 
@@ -107,7 +108,7 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
-        viewModelScope.launch { repo.createFromCode(imported) }
+        safeLaunch(app) { repo.createFromCode(imported) }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

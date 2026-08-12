@@ -63,13 +63,23 @@ object PbpMarkup {
         }
         if (cursor < text.length) pieces += text.substring(cursor)
 
+        // 조각마다 "뒤에 남은 글" 전체가 필요한데, 매번 새로 이어 붙이면 마커 수 × 본문
+        // 길이만큼 문자열을 복사한다 — 마커가 수백 개인 긴 메시지에서 첫 컴포지션이
+        // 몇 초씩 멎어 시스템이 ANR로 앱을 죽였다. 뒤에서부터 한 번만 누적해 둔다 (Z4)
+        val suffixes = arrayOfNulls<String>(pieces.size)
+        var accumulated = ""
+        for (i in pieces.indices.reversed()) {
+            suffixes[i] = accumulated
+            (pieces[i] as? String)?.let { accumulated = it + accumulated }
+        }
+
         // 스타일 토글 상태를 조각 사이로 이어 간다. 닫는 짝 탐색도 뒤 조각까지 본다.
         val nodes = mutableListOf<Node>()
         var style = Style()
         pieces.forEachIndexed { index, piece ->
             when (piece) {
                 is String -> {
-                    val tail = pieces.drop(index + 1).filterIsInstance<String>().joinToString("")
+                    val tail = suffixes[index].orEmpty()
                     val (spans, next) = parseStyled(piece, tail, style)
                     nodes += spans
                     style = next

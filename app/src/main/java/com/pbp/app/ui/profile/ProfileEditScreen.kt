@@ -59,6 +59,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.pbp.app.ui.common.safeLaunch
 import com.pbp.app.PbpApp
 import com.pbp.app.data.CharacterProfile
 import com.pbp.shared.ProfileStats
@@ -90,7 +91,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         newImagePath: String?, // 크롭 다이얼로그가 만든 512px JPEG 경로
         stats: List<Pair<String, String>>,
         onDone: () -> Unit,
-    ) = viewModelScope.launch {
+    ) = safeLaunch(app) {
         withContext(Dispatchers.IO) {
             val profile = (existing ?: CharacterProfile(name = "")).copy(
                 name = name.trim().ifEmpty { "이름 없음" },
@@ -106,7 +107,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         onDone()
     }
 
-    fun delete(profile: CharacterProfile, onDone: () -> Unit) = viewModelScope.launch {
+    fun delete(profile: CharacterProfile, onDone: () -> Unit) = safeLaunch(app) {
         withContext(Dispatchers.IO) {
             app.repository.deleteProfile(profile)
             profile.imagePath?.let { File(it).delete() }

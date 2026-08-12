@@ -71,6 +71,9 @@ internal class AvatarStore(
     }
 
     suspend fun resolve(remoteRoomId: String, avatarId: String): String? {
+        // 상대가 보낸 값이 그대로 파일 이름·문서 경로가 되는 자리다. 보내는 쪽은 늘
+        // md5 hex라 그 밖의 값은 지어낸 것 — 경로를 벗어나기 전에 막는다 (SV1)
+        if (!com.pbp.shared.Identifiers.isValidAvatarId(avatarId)) return null
         val file = File(context.filesDir, "avatars/remote-$avatarId.jpg")
         if (file.exists()) return file.absolutePath
         val doc = firestore().collection("rooms").document(remoteRoomId)

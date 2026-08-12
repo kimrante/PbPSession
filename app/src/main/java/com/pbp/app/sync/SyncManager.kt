@@ -983,13 +983,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
-    private fun randomCode(): String {
-        val alphabet = Protocol.INVITE_ALPHABET
-        return (1..6).map { alphabet.random() }.joinToString("")
-    }
+    private fun randomCode(): String = com.pbp.shared.Identifiers.newInviteCode()
 
     private companion object {
-        /** 초대 코드 자리를 찾는 시도 횟수 (A4). 32^6 공간이라 한 번이면 거의 끝난다 */
+        /** 초대 코드 자리를 찾는 시도 횟수 (A4). 32^8 공간이라 한 번이면 거의 끝난다 */
         const val CODE_ATTEMPTS = 5
     }
 

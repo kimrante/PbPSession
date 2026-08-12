@@ -93,6 +93,10 @@ class AppConfig private constructor(
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
         fun load(): AppConfig {
+            // 토큰·대화 로그가 든 폴더를 통째로 소유자 전용으로 (SV7). 시작할 때 한 번
+            // 걸어 두면 이미 만들어져 있던 설치본도 이때 정리된다
+            runCatching { AppPaths.root.mkdirs() }
+            AppPaths.restrictToOwner(AppPaths.root)
             val loaded = runCatching {
                 gson.fromJson(file.readText(Charsets.UTF_8), Saved::class.java)
             }.getOrNull()
@@ -101,6 +105,7 @@ class AppConfig private constructor(
                 runCatching {
                     val backup = File(file.parentFile, "config.json.bak")
                     file.copyTo(backup, overwrite = true)
+                    AppPaths.restrictToOwner(backup) // 백업에도 리프레시 토큰이 들어 있다
                     System.err.println(
                         "config.json을 읽지 못해 기본값으로 시작합니다. 원본은 ${backup.absolutePath}에 보관됨"
                     )
@@ -207,6 +212,8 @@ class AppConfig private constructor(
             // 임시 파일에 쓴 뒤 원자적 이동 — 쓰다 죽어도 기존 config가 깨지지 않는다 (P2-8)
             val tmp = File(file.parentFile, "config.json.tmp")
             tmp.writeText(json, Charsets.UTF_8)
+            // 옮기기 전에 잠근다 — 권한은 파일을 따라가므로 config.json이 그대로 물려받는다
+            AppPaths.restrictToOwner(tmp)
             runCatching {
                 java.nio.file.Files.move(
                     tmp.toPath(), file.toPath(),

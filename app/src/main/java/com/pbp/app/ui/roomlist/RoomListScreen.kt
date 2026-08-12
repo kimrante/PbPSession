@@ -551,7 +551,7 @@ private fun JoinRoomDialog(onDismiss: () -> Unit, onJoin: (String, () -> Unit) -
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
-                    label = { Text("초대 코드 (6자리)") },
+                    label = { Text("초대 코드") },
                     singleLine = true,
                 )
                 Text(

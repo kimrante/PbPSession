@@ -1294,7 +1294,4 @@ private enum class OverlayKind {
     ProfileManager, AddProfileChoice, MarkupHelp,
 }
 
-internal fun inviteCode(): String {
-    val alphabet = Protocol.INVITE_ALPHABET
-    return (1..6).map { alphabet.random() }.joinToString("")
-}
+internal fun inviteCode(): String = com.pbp.shared.Identifiers.newInviteCode()

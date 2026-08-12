@@ -224,7 +224,7 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
     var code by remember { mutableStateOf("") }
     var failed by remember { mutableStateOf(false) }
     OverlayScaffold("초대 코드로 참여", onDismiss) {
-        OverlayField(code, { code = it; failed = false }, "초대 코드 (6자리)")
+        OverlayField(code, { code = it; failed = false }, "초대 코드")
         if (failed) {
             Spacer(Modifier.height(DesktopDimens.gap2))
             Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 11.sp, color = Tokens.Danger)

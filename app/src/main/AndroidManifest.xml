@@ -7,8 +7,14 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!--
+        대화 로그(pbp.db)와 설정이 통째로 구글 계정 백업·기기 이전에 실려 나가지
+        않도록 자동 백업을 끈다 (보안 리뷰 SV11). 기본값이 true라 명시해야 한다.
+        기기를 바꿀 때 로그는 내보내기로 옮긴다.
+    -->
     <application
         android:name=".PbpApp"
+        android:allowBackup="false"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"

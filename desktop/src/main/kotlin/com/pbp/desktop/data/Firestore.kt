@@ -226,6 +226,13 @@ class FirestoreRest(
         res
     }.getOrNull()
 
+    /**
+     * URL 경로 한 조각으로 안전하게 — 문서 id가 밖에서 들어오는 자리에 쓴다.
+     * 인코딩 없이 넣으면 `/`나 `?`가 섞인 값이 다른 문서를 가리킬 수 있다.
+     */
+    private fun encodePath(segment: String): String =
+        java.net.URLEncoder.encode(segment, "UTF-8")
+
     private fun get(url: String): JsonObject? {
         val res = sendWithRetry {
             HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout).auth().GET().build()
@@ -334,18 +341,20 @@ class FirestoreRest(
     fun findRoomByCode(code: String): RoomMeta? {
         val normalized = code.trim().uppercase()
         // 사용자 입력이 URL 경로에 들어가므로 인코딩 (P3-12)
-        val encoded = java.net.URLEncoder.encode(normalized, "UTF-8")
-        get("$base/inviteCodes/$encoded?key=$apiKey")?.str("roomId")?.let { roomId ->
+        get("$base/inviteCodes/${encodePath(normalized)}?key=$apiKey")?.str("roomId")?.let { roomId ->
             getRoom(roomId)?.let { return it }
         }
         return legacyFindRoomByCode(normalized)
     }
 
     private fun legacyFindRoomByCode(code: String): RoomMeta? {
+        // 쿼리 JSON에 손으로 끼워 넣는 자리다 — 따옴표만 지우면 백슬래시·개행이 남는다.
+        // 코드 글자만 허용하고 그 밖은 조회 자체를 하지 않는다 (SV12)
+        if (!com.pbp.shared.Identifiers.isValidInviteCode(code)) return null
         val query = """
             {"structuredQuery":{"from":[{"collectionId":"rooms"}],
              "where":{"fieldFilter":{"field":{"fieldPath":"inviteCode"},"op":"EQUAL",
-                      "value":{"stringValue":"${code.replace("\"", "")}"}}},"limit":1}}
+                      "value":{"stringValue":"$code"}}},"limit":1}}
         """.trimIndent()
         val res = runCatching {
             val r = sendWithRetry {
@@ -784,13 +793,13 @@ class FirestoreRest(
     /** 프로필 이미지 업로드 — 모바일 ensureAvatarUploaded와 같은 문서 형태 (data=base64) */
     fun uploadAvatar(remoteRoomId: String, avatarId: String, base64: String): Boolean =
         patch(
-            "$base/rooms/$remoteRoomId/avatars/$avatarId?key=$apiKey",
+            "$base/rooms/$remoteRoomId/avatars/${encodePath(avatarId)}?key=$apiKey",
             gson.toJson(fields(mapOf("data" to base64))),
         )
 
     /** 프로필 이미지(base64 JPEG) — 모바일이 올린 avatars/{hash} 문서 */
     fun fetchAvatar(remoteRoomId: String, avatarId: String): ByteArray? {
-        val doc = get("$base/rooms/$remoteRoomId/avatars/$avatarId?key=$apiKey") ?: return null
+        val doc = get("$base/rooms/$remoteRoomId/avatars/${encodePath(avatarId)}?key=$apiKey") ?: return null
         val data = doc.str("data") ?: return null
         return runCatching { java.util.Base64.getDecoder().decode(data) }.getOrNull()
     }

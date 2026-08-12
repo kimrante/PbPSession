@@ -178,5 +178,11 @@ object Protocol {
 
     /** 초대 코드 — 헷갈리는 글자(0/O/1/I) 제외 */
     const val INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    const val INVITE_LENGTH = 6
+
+    /**
+     * 초대 코드 길이. 코드 하나가 방 콘텐츠 전체를 여는 열쇠인데 `get`이 열려 있어
+     * 마구잡이 대입을 막을 방법이 없다 — 6자(32⁶)에서 8자(32⁸)로 올려 뒤지는 비용을
+     * 1000배로 만든다. 이미 나눠 준 6자 코드는 그대로 쓸 수 있다(길이로 거르지 않는다).
+     */
+    const val INVITE_LENGTH = 8
 }

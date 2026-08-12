@@ -120,6 +120,22 @@ internal fun md5Hex(bytes: ByteArray): String =
         .joinToString("") { "%02x".format(it) }
 
 /**
+ * 아바타 캐시 파일 — 이름이 캐시 폴더 안에 머무는지까지 확인한다 (SV1).
+ *
+ * avatarId는 상대가 보낸 값이 그대로 파일 이름이 된다. 규격(md5 hex)에서 벗어난
+ * 값이면 파일을 만들지 않고 null을 돌려주고, 호출부는 이모지로 떨어진다.
+ */
+private fun avatarCacheFile(avatarId: String): java.io.File? {
+    if (!com.pbp.shared.Identifiers.isValidAvatarId(avatarId)) return null
+    val dir = AppPaths.dir(AppPaths.AVATARS_REMOTE)
+    val file = java.io.File(dir, avatarId)
+    // 규격 검사만으로 충분하지만, 파일 연산 직전에 실제 경로로 한 번 더 확인한다
+    return runCatching {
+        file.takeIf { it.canonicalPath.startsWith(dir.canonicalFile.path + java.io.File.separator) }
+    }.getOrNull()
+}
+
+/**
  * 아바타 다운로드 디스크 캐시 (P9) — Android의 filesDir/avatars와 동일하게
  * 해시 키 파일로 저장해 실행마다 재다운로드(문서 크기만큼 read 대역폭 과금)를 없앤다.
  */
@@ -128,8 +144,8 @@ internal fun fetchAvatarCached(
     remoteRoomId: String,
     avatarId: String,
 ): ByteArray? {
-    val dir = AppPaths.dir(AppPaths.AVATARS_REMOTE)
-    val cached = java.io.File(dir, avatarId)
+    val cached = avatarCacheFile(avatarId) ?: return null
+    val dir = cached.parentFile
     runCatching { if (cached.exists()) return cached.readBytes() }
     val bytes = firestore.fetchAvatar(remoteRoomId, avatarId) ?: return null
     runCatching {
@@ -150,7 +166,7 @@ internal fun fetchAvatarCached(
  * 그 아바타가 영구히 이모지 폴백으로 남는다 — 지워야 다음에 새로 받는다.
  */
 internal fun dropBrokenAvatarCache(avatarId: String) {
-    runCatching { java.io.File(AppPaths.dir(AppPaths.AVATARS_REMOTE), avatarId).delete() }
+    runCatching { avatarCacheFile(avatarId)?.delete() }
 }
 
 /** 방별 업로드 완료 표시 — 같은 이미지의 중복 업로드 방지 (모바일 uploadedAvatars와 동일) */

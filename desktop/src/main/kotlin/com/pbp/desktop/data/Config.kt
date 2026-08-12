@@ -7,6 +7,12 @@ import java.util.UUID
 
 /** 로컬 캐릭터 프로필 — 모바일과 같은 개념 (이름/이모지/이름색/말풍선색) */
 data class Profile(
+    /**
+     * 기기를 넘어 이 캐릭터를 가리키는 고유 id (모바일 CharacterProfile.characterId와
+     * 같은 역할). 이름은 겹칠 수 있어 판정 대상을 가리는 기준이 될 수 없다.
+     * 구 config에서 읽으면 비어 있으므로 불러올 때 채운다.
+     */
+    val characterId: String? = java.util.UUID.randomUUID().toString(),
     val name: String,
     val emoji: String = "🙂",
     val nameColor: Long = 0xFFFFC46B,
@@ -102,7 +108,11 @@ class AppConfig private constructor(
             }
             return AppConfig(
                 deviceId = loaded?.deviceId ?: "desktop-${UUID.randomUUID()}",
-                profiles = (loaded?.profiles ?: defaultProfiles()).toMutableList(),
+                // 구 config에는 characterId가 없다(Gson이 null로 채운다) — 여기서 한 번
+                // 채워 넣는다. 비워 두면 판정 대상 판별이 전부 빈 문자열로 겹친다
+                profiles = (loaded?.profiles ?: defaultProfiles())
+                    .map { if (it.characterId.isNullOrBlank()) it.copy(characterId = UUID.randomUUID().toString()) else it }
+                    .toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
                 appFont = loaded?.appFont ?: "system",

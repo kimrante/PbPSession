@@ -38,6 +38,11 @@ import com.pbp.shared.Rules
 
 /** 판정 요청 후보 — 내 캐릭터와 상대 캐릭터를 같은 모양으로 다룬다 (J3) */
 data class JudgeCandidate(
+    /**
+     * 그 캐릭터의 고유 id. 구버전 상대의 캐릭터에는 없다(null) — 그때만 이름으로
+     * 다루고, 요청에도 id 없이 나간다(받는 쪽이 이름으로 되돌아간다).
+     */
+    val id: String?,
     val name: String,
     val emoji: String,
     val nameColor: Long?,
@@ -58,15 +63,16 @@ internal fun JudgeRequestSheet(
     candidates: List<JudgeCandidate>,
     rule: String,
     onDismiss: () -> Unit,
-    onSend: (targetName: String, statName: String) -> Unit,
+    onSend: (targetId: String?, targetName: String, statName: String) -> Unit,
 ) {
     val tokens = Pbp.colors
-    // 대상은 id가 아니라 **이름**으로 들고 있는다 — 상대 캐릭터는 내 DB에 없어 id가 없다
-    var targetName by rememberSaveable { mutableStateOf<String?>(null) }
+    // 고른 대상은 **목록에서의 자리**로 들고 있는다. 이름으로 들고 있으면 같은 이름이
+    // 둘일 때 어느 쪽을 골랐는지 구분할 수 없다(고유 id 없는 구버전 상대도 있다)
+    var targetIndex by rememberSaveable { mutableStateOf<Int?>(null) }
     var statName by rememberSaveable { mutableStateOf<String?>(null) }
     var manualStat by rememberSaveable { mutableStateOf("") }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val target = candidates.find { it.name == targetName }
+    val target = targetIndex?.let { candidates.getOrNull(it) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -100,8 +106,8 @@ internal fun JudgeRequestSheet(
 
             if (target == null) {
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                    candidates.forEach { candidate ->
-                        CandidateRow(candidate) { targetName = candidate.name }
+                    candidates.forEachIndexed { index, candidate ->
+                        CandidateRow(candidate) { targetIndex = index }
                     }
                     if (candidates.isEmpty()) {
                         Text(
@@ -134,7 +140,7 @@ internal fun JudgeRequestSheet(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .clickable {
-                                targetName = null
+                                targetIndex = null
                                 statName = null
                             }
                             .padding(horizontal = PbpDimens.gap3, vertical = PbpDimens.gap2),
@@ -192,7 +198,7 @@ internal fun JudgeRequestSheet(
                                 if (enabled) tokens.signature else tokens.ink.copy(alpha = .08f)
                             )
                             .clickable(enabled = enabled) {
-                                onSend(target.name, statName!!)
+                                onSend(target.id, target.name, statName!!)
                             }
                             .padding(horizontal = PbpDimens.gap4, vertical = PbpDimens.gap3),
                     )

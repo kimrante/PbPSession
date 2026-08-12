@@ -53,6 +53,14 @@ data class ChatRoom(
 )
 data class CharacterProfile(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /**
+     * 기기를 넘어 이 캐릭터를 가리키는 고유 id.
+     *
+     * 로컬 [id]는 기기마다 다른 번호라 상대에게 건넬 수 없고, **이름은 겹칠 수 있다** —
+     * 같은 방에 같은 이름의 프로필이 둘이면 판정 요청이 엉뚱하게 붙었다. 그래서 판정
+     * 대상은 이 값으로 가린다.
+     */
+    val characterId: String = java.util.UUID.randomUUID().toString(),
     val name: String,
     val tagline: String = "",
     val emoji: String = "🙂",
@@ -118,6 +126,8 @@ data class Message(
     val uploaded: Boolean = false,
     /** JUDGE 요청의 대상 캐릭터 이름. 그 캐릭터를 가진 사람만 굴릴 수 있다 (J1) */
     val judgeTarget: String? = null,
+    /** 판정 대상의 고유 id — 이름이 겹쳐도 섞이지 않는다. 구버전 메시지에는 없다 */
+    val judgeTargetId: String? = null,
     /**
      * 이 굴림(DICE)이 응답한 요청의 키 — 요청 메시지의 `remoteId ?: "local-{id}"`.
      *

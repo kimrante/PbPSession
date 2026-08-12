@@ -236,6 +236,8 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 자기 프로필에서 읽는다.
      */
     data class PeerCharacter(
+        /** 상대가 붙인 고유 id. 구버전 상대는 없다(null) — 그때만 이름으로 다룬다 */
+        val id: String?,
         val name: String,
         val emoji: String,
         val nameColor: Long?,
@@ -306,6 +308,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             val name = (map[Protocol.Character.NAME] as? String)?.takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
             PeerCharacter(
+                id = (map[Protocol.Character.ID] as? String)?.takeIf { it.isNotBlank() },
                 name = name,
                 emoji = map[Protocol.Character.EMOJI] as? String ?: "",
                 nameColor = (map[Protocol.Character.NAME_COLOR] as? Number)?.toLong(),

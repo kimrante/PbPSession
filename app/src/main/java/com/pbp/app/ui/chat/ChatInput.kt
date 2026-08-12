@@ -337,17 +337,27 @@ private fun TypingLine(typingName: String?, typingUntil: Long) {
     }
     val label = typingName?.takeIf { typingUntil > now }?.let { "${it}님이 입력 중…" }
     Box(
-        Modifier.fillMaxWidth().height(TYPING_ROW_HEIGHT),
+        // 고정 높이가 아니라 **최소 높이**다. 14dp에 못 박아 두면 글자 크기를 키운
+        // 기기에서 줄 상자가 넘쳐 밑이 잘렸다. 글이 없을 때도 같은 줄 상자를 그려
+        // 두므로(아래 빈 문자열) 표시가 들고 날 때 입력 영역이 튀지 않는다
+        Modifier.fillMaxWidth().heightIn(min = TYPING_ROW_HEIGHT),
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (label != null) {
-            Text(
-                label,
-                fontSize = 10.sp,
-                color = tokens.inkDim,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-            )
-        }
+        Text(
+            label.orEmpty(),
+            fontSize = 10.sp,
+            // 줄 높이를 직접 준다. 기본값은 줄 상자를 글립에 딱 맞춰 잡아 한글의
+            // 받침·내림선이 깎인다 — 입력창 textStyle과 같은 이유·같은 처방이다
+            lineHeight = 14.sp,
+            style = androidx.compose.ui.text.TextStyle(
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+                    trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.None,
+                ),
+            ),
+            color = tokens.inkDim,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }

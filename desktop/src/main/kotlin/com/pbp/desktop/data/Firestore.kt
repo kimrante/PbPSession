@@ -12,7 +12,13 @@ import java.nio.charset.StandardCharsets
 import com.pbp.shared.Protocol
 
 /** 상대가 올린 캐릭터 한 명 (J8). 값은 **이름만** 온다 — 숫자는 소유자 기기에만 있다 */
-data class PeerCharacter(val name: String, val emoji: String, val stats: List<String>)
+/** @param id 상대가 붙인 고유 id — 이름이 겹쳐도 섞이지 않는다. 구버전 상대는 null */
+data class PeerCharacter(
+    val id: String?,
+    val name: String,
+    val emoji: String,
+    val stats: List<String>,
+)
 
 /** 메시지 (Firestore 문서 ↔ 로컬 모델) — 안드로이드 앱과 같은 스키마 */
 data class Message(
@@ -34,6 +40,8 @@ data class Message(
     val createdAt: Long,
     /** JUDGE 요청의 대상 캐릭터 이름 (J1) */
     val judgeTarget: String?,
+    /** 판정 대상의 고유 id — 구버전이 보낸 메시지에는 없다 */
+    val judgeTargetId: String? = null,
     /** 이 굴림이 응답한 요청의 키 (J1) */
     val judgeRef: String?,
     /**
@@ -449,6 +457,8 @@ class FirestoreRest(
                     ?.mapNotNull { runCatching { it.asJsonObject.get("stringValue").asString }.getOrNull() }
                     .orEmpty()
                 out += PeerCharacter(
+                    id = fields.getAsJsonObject(Protocol.Character.ID)
+                        ?.get("stringValue")?.asString?.takeIf { it.isNotBlank() },
                     name = name,
                     emoji = fields.getAsJsonObject(Protocol.Character.EMOJI)
                         ?.get("stringValue")?.asString.orEmpty(),
@@ -571,6 +581,7 @@ class FirestoreRest(
         editedAt = doc.long("editedAt"),
         createdAt = doc.long("createdAt") ?: 0L,
         judgeTarget = doc.str("judgeTarget"),
+        judgeTargetId = doc.str("judgeTargetId"),
         judgeRef = doc.str("judgeRef"),
         // syncAt이 없는 옛 문서는 createdAt으로 — 커서가 뒤로 가지 않게만 하면 된다
         syncAt = doc.timestamp("syncAt") ?: doc.long("createdAt") ?: 0L,

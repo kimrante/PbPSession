@@ -41,6 +41,8 @@ import com.pbp.shared.Rules
  * 값은 **이름만** 들고 있다. 숫자는 그 캐릭터를 가진 기기에만 있다.
  */
 internal data class JudgeCandidate(
+    /** 고유 id. 구버전 상대의 캐릭터에는 없다(null) */
+    val id: String?,
     val name: String,
     val emoji: String,
     val nameColor: Long?,
@@ -58,7 +60,7 @@ internal fun JudgeRequestOverlay(
     candidates: List<JudgeCandidate>?,
     rule: String,
     onDismiss: () -> Unit,
-    onSend: (targetName: String, statName: String) -> Unit,
+    onSend: (targetId: String?, targetName: String, statName: String) -> Unit,
 ) {
     // 대상은 인덱스가 아니라 **이름**으로 들고 있는다 — 상대 캐릭터는 내 목록에 없다
     var targetName by remember { mutableStateOf<String?>(null) }
@@ -172,7 +174,7 @@ internal fun JudgeRequestOverlay(
                 Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
                     val picked = statName
                     if (picked != null) {
-                        YellowButton("보내기", Modifier.weight(1f)) { onSend(target.name, picked) }
+                        YellowButton("보내기", Modifier.weight(1f)) { onSend(target.id, target.name, picked) }
                     } else {
                         // 누를 수 없는 버튼에도 자리는 남겨 둔다 — 버튼이 사라지면 창이 흔들린다
                         Box(

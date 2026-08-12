@@ -211,6 +211,8 @@ internal fun ChatPane(
             val rolledRefs = remember(messages) {
                 messages.mapNotNullTo(mutableSetOf()) { it.judgeRef }
             }
+            // 내 차례인지는 고유 id로 가린다 — 이름이 같은 프로필이 둘이면 엉뚱하게 붙었다
+            val myCharacterIds = remember(profiles) { profiles.map { it.characterId }.toSet() }
             val myCharacters = remember(profiles) { profiles.map { it.name }.toSet() }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 LazyColumn(
@@ -258,6 +260,11 @@ internal fun ChatPane(
                                     mark = mark,
                                     judgeState = when {
                                         (message.docId in rolledRefs) -> JudgeState.Done
+                                        message.judgeTargetId != null ->
+                                            if (message.judgeTargetId in myCharacterIds) {
+                                                JudgeState.MyTurn
+                                            } else JudgeState.Waiting
+
                                         message.judgeTarget in myCharacters -> JudgeState.MyTurn
                                         else -> JudgeState.Waiting
                                     },

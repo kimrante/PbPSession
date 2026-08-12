@@ -60,7 +60,17 @@ object Protocol {
         const val AVATAR_ID = "avatarId"
 
         // 자동 판정 요청 (J1)
+        /** 대상 캐릭터의 **표시 이름**. 구버전과 화면 표기에 쓴다 */
         const val JUDGE_TARGET = "judgeTarget"
+
+        /**
+         * 대상 캐릭터의 **고유 id** — 누가 굴릴 차례인지는 이걸로 가린다.
+         *
+         * 예전에는 이름으로 맞췄다. 한 방에 같은 이름의 프로필이 둘 있으면 요청이
+         * 엉뚱한 쪽에 붙거나 아예 아무에게도 안 붙었다. 구버전이 보낸 메시지에는
+         * 이 필드가 없으므로 받는 쪽은 없을 때 이름으로 되돌아간다.
+         */
+        const val JUDGE_TARGET_ID = "judgeTargetId"
         const val JUDGE_REF = "judgeRef"
 
         // 방 문서
@@ -89,6 +99,8 @@ object Protocol {
 
     /** [Field.CHARACTERS] 항목의 키 */
     object Character {
+        /** 기기를 넘어 그 캐릭터를 가리키는 고유 id — 이름이 겹쳐도 섞이지 않는다 */
+        const val ID = "id"
         const val NAME = "name"
         const val EMOJI = "emoji"
         const val NAME_COLOR = "nameColor"

@@ -671,6 +671,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             // 오너 프로필은 캐릭터가 아니라 애초에 이 목록에 들어오지 않는다
             val mine = profiles.filterNot { it.isGm }.map { profile ->
                 JudgeCandidate(
+                    id = profile.characterId,
                     name = profile.name,
                     emoji = profile.emoji,
                     nameColor = profile.nameColor,
@@ -680,13 +681,15 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         .keys.toList(),
                 )
             }
-            val peerCandidates = peers.map { JudgeCandidate(it.name, it.emoji, null, it.stats) }
-            judgeCandidates = (mine + peerCandidates).distinctBy { it.name }
+            val peerCandidates = peers.map { JudgeCandidate(it.id, it.name, it.emoji, null, it.stats) }
+            // 이름이 아니라 고유 id로 거른다 — 이름으로 걸렀더니 같은 이름의 캐릭터가
+            // 둘일 때 뒤엣것이 목록에서 통째로 사라졌다
+            judgeCandidates = (mine + peerCandidates).distinctBy { it.id ?: "name:${it.name}" }
         }
     }
 
     /** 판정 요청을 보낸다 (J8) — 값 **이름**만 싣는다. 숫자는 소유자 기기에만 있다 */
-    fun sendJudgeRequest(targetName: String, statName: String) {
+    fun sendJudgeRequest(targetId: String?, targetName: String, statName: String) {
         val room = selected ?: return
         val gm = profiles.getOrNull(room.activeProfileIndex) ?: return
         lastLocalSendAt.set(System.currentTimeMillis())
@@ -702,9 +705,20 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     authorUid = authorUid(),
                     diceExpr = Rules.judgeCommand(room.rule ?: Rules.COC7, statName),
                     judgeTarget = targetName,
+                    judgeTargetId = targetId,
                 ),
             )
         }
+    }
+
+    /**
+     * 요청이 지목한 내 캐릭터. **고유 id를 먼저 본다** — 이름으로만 찾으면 같은 이름의
+     * 프로필이 둘일 때 엉뚱한 쪽이 굴렸다. 구버전 요청에는 id가 없으니 그때만 이름으로
+     */
+    fun judgeProfile(request: Message): Profile? {
+        request.judgeTargetId?.let { id -> return profiles.find { it.characterId == id } }
+        val target = request.judgeTarget ?: return null
+        return profiles.find { it.name == target }
     }
 
     /**
@@ -713,11 +727,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      */
     fun rollJudge(request: Message) {
         val room = selected ?: return
-        val target = request.judgeTarget ?: return
         val expr = request.diceExpr ?: return
         // 연타 방지 — 이미 결과가 있으면 아무것도 하지 않는다 (렌더의 Done과 두 겹)
         if (messages.any { it.judgeRef == request.docId }) return
-        val profile = profiles.find { it.name == target } ?: return
+        val profile = judgeProfile(request) ?: return
         val (plain, _) = ProfileStats.substitute(expr, ProfileStats.sanitize(profile.stats.orEmpty()))
         val command = DiceBot.parse(plain) ?: run {
             // 치환이 안 됐다 = 그 캐릭터에 그 값이 없다. 값을 받아 채운 뒤 굴린다 (J8)
@@ -746,8 +759,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     /** 요청에 값을 채워 넣고 바로 굴린다 — 대상 캐릭터에 그 값이 없었을 때 (J8) */
     fun addStatAndRoll(request: Message, statName: String, value: Int) {
-        val target = request.judgeTarget ?: return
-        val index = profiles.indexOfFirst { it.name == target }
+        val picked = judgeProfile(request) ?: return
+        val index = profiles.indexOfFirst { it.characterId == picked.characterId }
         if (index < 0) return
         val merged = profiles[index].stats.orEmpty() + (statName to value.toString())
         profiles = profiles.mapIndexed { i, profile ->
@@ -1219,8 +1232,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             candidates = judgeCandidates,
             rule = selected?.rule ?: Rules.COC7,
             onDismiss = { judgeOpen = false },
-            onSend = { targetName, statName ->
-                sendJudgeRequest(targetName, statName)
+            onSend = { targetId, targetName, statName ->
+                sendJudgeRequest(targetId, targetName, statName)
                 judgeOpen = false
             },
         )

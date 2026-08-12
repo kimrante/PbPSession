@@ -22,6 +22,7 @@ object SyncMapping {
         "isOoc" to message.isOoc,
         "editedAt" to message.editedAt,
         "judgeTarget" to message.judgeTarget,
+        "judgeTargetId" to message.judgeTargetId,
         "judgeRef" to message.judgeRef,
         "createdAt" to message.createdAt,
         // 커밋 시점의 서버 시계 — 오프라인 큐에 오래 머물러도 이 값은 실제 도착 순서다.
@@ -48,6 +49,7 @@ object SyncMapping {
         senderTextColor = (data["senderTextColor"] as? Number)?.toLong(),
         isOoc = data["isOoc"] as? Boolean ?: false,
         judgeTarget = data["judgeTarget"] as? String,
+        judgeTargetId = data["judgeTargetId"] as? String,
         judgeRef = data["judgeRef"] as? String,
         editedAt = (data["editedAt"] as? Number)?.toLong(),
         createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L,

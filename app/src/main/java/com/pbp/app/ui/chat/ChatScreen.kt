@@ -169,9 +169,9 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
         }
     }
 
-    fun sendJudgeRequest(targetName: String, statName: String) = safeLaunch(app) {
+    fun sendJudgeRequest(targetId: String?, targetName: String, statName: String) = safeLaunch(app) {
         val gm = profiles.value.find { it.id == room.value?.activeProfileId } ?: return@safeLaunch
-        repo.sendJudgeRequest(roomId, gm, targetName, statName)
+        repo.sendJudgeRequest(roomId, gm, targetId, targetName, statName)
     }
 
     /** @param onNeedValue 대상 캐릭터에 그 값이 없을 때 — 값 이름을 돌려준다 (J6) */
@@ -687,6 +687,10 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                     messages.mapNotNullTo(mutableSetOf()) { it.judgeRef }
                 }
                 // 내가 가진 캐릭터 이름 — 이 이름이 대상이면 내가 굴릴 차례다
+                // 내 차례인지는 **고유 id**로 가린다 — 이름으로 보면 같은 이름의 프로필이
+                // 둘 있을 때 엉뚱한 쪽이 굴리거나 아무도 못 굴렸다. 구버전이 보낸 요청은
+                // id가 없으니 그때만 이름으로 되돌아간다
+                val myCharacterIds = remember(profiles) { profiles.map { it.characterId }.toSet() }
                 val myCharacters = remember(profiles) { profiles.map { it.name }.toSet() }
                 // 방을 만든 날은 로그 맨 위에만 찍는다 — 아직 못 불러온 옛 대화가 있으면
                 // '이전 대화 불러오기' 위에 생성일이 뜨는 꼴이라 거짓말이 된다
@@ -739,7 +743,9 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                                     showRead = message.id == readMarkId,
                                     themeColor = themeColor,
                                     markOf = { part -> captureMarkOf(captureIdx, base + part) },
-                                    judgeState = judgeStateOf(message, rolledRefs, myCharacters),
+                                    judgeState = judgeStateOf(
+                                        message, rolledRefs, myCharacterIds, myCharacters,
+                                    ),
                                     onJudgeTap = {
                                         // 캡처 중에는 굴리지 않는다 — MessageBlock에서도
                                         // 막지만, 굴림은 되돌릴 수 없어 두 겹으로 (A1)
@@ -891,23 +897,29 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     )
 
     if (judgeSheetOpen) {
-        // 내 캐릭터(GM 제외) + 상대가 올린 명단, 이름으로 중복 제거.
+        // 내 캐릭터(GM 제외) + 상대가 올린 명단.
         // 오너 프로필은 CharacterProfile이 아니라 애초에 이 목록에 들어오지 않는다.
+        //
+        // 중복 제거는 **고유 id 기준**이다. 이름으로 걸렀더니 같은 방에 같은 이름의
+        // 프로필이 둘 있으면 뒤엣것이 통째로 사라져 판정 대상으로 고를 수조차 없었다.
+        // id가 없는 구버전 상대의 캐릭터만 예전처럼 이름으로 거른다
         val candidates = remember(profiles, peerState.peerCharacters) {
             (
                 profiles.filterNot { it.isGm }.map {
-                    JudgeCandidate(it.name, it.emoji, it.nameColor, numericStatNames(it))
+                    JudgeCandidate(
+                        it.characterId, it.name, it.emoji, it.nameColor, numericStatNames(it),
+                    )
                 } + peerState.peerCharacters.map {
-                    JudgeCandidate(it.name, it.emoji, it.nameColor, it.stats)
+                    JudgeCandidate(it.id, it.name, it.emoji, it.nameColor, it.stats)
                 }
-                ).distinctBy { it.name }
+                ).distinctBy { it.id ?: "name:${it.name}" }
         }
         JudgeRequestSheet(
             candidates = candidates,
             rule = room?.rule ?: com.pbp.shared.Rules.COC7,
             onDismiss = { judgeSheetOpen = false },
-            onSend = { targetName, statName ->
-                vm.sendJudgeRequest(targetName, statName)
+            onSend = { targetId, targetName, statName ->
+                vm.sendJudgeRequest(targetId, targetName, statName)
                 judgeSheetOpen = false
                 pendingScrollToLatest = true
             },
@@ -1013,9 +1025,14 @@ fun ChatScreen(nav: NavController, roomId: Long) {
 internal fun judgeStateOf(
     message: Message,
     rolledRefs: Set<String>,
+    myCharacterIds: Set<String>,
     myCharacters: Set<String>,
 ): JudgeState = when {
     judgeKey(message) in rolledRefs -> JudgeState.Done
+    // id가 실린 요청은 id로만 가린다 — 이름이 같아도 남의 캐릭터를 내 차례로 치지 않는다
+    message.judgeTargetId != null -> {
+        if (message.judgeTargetId in myCharacterIds) JudgeState.MyTurn else JudgeState.Waiting
+    }
     message.judgeTarget in myCharacters -> JudgeState.MyTurn
     else -> JudgeState.Waiting
 }

@@ -14,8 +14,8 @@ android {
         applicationId = "com.pbp.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 43
-        versionName = "0.17.0"
+        versionCode = 44
+        versionName = "0.18.0"
     }
 
     buildTypes {

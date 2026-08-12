@@ -40,6 +40,7 @@ internal fun messageValues(
     diceOutcome: String? = null,
     avatarId: String? = null,
     judgeTarget: String? = null,
+    judgeTargetId: String? = null,
     judgeRef: String? = null,
 ): Map<String, Any?> = mapOf(
     // 폴 커서 전용 필드(syncAt)는 여기서 넣지 않는다 — 쓰기 시점에 **서버가 찍는다**
@@ -47,6 +48,7 @@ internal fun messageValues(
     // 몇 초만 빨라도 폴 커서가 서버 시각을 앞질러 상대 메시지를 건너뛴다.
     "type" to type,
     "judgeTarget" to judgeTarget,
+    "judgeTargetId" to judgeTargetId,
     "judgeRef" to judgeRef,
     "body" to body,
     "diceExpr" to diceExpr,

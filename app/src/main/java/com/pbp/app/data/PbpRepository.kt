@@ -155,6 +155,8 @@ class PbpRepository(private val db: AppDatabase) {
         val remoteId = db.roomDao().get(roomId)?.remoteId ?: return
         val payload = profiles.filterNot { it.isGm }.map { profile ->
             mapOf(
+                // 이름이 겹쳐도 상대가 이 캐릭터를 정확히 가리킬 수 있게
+                com.pbp.shared.Protocol.Character.ID to profile.characterId,
                 com.pbp.shared.Protocol.Character.NAME to profile.name,
                 com.pbp.shared.Protocol.Character.EMOJI to profile.emoji,
                 com.pbp.shared.Protocol.Character.NAME_COLOR to profile.nameColor,
@@ -242,7 +244,13 @@ class PbpRepository(private val db: AppDatabase) {
      * 경로(sendMessage)는 보낼 때 치환하지만, 여기서는 굴리는 쪽이 자기 값으로 치환해야
      * 하므로 반대다. 그래서 요청 뒤에 값을 고쳐도 항상 최신 값으로 굴러간다.
      */
-    suspend fun sendJudgeRequest(roomId: Long, sender: CharacterProfile, targetName: String, statName: String) {
+    suspend fun sendJudgeRequest(
+        roomId: Long,
+        sender: CharacterProfile,
+        targetId: String?,
+        targetName: String,
+        statName: String,
+    ) {
         val rule = db.roomDao().get(roomId)?.rule ?: com.pbp.shared.Rules.COC7
         val message = Message(
             roomId = roomId,
@@ -251,6 +259,7 @@ class PbpRepository(private val db: AppDatabase) {
             body = "$targetName, $statName 판정",
             diceExpr = com.pbp.shared.Rules.judgeCommand(rule, statName),
             judgeTarget = targetName,
+            judgeTargetId = targetId,
             senderName = sender.name,
             senderEmoji = sender.emoji,
             senderImagePath = sender.imagePath,
@@ -274,8 +283,7 @@ class PbpRepository(private val db: AppDatabase) {
         val key = judgeKey(request)
         // 여기서도 한 번 걸러 굴림 자체를 아낀다 — 확정 판정은 아래 트랜잭션이 한다
         if (db.messageDao().hasJudgeResult(request.roomId, key)) return null
-        val target = request.judgeTarget ?: return null
-        val profile = db.profileDao().forRoom(request.roomId).find { it.name == target } ?: return null
+        val profile = judgeProfile(request) ?: return null
         val expr = request.diceExpr ?: return null
         val stats = ProfileStats.decode(profile.stats).toMap()
         val (plain, _) = ProfileStats.substitute(expr, stats)
@@ -307,10 +315,24 @@ class PbpRepository(private val db: AppDatabase) {
         return null
     }
 
+    /**
+     * 요청이 지목한 내 캐릭터.
+     *
+     * **고유 id를 먼저 본다** — 이름으로만 찾으면 같은 이름의 프로필이 둘 있을 때
+     * 엉뚱한 쪽이 굴렸다. 구버전이 보낸 요청에는 id가 없으니 그때만 이름으로 찾는다.
+     */
+    private suspend fun judgeProfile(request: Message): CharacterProfile? {
+        val profiles = db.profileDao().forRoom(request.roomId)
+        request.judgeTargetId?.let { id ->
+            return profiles.find { it.characterId == id }
+        }
+        val target = request.judgeTarget ?: return null
+        return profiles.find { it.name == target }
+    }
+
     /** 요청에 값을 채워 넣고 바로 굴린다 — 대상 캐릭터에 그 값이 없었을 때 (J6) */
     suspend fun addStatAndRoll(request: Message, statName: String, value: Int) {
-        val target = request.judgeTarget ?: return
-        val profile = db.profileDao().forRoom(request.roomId).find { it.name == target } ?: return
+        val profile = judgeProfile(request) ?: return
         val stats = ProfileStats.decode(profile.stats).filterNot { it.first == statName }
         db.profileDao().update(
             profile.copy(

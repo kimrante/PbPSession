@@ -404,7 +404,7 @@ private fun GoogleAccountRow() {
                                 com.pbp.app.sync.GoogleAccountLinker.Result.Cancelled ->
                                     note = "계정 선택이 취소되었습니다"
                                 is com.pbp.app.sync.GoogleAccountLinker.Result.Failed ->
-                                    note = result.message
+                                    note = result.message + signingHint(context, result.message)
                             }
                             busy = false
                         }
@@ -415,4 +415,22 @@ private fun GoogleAccountRow() {
             }
         }
     }
+}
+
+/**
+ * "Developer console is not set up correctly" — 이 빌드의 서명 지문이 Firebase
+ * 프로젝트에 등록돼 있지 않을 때 나온다. 어느 값을 등록해야 하는지 화면에서
+ * 바로 읽을 수 있어야 한다 (콘솔과 대조할 값을 사람이 따로 뽑기 어렵다).
+ */
+private fun signingHint(context: android.content.Context, message: String): String {
+    if (!message.contains("Developer console", ignoreCase = true)) return ""
+    val sha1 = runCatching {
+        val flag = android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES
+        val info = context.packageManager.getPackageInfo(context.packageName, flag)
+        val cert = info.signingInfo?.apkContentsSigners?.firstOrNull() ?: return ""
+        java.security.MessageDigest.getInstance("SHA-1")
+            .digest(cert.toByteArray())
+            .joinToString(":") { "%02X".format(it) }
+    }.getOrNull() ?: return ""
+    return "\n\n이 빌드의 SHA-1이 Firebase 프로젝트에 등록돼 있어야 합니다:\n$sha1"
 }

@@ -37,6 +37,8 @@ exifinterface = { group = "androidx.exifinterface", name = "exifinterface", vers
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutinesCore" }
+# 데스크톱의 Dispatchers.Main — 이게 없으면 UI 스레드로 돌아오는 코드가 전부 예외로 죽는다
+coroutines-swing = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-swing", version.ref = "coroutinesCore" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 

@@ -18,6 +18,10 @@ java {
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.coroutines.core)
+    // Dispatchers.Main = AWT 이벤트 스레드. 이 모듈이 없으면 Dispatchers.Main을 쓰는
+    // 순간 "Module with the Main dispatcher is missing"으로 죽는다 — 코루틴 안에서
+    // 나는 예외라 화면에는 아무 일도 일어나지 않은 것처럼 보인다
+    implementation(libs.coroutines.swing)
     implementation(libs.gson)
 
     implementation(project(":shared"))

@@ -92,7 +92,9 @@ internal class GoogleAccountLinker(
                 // 다른 기기가 먼저 가져간 경우다. 여기서 멈추면 영영 연결이 안 되므로,
                 // **그 계정으로 로그인해 원래 신원을 되찾는다.** 지금 익명 계정은 버려진다
                 is FirebaseAuthUserCollisionException -> recover(credential)
-                else -> Result.Failed(error.message ?: "연결에 실패했습니다 (${error.javaClass.simpleName})")
+                // [2단계]는 구글 토큰을 받은 뒤 Firebase에 붙이는 구간이다 —
+                // 여기서 실패하면 Firebase 프로젝트 설정 쪽 문제다
+                else -> Result.Failed(stageMessage("2단계 Firebase 연결", error))
             }
         }
     }
@@ -106,6 +108,15 @@ internal class GoogleAccountLinker(
         }.getOrElse { error ->
             Result.Failed(error.message ?: "계정을 되찾지 못했습니다")
         }
+
+    /**
+     * 실패가 어느 구간에서 났는지까지 남긴다.
+     *
+     * 계정 선택(Play 서비스)과 Firebase 연결은 원인이 전혀 다른데 화면에 뜨는 문구가
+     * 비슷해서, 구간과 예외 종류를 알려 주지 않으면 어디를 고쳐야 할지 알 수 없다.
+     */
+    private fun stageMessage(stage: String, error: Throwable): String =
+        "[$stage] ${error.javaClass.simpleName}: ${error.message ?: "메시지 없음"}"
 
     private sealed interface TokenResult {
         data class Ok(val idToken: String) : TokenResult
@@ -134,7 +145,9 @@ internal class GoogleAccountLinker(
             when (error) {
                 is GetCredentialCancellationException -> Result.Cancelled
                 is NoCredentialException -> Result.NoAccount
-                else -> Result.Failed(error.message ?: "계정 선택에 실패했습니다")
+                // [1단계]는 기기의 Play 서비스가 구글 토큰을 내주는 구간이다 —
+                // 여기서 실패하면 이 앱(패키지+서명)이 OAuth 클라이언트에 없다는 뜻이 대부분
+                else -> Result.Failed(stageMessage("1단계 계정 선택", error))
             }
         )
     }

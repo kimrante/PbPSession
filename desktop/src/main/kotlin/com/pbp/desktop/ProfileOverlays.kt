@@ -588,6 +588,10 @@ internal fun ProfileManagerOverlay(
 @Composable
 internal fun OwnerProfileOverlay(
     recentColors: Map<String, List<Long>> = emptyMap(),
+    /** 연결된 구글 계정 주소. null이면 아직 익명 계정이다 */
+    accountEmail: String? = null,
+    /** 구글 로그인 시작. null이면 이 빌드에 로그인이 설정돼 있지 않다 */
+    onSignIn: ((onDone: (String?) -> Unit) -> Unit)? = null,
     onColorUsed: (String, Long) -> Unit = { _, _ -> },
     initialName: String,
     initialColor: Long,
@@ -676,6 +680,10 @@ internal fun OwnerProfileOverlay(
                 textColor = it; onColorUsed("text", it)
             }
         }
+        if (onSignIn != null) {
+            Spacer(Modifier.height(DesktopDimens.gap4))
+            GoogleAccountRow(accountEmail, onSignIn)
+        }
         Spacer(Modifier.height(DesktopDimens.gap4))
         Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
             YellowButton("저장", Modifier.weight(1f)) {
@@ -683,6 +691,54 @@ internal fun OwnerProfileOverlay(
             }
             if (!forced) {
                 GhostButton("취소", Modifier.weight(1f), onDismiss)
+            }
+        }
+    }
+}
+
+/**
+ * 구글 계정 — 폰과 PC가 같은 신원을 쓰게 하는 자리.
+ *
+ * PC는 폰과 달리 **갈아탄다**: 한 구글 계정에 덧붙일 수 있는 익명 계정은 하나뿐이라
+ * 두 번째 기기는 새 신원을 받는다. 그래서 로그인 뒤에 참여 중인 방마다 멤버를
+ * 다시 등록해야 하고(안 하면 규칙상 방을 못 읽는다), 예전 신원으로 보낸 메시지도
+ * 계속 내 것으로 읽어야 한다.
+ */
+@Composable
+private fun GoogleAccountRow(
+    accountEmail: String?,
+    onSignIn: (onDone: (String?) -> Unit) -> Unit,
+) {
+    var email by remember { mutableStateOf(accountEmail) }
+    var busy by remember { mutableStateOf(false) }
+    Text("구글 계정", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Tokens.InkDim)
+    Spacer(Modifier.height(DesktopDimens.gap2))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                email ?: "연결 안 됨",
+                fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+            )
+            Spacer(Modifier.height(DesktopDimens.gap1))
+            Text(
+                if (email != null) {
+                    "폰과 같은 계정이면 같은 세션을 이어서 진행합니다"
+                } else {
+                    "브라우저가 열립니다. 폰에서 연결한 것과 같은 계정을 고르세요"
+                },
+                fontSize = 11.sp, color = Tokens.InkDim,
+            )
+        }
+        if (email == null) {
+            Spacer(Modifier.width(DesktopDimens.gap2))
+            GhostButton(if (busy) "로그인 중…" else "로그인", Modifier) {
+                if (!busy) {
+                    busy = true
+                    onSignIn { signedInEmail ->
+                        busy = false
+                        if (signedInEmail != null) email = signedInEmail
+                    }
+                }
             }
         }
     }

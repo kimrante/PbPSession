@@ -101,6 +101,28 @@ class FirestoreRest(
 
     @Volatile private var refreshToken: String? = initialRefreshToken
 
+    /**
+     * 예전에 쓰던 내 uid들 (구글 계정으로 갈아타면 uid가 바뀐다).
+     *
+     * 서버에 남아 있는 옛 메시지의 authorUid는 그대로라, 이 목록이 없으면 **내가 보낸
+     * 지난 대화가 전부 상대 말풍선으로 넘어간다.** 읽어 들일 때 지금 uid로 옮겨 준다.
+     */
+    @Volatile
+    var pastUids: Set<String> = emptySet()
+
+    /** 나(지금 신원이거나 예전 신원)인가 */
+    fun isMe(candidate: String?): Boolean =
+        candidate != null && (candidate == uid || candidate in pastUids)
+
+    /**
+     * 구글 계정으로 갈아탄다 — 익명 계정과 달리 이 신원은 다른 기기와 같다.
+     * 지금 uid는 예전 목록으로 옮겨 담는다.
+     */
+    fun applyGoogleAccount(account: GoogleSignIn.Account, expiresInSec: Long = 3600) {
+        uid?.let { previous -> if (previous != account.uid) pastUids = pastUids + previous }
+        applyTokens(account.idToken, account.uid, account.refreshToken, expiresInSec)
+    }
+
     /** 토큰 발급/갱신 직렬화용 — HTTP는 이 락 밖에서 돌지 않지만, 락 자체는 짧게 유지 (C15) */
     private val tokenLock = Any()
 
@@ -445,13 +467,14 @@ class FirestoreRest(
      * 1:1 방이라 한 번에 문서 2건(=읽기 2회)이다.
      */
     fun listPeerCharacters(remoteRoomId: String): List<PeerCharacter> {
-        val myUid = uid
         val res = get("$base/rooms/$remoteRoomId/members?key=$apiKey") ?: return emptyList()
         val documents = res.getAsJsonArray("documents") ?: return emptyList()
         val out = mutableListOf<PeerCharacter>()
         documents.forEach { element ->
             val doc = runCatching { element.asJsonObject }.getOrNull() ?: return@forEach
-            if (doc.docId() == myUid) return@forEach
+            // 갈아타면서 남은 내 옛 멤버 문서를 상대로 착각하지 않는다 — 그대로 두면
+            // 내 캐릭터가 판정 후보에 '상대 캐릭터'로 한 번 더 뜬다
+            if (isMe(doc.docId())) return@forEach
             val entries = doc.getAsJsonObject("fields")
                 ?.getAsJsonObject(Protocol.Field.CHARACTERS)
                 ?.getAsJsonObject("arrayValue")

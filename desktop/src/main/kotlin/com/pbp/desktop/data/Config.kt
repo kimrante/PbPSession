@@ -53,6 +53,13 @@ class AppConfig private constructor(
     val rooms: MutableList<JoinedRoom>,
     /** 익명 인증 리프레시 토큰 — 재시작해도 같은 auth UID 유지 (P0-1) */
     @Volatile var authRefreshToken: String? = null,
+    /** 연결된 구글 계정 주소. 비어 있으면 아직 익명 계정이다 */
+    @Volatile var accountEmail: String? = null,
+    /**
+     * 구글 계정으로 갈아타기 전에 쓰던 uid들. 서버에 남은 옛 메시지의 authorUid는
+     * 그대로라, 이 목록이 있어야 지난 내 대화가 상대 쪽으로 넘어가지 않는다.
+     */
+    @Volatile var pastUids: List<String> = emptyList(),
     /** 앱 전체 글꼴 — "system" / "gowun" / "pretendard" (모바일 AppFonts와 동일 값) */
     @Volatile var appFont: String = "system",
     /** 오너 프로필 — 잡담·참여 인사에 쓰이는 플레이어 본인 (모바일 OwnerProfile과 동일 개념) */
@@ -126,6 +133,8 @@ class AppConfig private constructor(
                     .toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
+                accountEmail = loaded?.accountEmail,
+                pastUids = loaded?.pastUids.orEmpty(),
                 appFont = loaded?.appFont ?: "system",
                 ownerName = loaded?.ownerName ?: "",
                 ownerColor = loaded?.ownerColor ?: 0xFFFFD9A8,
@@ -153,6 +162,8 @@ class AppConfig private constructor(
         val profiles: List<Profile>?,
         val rooms: List<JoinedRoom>?,
         val authRefreshToken: String? = null,
+        val accountEmail: String? = null,
+        val pastUids: List<String>? = null,
         val appFont: String? = null,
         val ownerName: String? = null,
         val ownerColor: Long? = null,
@@ -171,7 +182,8 @@ class AppConfig private constructor(
     @Synchronized
     fun snapshot(): String = gson.toJson(
         Saved(
-            deviceId, profiles.toList(), rooms.toList(), authRefreshToken, appFont,
+            deviceId, profiles.toList(), rooms.toList(), authRefreshToken, accountEmail,
+            pastUids.toList(), appFont,
             ownerName, ownerColor, ownerImagePath, ownerTextColor, captureWithBackground,
             captureExcludeOoc, recentColorsBySlot.toMap(),
         )

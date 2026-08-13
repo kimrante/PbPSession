@@ -344,7 +344,8 @@ internal fun MessageBlock(
     onJudgeTap: () -> Unit = {},
     onLongPress: (Message) -> Unit = {},
 ) {
-    val mine = message.authorUid == myUid
+    // 계정을 갈아타면 uid가 바뀐다 — 예전 신원으로 보낸 것도 내 말풍선으로 둔다
+    val mine = firestore?.isMe(message.authorUid) ?: (message.authorUid == myUid)
     val radiusPx = with(LocalDensity.current) { DesktopDimens.rCell.toPx() }
     var wrapper = Modifier.fillMaxWidth().captureBand(mark, Tokens.Signature, radiusPx)
     if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
@@ -694,8 +695,10 @@ internal fun BubbleRow(
     showTime: Boolean,
     onLongPress: (Message) -> Unit = {},
 ) {
-    val mine = message.authorUid == myUid && overrideName == null
-    // 편집/삭제 대상 여부는 표시 방향(mine)과 무관하게 실제 작성자 기준 (앱과 동일)
+    val mine = (firestore?.isMe(message.authorUid) ?: (message.authorUid == myUid)) &&
+        overrideName == null
+    // 편집/삭제 대상 여부는 표시 방향(mine)과 무관하게 실제 작성자 기준 (앱과 동일).
+    // 여기는 **지금 신원**이어야 한다 — 서버도 지금 uid의 문서만 고치게 허용한다
     val editable = message.authorUid == myUid
     val body = overrideBody ?: message.body
     // 대사는 인용 말풍선 — 모바일과 동일 규칙 (목업 final-design.html)

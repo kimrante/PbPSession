@@ -123,7 +123,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     config.save()
                 }
             },
-        )
+        ).apply {
+            // 계정을 갈아타기 전 신원 — 이게 있어야 그때 보낸 내 메시지가 내 것으로 남는다
+            pastUids = config.pastUids.toSet()
+        }
     }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -145,6 +148,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var recentColors by remember { mutableStateOf(config.recentColorsBySlot.mapValues { it.value.toList() }) }
 
     // 오너 프로필 — 미설정이면 먼저 설정하게 한다 (첫 실행 포함, 모바일과 동일)
+    /** 연결된 구글 계정 — 바뀌면 화면의 신원(authorUid)도 함께 다시 그려져야 한다 */
+    var accountEmail by remember { mutableStateOf(config.accountEmail) }
     var ownerName by remember { mutableStateOf(config.ownerName) }
     var ownerColor by remember { mutableStateOf(config.ownerColor) }
     var ownerImagePath by remember { mutableStateOf(config.ownerImagePath) }
@@ -1156,6 +1161,39 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         OverlayKind.OwnerProfile -> OwnerProfileOverlay(
             recentColors = recentColors,
             onColorUsed = ::rememberColor,
+            accountEmail = accountEmail,
+            // 시크릿이 빌드에 없으면 항목 자체를 감춘다
+            onSignIn = if (!com.pbp.desktop.data.GoogleSignIn.isConfigured) null else { onDone ->
+                scope.launch(Dispatchers.IO) {
+                    val email = when (val result = com.pbp.desktop.data.GoogleSignIn.signIn(API_KEY)) {
+                        is com.pbp.desktop.data.GoogleSignIn.Result.Ok -> {
+                            firestore.applyGoogleAccount(result.account)
+                            // 신원이 바뀌었으니 참여 중인 방마다 멤버를 다시 등록한다 —
+                            // 안 하면 규칙상 그 방을 읽지도 쓰지도 못한다
+                            config.roomsCopy().forEach {
+                                runCatching { firestore.ensureMember(it.remoteId) }
+                            }
+                            result.account.email ?: "구글 계정"
+                        }
+                        com.pbp.desktop.data.GoogleSignIn.Result.Cancelled -> null
+                        is com.pbp.desktop.data.GoogleSignIn.Result.Failed -> {
+                            System.err.println("구글 로그인 실패: ${result.message}")
+                            null
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        if (email != null) {
+                            accountEmail = email
+                            config.accountEmail = email
+                            // 갈아타기 전 신원을 남겨 둔다 — 그때 보낸 내 메시지를 계속 내 것으로 읽는다
+                            config.pastUids = firestore.pastUids.toList()
+                            persist()
+                        }
+                        onDone(email)
+                    }
+                }
+                Unit
+            },
             initialName = ownerName,
             initialColor = ownerColor,
             initialImage = ownerImagePath,

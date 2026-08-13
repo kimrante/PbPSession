@@ -5,6 +5,8 @@ local.properties
 *.iml
 .kotlin/
 google-services.json
+# 데스크톱 구글 로그인 시크릿 (secrets.properties.example 참고)
+secrets.properties
 .claude/settings.local.json
 PbP-release.apk
 

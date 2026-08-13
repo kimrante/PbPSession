@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -285,6 +286,13 @@ fun OwnerProfileScreen(nav: NavController) {
                     Spacer(Modifier.width(PbpDimens.gap2))
                     OwnerAvatar(name, color, imagePath, PbpDimens.avatarChat)
                 }
+
+                // 이름을 정하기 전에는 계정 이야기를 꺼내지 않는다 (목업 02-B의 잠금 상태)
+                if (!locked) {
+                    Spacer(Modifier.height(PbpDimens.gap5))
+                    FieldLabel("구글 계정")
+                    GoogleAccountRow()
+                }
                 // 화면 하단 여유 — 캐릭터 편집 화면과 같은 방식 (Spacer로 통일)
                 Spacer(Modifier.height(PbpDimens.gap6))
             }
@@ -307,5 +315,83 @@ fun OwnerProfileScreen(nav: NavController) {
             },
             initial = if (isText) textColor else color,
         )
+    }
+}
+
+/**
+ * 구글 계정 연결 — 폰과 PC가 같은 신원을 쓰기 위한 첫 단계.
+ *
+ * 지금 신원은 기기마다 따로 만들어진 익명 계정이라, 같은 사람이 써도 서로 다른
+ * 사용자다. 여기서 구글 계정을 **덧붙이면** 그 UID가 그대로 유지되면서 계정에
+ * 이름이 생긴다 — 참여 중인 방과 지난 대화는 하나도 건드리지 않는다.
+ */
+@Composable
+private fun GoogleAccountRow() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val tokens = Pbp.colors
+    val sync = remember(context) {
+        (context.applicationContext as com.pbp.app.PbpApp).syncManager
+    }
+    var email by remember { mutableStateOf(sync.linkedGoogleEmail) }
+    var busy by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
+
+    Surface(
+        color = tokens.panel2,
+        shape = RoundedCornerShape(PbpDimens.rCell),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            Modifier.padding(PbpDimens.gap3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    email ?: "연결 안 됨",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = tokens.ink,
+                )
+                Spacer(Modifier.height(PbpDimens.gap1))
+                Text(
+                    note ?: if (email != null) {
+                        "이 계정으로 다른 기기와 이어집니다"
+                    } else {
+                        "연결해 두면 이후 PC에서도 같은 계정으로 이어갈 수 있습니다"
+                    },
+                    fontSize = 10.sp,
+                    color = tokens.inkDim,
+                )
+            }
+            if (email == null) {
+                Spacer(Modifier.width(PbpDimens.gap2))
+                OutlinedButton(
+                    enabled = !busy,
+                    onClick = {
+                        val activity = context as? android.app.Activity ?: return@OutlinedButton
+                        busy = true
+                        note = null
+                        scope.launch {
+                            when (val result = sync.linkGoogleAccount(activity)) {
+                                is com.pbp.app.sync.GoogleAccountLinker.Result.Linked -> {
+                                    email = result.email ?: sync.linkedGoogleEmail
+                                }
+                                com.pbp.app.sync.GoogleAccountLinker.Result.AlreadyLinked ->
+                                    note = "이 구글 계정은 다른 기기에 이미 연결돼 있습니다"
+                                com.pbp.app.sync.GoogleAccountLinker.Result.NoAccount ->
+                                    note = "기기에 구글 계정이 없습니다"
+                                com.pbp.app.sync.GoogleAccountLinker.Result.Cancelled -> Unit
+                                is com.pbp.app.sync.GoogleAccountLinker.Result.Failed ->
+                                    note = result.message
+                            }
+                            busy = false
+                        }
+                    },
+                ) {
+                    Text(if (busy) "연결 중…" else "연결", fontSize = 11.sp)
+                }
+            }
+        }
     }
 }

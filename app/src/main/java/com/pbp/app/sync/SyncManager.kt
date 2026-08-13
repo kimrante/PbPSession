@@ -108,6 +108,16 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         return myUid
     }
 
+    /** 구글 계정 연결 — 폰과 PC가 같은 신원을 쓰기 위한 첫 단계 */
+    private val googleAccount by lazy { GoogleAccountLinker(context, { firebaseApp }) }
+
+    /** 연결된 구글 계정 주소. 연결 전이면 null */
+    val linkedGoogleEmail: String? get() = if (isDemo) null else googleAccount.linkedEmail
+
+    internal suspend fun linkGoogleAccount(
+        activity: android.app.Activity,
+    ): GoogleAccountLinker.Result = googleAccount.link(activity)
+
     private val firestore: FirebaseFirestore by lazy {
         FirebaseFirestore.getInstance(firebaseApp).apply {
             if (isDemo) {

@@ -73,6 +73,10 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.auth) // 익명 인증 (P0-1 보안 규칙 전제)
     implementation(libs.firebase.messaging)
+    // 구글 로그인 (기기 간 이어하기) — 계정 선택은 시스템 UI가 띄운다
+    implementation(libs.credentials)
+    implementation(libs.credentials.play.services)
+    implementation(libs.googleid)
     implementation(libs.coroutines.play.services)
 
     implementation(project(":shared"))

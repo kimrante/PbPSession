@@ -84,6 +84,8 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
 
     fun save(
         existing: CharacterProfile?,
+        /** 새로 만드는 경우 속할 방. 기존 프로필을 고칠 때는 쓰이지 않는다 */
+        roomId: Long,
         name: String,
         nameColor: Long?,
         bubbleColor: Long?,
@@ -93,7 +95,8 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
         onDone: () -> Unit,
     ) = safeLaunch(app) {
         withContext(Dispatchers.IO) {
-            val profile = (existing ?: CharacterProfile(name = "")).copy(
+            // 새 프로필은 만든 방에 속한다 — 프로필은 그 방에서만 보이고 편집된다
+            val profile = (existing ?: CharacterProfile(name = "", roomId = roomId)).copy(
                 name = name.trim().ifEmpty { "이름 없음" },
                 nameColor = nameColor,
                 bubbleColor = bubbleColor,
@@ -117,7 +120,7 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
 }
 
 @Composable
-fun ProfileEditScreen(nav: NavController, profileId: Long) {
+fun ProfileEditScreen(nav: NavController, profileId: Long, roomId: Long = 0L) {
     val app = LocalContext.current.applicationContext as PbpApp
     val vm: ProfileEditViewModel = viewModel(factory = viewModelFactory {
         initializer { ProfileEditViewModel(app) }
@@ -217,7 +220,10 @@ fun ProfileEditScreen(nav: NavController, profileId: Long) {
                                 .takeIf { it.isNotEmpty() }
                                 ?.let { listOf(it to newStatValue.trim()) }
                                 .orEmpty()
-                            vm.save(existing, name, nameColor, bubbleColor, textColor, pickedPath, stats + pending) {
+                            vm.save(
+                                existing, roomId, name, nameColor, bubbleColor, textColor,
+                                pickedPath, stats + pending,
+                            ) {
                                 nav.popBackStack()
                             }
                         }

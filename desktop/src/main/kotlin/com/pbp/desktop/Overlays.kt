@@ -542,6 +542,8 @@ internal fun AddProfileChoiceOverlay(
     onEmpty: () -> Unit,
     /** true = 생성 성공, false = 클립보드에서 코드를 찾지 못함 */
     onClipboard: () -> Boolean,
+    /** 다른 방에서 쓰던 캐릭터 데려오기. null이면 가져올 방이 없다 */
+    onFromOtherRoom: (() -> Unit)? = null,
 ) {
     var clipboardError by remember { mutableStateOf(false) }
     OverlayScaffold("캐릭터 추가", onDismiss) {
@@ -571,6 +573,23 @@ internal fun AddProfileChoiceOverlay(
                 "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
                 fontSize = 11.sp, color = Tokens.InkDim,
             )
+        }
+        onFromOtherRoom?.let { pick ->
+            Column(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = pick)
+                    .padding(10.dp),
+            ) {
+                Text(
+                    "다른 방에서 가져오기",
+                    fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Tokens.SignatureInk,
+                )
+                Text(
+                    "다른 세션에서 쓰던 캐릭터를 이 방으로 복사합니다",
+                    fontSize = 11.sp, color = Tokens.InkDim,
+                )
+            }
         }
         if (clipboardError) {
             Spacer(Modifier.height(DesktopDimens.gap2))
@@ -616,5 +635,44 @@ internal fun FontOverlay(current: String, onDismiss: () -> Unit, onSelect: (Stri
         }
         Spacer(Modifier.height(DesktopDimens.gap4))
         GhostButton("닫기", Modifier.fillMaxWidth(), onDismiss)
+    }
+}
+
+/**
+ * 다른 방에서 쓰던 캐릭터를 골라 이 방으로 복사한다.
+ *
+ * 원본은 그 방에 그대로 남고, 사본은 새 id를 받아 따로 산다 — 한쪽을 고쳐도
+ * 다른 쪽은 그대로다. GM은 목록에 없다(서술 권한은 방마다 마스터에게만 있다).
+ */
+@Composable
+internal fun CopyProfileOverlay(
+    candidates: List<Pair<com.pbp.desktop.data.Profile, String>>,
+    onDismiss: () -> Unit,
+    onPick: (com.pbp.desktop.data.Profile) -> Unit,
+) {
+    OverlayScaffold("다른 방에서 가져오기", onDismiss) {
+        if (candidates.isEmpty()) {
+            Text("다른 방에 가져올 캐릭터가 없습니다.", fontSize = 13.sp, color = Tokens.InkDim)
+        } else {
+            candidates.forEach { (profile, roomName) ->
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onPick(profile) }
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            profile.name.ifBlank { "이름 없음" },
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
+                        )
+                        Text(roomName, fontSize = 11.sp, color = Tokens.InkDim)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(DesktopDimens.gap3))
+        GhostButton("취소", Modifier.fillMaxWidth(), onDismiss)
     }
 }

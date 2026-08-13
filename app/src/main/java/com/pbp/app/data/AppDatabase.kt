@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
-    version = 13,
+    version = 14,
     // 마이그레이션이 10개인데 스키마 JSON이 없어 MigrationTestHelper를 쓸 수 없었다 (I1).
     // 내보낸 스키마는 schemas/에 커밋한다 — 다음 버전부터 마이그레이션 테스트가 가능해진다
     exportSchema = true,
@@ -108,7 +108,33 @@ abstract class AppDatabase : RoomDatabase() {
          * 캐릭터 고유 id — 판정 대상을 이름 대신 이 값으로 가린다.
          * 기존 행은 randomblob로 행마다 다른 값을 채운다(SQLite가 행별로 평가한다).
          */
-        /** 프로필 동기화 — 어느 쪽이 최신인지 가릴 기준이 필요하다 */
+        /**
+     * 프로필은 이제 **만들어진 방에 속한다**. 방이 없던 프로필(모든 방 공통)은
+     * 방마다 사본으로 나눈다 — 한 방에만 남기면 나머지 방이 갑자기 빈손이 된다.
+     * 사본은 각자 새 id를 받아 이후로는 따로 산다.
+     *
+     * 방이 하나도 없으면 지우지 않는다(지우면 그 프로필은 어디로도 못 간다).
+     */
+    private val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                INSERT INTO profiles
+                    (characterId, name, tagline, emoji, imagePath, isGm, roomId,
+                     nameColor, bubbleColor, textColor, stats, updatedAt)
+                SELECT lower(hex(randomblob(16))), p.name, p.tagline, p.emoji, p.imagePath,
+                       p.isGm, r.id, p.nameColor, p.bubbleColor, p.textColor, p.stats, p.updatedAt
+                FROM profiles p CROSS JOIN rooms r
+                WHERE p.roomId IS NULL
+                """.trimIndent()
+            )
+            db.execSQL(
+                "DELETE FROM profiles WHERE roomId IS NULL AND EXISTS (SELECT 1 FROM rooms)"
+            )
+        }
+    }
+
+    /** 프로필 동기화 — 어느 쪽이 최신인지 가릴 기준이 필요하다 */
     private val MIGRATION_12_13 = object : Migration(12, 13) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE profiles ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
@@ -144,7 +170,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14,
                 )
                 .build()
     }

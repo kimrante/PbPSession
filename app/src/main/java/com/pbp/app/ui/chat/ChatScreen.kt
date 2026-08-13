@@ -253,6 +253,18 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
 
     fun delete(message: Message) = safeLaunch(app) { repo.deleteMessage(message) }
 
+    /** 이 방으로 데려올 수 있는 다른 방의 캐릭터 (방 이름과 함께) */
+    fun loadCopyCandidates(
+        onReady: (Pair<List<com.pbp.app.data.CharacterProfile>, Map<Long, String>>) -> Unit,
+    ) = safeLaunch(app) {
+        val list = repo.profilesFromOtherRooms(roomId)
+        onReady(list to repo.roomNamesOf(list.mapNotNull { it.roomId }.distinct()))
+    }
+
+    fun copyProfile(source: com.pbp.app.data.CharacterProfile) = safeLaunch(app) {
+        repo.copyProfileInto(source, roomId)
+    }
+
     fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
         safeLaunch(app) { repo.createFromCode(imported) }
 
@@ -968,12 +980,33 @@ fun ChatScreen(nav: NavController, roomId: Long) {
         }
     }
 
+    // 다른 방에서 가져오기 — 열 때 후보를 읽는다(방마다 다르고 자주 바뀌지 않는다)
+    var copyCandidates by remember {
+        mutableStateOf<Pair<List<com.pbp.app.data.CharacterProfile>, Map<Long, String>>?>(null)
+    }
+    copyCandidates?.let { (candidates, roomNames) ->
+        com.pbp.app.ui.profile.CopyProfileDialog(
+            profiles = candidates,
+            roomNames = roomNames,
+            onDismiss = { copyCandidates = null },
+            onPick = { profile ->
+                vm.copyProfile(profile)
+                copyCandidates = null
+            },
+        )
+    }
+
     if (showAddProfile) {
         AddProfileDialog(
             onDismiss = { showAddProfile = false },
+            onFromOtherRoom = {
+                showAddProfile = false
+                vm.loadCopyCandidates { copyCandidates = it }
+            },
             onEmpty = {
                 showAddProfile = false
-                nav.navigate(com.pbp.app.Routes.profile(0))
+                // 프로필은 만든 방에 귀속된다 — 어느 방에서 만드는지 함께 넘긴다
+                nav.navigate(com.pbp.app.Routes.profile(0, roomId))
             },
             onClipboard = {
                 showAddProfile = false

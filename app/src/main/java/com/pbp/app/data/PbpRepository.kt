@@ -23,7 +23,6 @@ class PbpRepository(private val db: AppDatabase) {
     fun observeMessageCount(roomId: Long) = db.messageDao().observeCount(roomId)
     suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
-    fun observeAllProfiles() = db.profileDao().observeAllProfiles()
 
     /** 클립보드에서 가져온 ccfolia 캐릭터를 전역 프로필로 등록 (리뷰 C1) */
     suspend fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) {
@@ -425,6 +424,28 @@ class PbpRepository(private val db: AppDatabase) {
             pushIfSynced(roomId, listOf(inserted))
             true
         }
+
+    /** 방 이름 조회 — 다른 방 캐릭터를 어느 방 것인지 보여 줄 때 */
+    suspend fun roomNamesOf(roomIds: List<Long>): Map<Long, String> =
+        roomIds.mapNotNull { id -> db.roomDao().get(id)?.let { id to it.name } }.toMap()
+
+    /** 이 방으로 데려올 수 있는 다른 방의 캐릭터 */
+    suspend fun profilesFromOtherRooms(roomId: Long) = db.profileDao().fromOtherRooms(roomId)
+
+    /**
+     * 다른 방의 캐릭터를 이 방으로 **복사**한다 — 원본은 그 방에 그대로 남는다.
+     * 사본은 새 id를 받아 따로 산다(한쪽을 고쳐도 다른 쪽은 그대로).
+     */
+    suspend fun copyProfileInto(source: CharacterProfile, roomId: Long) {
+        saveProfile(
+            source.copy(
+                id = 0,
+                characterId = java.util.UUID.randomUUID().toString(),
+                roomId = roomId,
+                updatedAt = 0,
+            )
+        )
+    }
 
     suspend fun saveProfile(profile: CharacterProfile) {
         // 고친 시각을 남긴다 — 다른 기기와 부딪히면 나중 것이 남는 기준이 된다

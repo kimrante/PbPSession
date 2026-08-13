@@ -12,7 +12,7 @@ object Routes {
     const val CAPTURE = "capture"
 
     const val CHAT_PATTERN = "chat/{roomId}"
-    const val PROFILE_PATTERN = "profile/{profileId}"
+    const val PROFILE_PATTERN = "profile/{profileId}/{roomId}"
     const val SETTINGS_PATTERN = "settings/{roomId}"
 
     const val ARG_ROOM_ID = "roomId"
@@ -20,8 +20,11 @@ object Routes {
 
     fun chat(roomId: Long) = "chat/$roomId"
 
-    /** profileId 0 = 새 캐릭터 */
-    fun profile(profileId: Long) = "profile/$profileId"
+    /**
+     * profileId 0 = 새 캐릭터. 프로필은 방에 속하므로 **어느 방에서 만드는지**가 필요하다
+     * (기존 프로필을 고칠 때는 그 프로필이 이미 방을 알고 있어 쓰이지 않는다).
+     */
+    fun profile(profileId: Long, roomId: Long = 0L) = "profile/$profileId/$roomId"
 
     fun settings(roomId: Long) = "settings/$roomId"
 }

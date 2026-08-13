@@ -65,7 +65,6 @@ import com.pbp.app.data.MessageType
 import com.pbp.app.data.OwnerProfile
 import com.pbp.shared.Rules
 import com.pbp.app.ui.common.FontSettingDialog
-import com.pbp.app.ui.profile.ProfileManagerDialog
 import com.pbp.app.ui.common.relativeTime
 import com.pbp.app.ui.theme.GowunBatang
 import com.pbp.app.ui.common.PbpButtonKind
@@ -107,12 +106,6 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         onResult(app.syncManager.joinRoom(code.trim().uppercase()))
     }
 
-    /** 프로필 관리 — 오너 외 모든 프로필 (GM·방 귀속 포함) */
-    val allProfiles = repo.observeAllProfiles()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
-        safeLaunch(app) { repo.createFromCode(imported) }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -142,10 +135,8 @@ fun RoomListScreen(nav: NavController) {
     LaunchedEffect(OwnerProfile.isSet) {
         if (!OwnerProfile.isSet) nav.navigate(com.pbp.app.Routes.OWNER)
     }
-    // 프로필 관리 — 오너 아이콘을 누르면 전체 프로필 목록
-    var showManager by remember { mutableStateOf(false) }
-    var showAddProfile by remember { mutableStateOf(false) }
-    val allProfiles by vm.allProfiles.collectAsState()
+    // 프로필은 각 방 안에서만 보고 고친다 — 여기서는 목록을 열지 않는다.
+    // 오너 아이콘은 '기본 아이디'(계정 표시 이름) 설정으로 바로 간다
 
     Scaffold(
         containerColor = tokens.bg,
@@ -173,7 +164,9 @@ fun RoomListScreen(nav: NavController) {
                     // 프로필 관리 — 오너 프로필 아이콘 모양, 초대코드(참여) 오른편
                     com.pbp.app.ui.common.OwnerAvatar(
                         OwnerProfile.name, OwnerProfile.color, OwnerProfile.imagePath, PbpDimens.avatarBar,
-                        Modifier.combinedClickable(onClick = { showManager = true }),
+                        Modifier.combinedClickable(
+                            onClick = { nav.navigate(com.pbp.app.Routes.OWNER) },
+                        ),
                     )
                 }
                 // 로고+워드마크 1행, 부제 2행 — 묶음 전체가 화면 정중앙 (좌우 인셋 동일)
@@ -291,42 +284,6 @@ fun RoomListScreen(nav: NavController) {
 
     if (showFont) {
         FontSettingDialog(onDismiss = { showFont = false })
-    }
-
-    if (showManager) {
-        ProfileManagerDialog(
-            profiles = allProfiles,
-            roomNames = rooms.associate { it.id to it.name },
-            onDismiss = { showManager = false },
-            onOwner = {
-                showManager = false
-                nav.navigate(com.pbp.app.Routes.OWNER)
-            },
-            onProfile = { id ->
-                showManager = false
-                nav.navigate(com.pbp.app.Routes.profile(id))
-            },
-            onAdd = {
-                showManager = false
-                showAddProfile = true
-            },
-        )
-    }
-
-    if (showAddProfile) {
-        com.pbp.app.ui.common.AddProfileDialog(
-            onDismiss = { showAddProfile = false },
-            onEmpty = {
-                showAddProfile = false
-                nav.navigate(com.pbp.app.Routes.profile(0))
-            },
-            onClipboard = {
-                showAddProfile = false
-                com.pbp.app.ui.common.importCharacterFromClipboard(context) {
-                    vm.createFromCode(it)
-                }
-            },
-        )
     }
 
     deleteTarget?.let { room ->

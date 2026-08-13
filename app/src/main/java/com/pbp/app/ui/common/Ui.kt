@@ -578,6 +578,8 @@ fun AddProfileDialog(
     onDismiss: () -> Unit,
     onEmpty: () -> Unit,
     onClipboard: () -> Unit,
+    /** 다른 방에서 쓰던 캐릭터 데려오기. null이면 가져올 방이 없다 */
+    onFromOtherRoom: (() -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -594,6 +596,13 @@ fun AddProfileDialog(
                     subtitle = "복사해 둔 캐릭터 코드(JSON)의 이름·능력치를 값으로 자동 등록",
                     onClick = onClipboard,
                 )
+                onFromOtherRoom?.let {
+                    AddOptionRow(
+                        title = "다른 방에서 가져오기",
+                        subtitle = "다른 세션에서 쓰던 캐릭터를 이 방으로 복사합니다",
+                        onClick = it,
+                    )
+                }
             }
         },
         confirmButton = { PbpDialogButton("취소", onDismiss, kind = PbpButtonKind.Cancel) },

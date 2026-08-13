@@ -101,3 +101,46 @@ fun ProfileManagerDialog(
         confirmButton = { PbpDialogButton("닫기", onDismiss) },
     )
 }
+
+/**
+ * 다른 방에서 쓰던 캐릭터를 골라 이 방으로 복사한다.
+ *
+ * 원본은 그 방에 그대로 남고, 사본은 새 id를 받아 따로 산다 — 한쪽을 고쳐도
+ * 다른 쪽은 그대로다. GM은 목록에 없다(서술 권한은 방마다 마스터에게만 있다).
+ */
+@Composable
+fun CopyProfileDialog(
+    profiles: List<com.pbp.app.data.CharacterProfile>,
+    roomNames: Map<Long, String>,
+    onDismiss: () -> Unit,
+    onPick: (com.pbp.app.data.CharacterProfile) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { PbpDialogTitle("다른 방에서 가져오기") },
+        text = {
+            if (profiles.isEmpty()) {
+                Text("다른 방에 가져올 캐릭터가 없습니다.", fontSize = 13.sp, color = Pbp.colors.inkDim)
+            } else {
+                Column(
+                    Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())
+                ) {
+                    profiles.forEach { profile ->
+                        ManagerRow(
+                            label = profile.name.ifBlank { "이름 없음" },
+                            sub = profile.roomId?.let { roomNames[it] } ?: "다른 방",
+                            onClick = { onPick(profile) },
+                        ) {
+                            com.pbp.app.ui.common.Avatar(
+                                emoji = profile.emoji,
+                                imagePath = profile.imagePath,
+                                size = PbpDimens.avatarStrip,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { PbpDialogButton("닫기", onDismiss, kind = PbpButtonKind.Cancel) },
+    )
+}

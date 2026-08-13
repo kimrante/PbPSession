@@ -1454,6 +1454,31 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     false
                 }
             },
+            onFromOtherRoom = { overlay = OverlayKind.CopyProfile },
+        )
+        OverlayKind.CopyProfile -> CopyProfileOverlay(
+            // 다른 방의 캐릭터만. GM은 뺀다 — 서술 권한은 방마다 마스터에게만 있다
+            candidates = profiles
+                .filterNot { it.isGm || it.roomId == null || it.roomId == selected?.remoteId }
+                .map { profile ->
+                    profile to (
+                        rooms.firstOrNull { it.remoteId == profile.roomId }?.name ?: "다른 방"
+                        )
+                },
+            onDismiss = { overlay = null },
+            onPick = { source ->
+                val room = selected
+                if (room != null) {
+                    // 사본은 새 id를 받아 따로 산다 — 원본은 그 방에 그대로 남는다
+                    val copy = source.copy(
+                        characterId = java.util.UUID.randomUUID().toString(),
+                        roomId = room.remoteId,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                    saveProfiles(profiles + copy, copy)
+                }
+                overlay = OverlayKind.ProfileManager
+            },
         )
         OverlayKind.OwnerProfile -> OwnerProfileOverlay(
             recentColors = recentColors,
@@ -1664,7 +1689,7 @@ internal fun <T> runBlockingIo(block: () -> T): T =
 
 private enum class OverlayKind {
     JoinRoom, CreateRoom, NewProfile, ShowCode, RoomSettings, FontSetting, OwnerProfile,
-    ProfileManager, AddProfileChoice, MarkupHelp,
+    ProfileManager, AddProfileChoice, CopyProfile, MarkupHelp,
 }
 
 internal fun inviteCode(): String = com.pbp.shared.Identifiers.newInviteCode()

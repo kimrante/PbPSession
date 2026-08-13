@@ -80,10 +80,6 @@ interface ProfileDao {
     @Query("SELECT DISTINCT imagePath FROM profiles WHERE imagePath IS NOT NULL")
     suspend fun allImagePaths(): List<String>
 
-    /** 프로필 관리 목록 — 전역·방 귀속(GM 포함) 전부 */
-    @Query("SELECT * FROM profiles ORDER BY isGm DESC, name")
-    fun observeAllProfiles(): Flow<List<CharacterProfile>>
-
     @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId ORDER BY isGm DESC, name")
     fun observeForRoom(roomId: Long): Flow<List<CharacterProfile>>
 
@@ -97,6 +93,17 @@ interface ProfileDao {
 
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun get(id: Long): CharacterProfile?
+
+    /**
+     * 다른 방에서 쓰고 있는 캐릭터 — 이 방으로 복사해 올 후보.
+     * GM은 뺀다(서술 권한은 방마다 마스터에게만 주어진다).
+     */
+    @Query(
+        """SELECT * FROM profiles
+           WHERE roomId IS NOT NULL AND roomId != :roomId AND isGm = 0
+           ORDER BY name"""
+    )
+    suspend fun fromOtherRooms(roomId: Long): List<CharacterProfile>
 
     /** 계정 동기화용 — 전부 */
     @Query("SELECT * FROM profiles")

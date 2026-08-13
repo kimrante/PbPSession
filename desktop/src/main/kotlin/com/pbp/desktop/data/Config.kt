@@ -89,6 +89,9 @@ class AppConfig private constructor(
         /** 저장 상한 — 모바일 RecentColors.MAX와 같아야 한다 */
         const val RECENT_COLORS_MAX = 5
 
+        /** 예전 기본 GM 아바타에 박혀 있던 글자 — 보이면 지운다 */
+        private const val LEGACY_GM_EMOJI = "敍"
+
         private val file = AppPaths.file("config.json")
         private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
@@ -117,6 +120,9 @@ class AppConfig private constructor(
                 // 채워 넣는다. 비워 두면 판정 대상 판별이 전부 빈 문자열로 겹친다
                 profiles = (loaded?.profiles ?: defaultProfiles())
                     .map { if (it.characterId.isNullOrBlank()) it.copy(characterId = UUID.randomUUID().toString()) else it }
+                    // 이미 만들어진 config에는 예전 GM 아바타 글자가 남아 있다 — 기본값을
+                    // 바꾸는 것만으로는 쓰던 사람 화면이 그대로라 여기서 함께 비운다
+                    .map { if (it.isGm && it.emoji == LEGACY_GM_EMOJI) it.copy(emoji = "") else it }
                     .toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
@@ -135,7 +141,9 @@ class AppConfig private constructor(
         }
 
         private fun defaultProfiles() = listOf(
-            Profile(name = "GM", emoji = "敍", nameColor = 0xFFFFD972, bubbleColor = 0xFFE7E2D4, isGm = true),
+            // GM 아바타는 글자 없이 무채색 원만 — 모바일 기본 GM과 같다.
+            // (emoji가 빈 문자열이면 아바타에 아무 글자도 그리지 않는다)
+            Profile(name = "GM", emoji = "", nameColor = 0xFFFFD972, bubbleColor = 0xFFE7E2D4, isGm = true),
             Profile(name = "플레이어", emoji = "🙂"),
         )
     }

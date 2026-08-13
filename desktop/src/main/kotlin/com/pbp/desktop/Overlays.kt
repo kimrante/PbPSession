@@ -34,7 +34,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -114,14 +121,18 @@ internal fun MarkupHelpOverlay(onDismiss: () -> Unit) {
 internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Box(
         // 라이트 모드 딤 — rgba(30,35,45,.38) (목업 final-design.html)
-        Modifier.fillMaxSize().background(Tokens.Scrim).clickable(onClick = onDismiss),
+        // 닫기는 **마우스 클릭만** 받는다 — clickable은 포커스가 오면 키보드 엔터·스페이스도
+        // 클릭으로 치기 때문에, 입력창에서 친 엔터가 창을 닫아 버렸다
+        Modifier.fillMaxSize().background(Tokens.Scrim)
+            .pointerInput(Unit) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center,
     ) {
         Column(
             Modifier.width(DesktopDimens.overlay)
                 .clip(RoundedCornerShape(DesktopDimens.rSheet))
                 .background(Tokens.Panel)
-                .clickable(enabled = false) {}
+                // 패널 안쪽 클릭은 여기서 삼킨다 (딤까지 내려가면 창이 닫힌다)
+                .pointerInput(Unit) { detectTapGestures { } }
                 .padding(DesktopDimens.gap5)
                 .verticalScroll(rememberScrollState()),
         ) {
@@ -137,11 +148,33 @@ internal fun OverlayScaffold(title: String, onDismiss: () -> Unit, content: @Com
 }
 
 @Composable
-internal fun OverlayField(value: String, onChange: (String) -> Unit, placeholder: String) {
+internal fun OverlayField(
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    /** 엔터로 확인. 넘기지 않으면 엔터는 아무 일도 하지 않는다 */
+    onSubmit: (() -> Unit)? = null,
+    /** 열자마자 바로 칠 수 있게 커서를 둔다 */
+    autoFocus: Boolean = false,
+) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    if (autoFocus) LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     BasicTextField(
         value = value,
         onValueChange = onChange,
         modifier = Modifier.fillMaxWidth()
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                // 한 줄 입력에서 엔터는 줄바꿈이 아니라 '확인'이다. 여기서 받지 않으면
+                // 위쪽 딤이 그 엔터를 클릭으로 받아 창이 그냥 닫혔다
+                val submit = onSubmit
+                if (submit != null && event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                ) {
+                    submit()
+                    true
+                } else false
+            }
             .clip(RoundedCornerShape(12.dp))
             .background(Tokens.FieldBg)
             .border(1.dp, Tokens.Line, RoundedCornerShape(12.dp))
@@ -224,14 +257,16 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
     var code by remember { mutableStateOf("") }
     var failed by remember { mutableStateOf(false) }
     OverlayScaffold("초대 코드로 참여", onDismiss) {
-        OverlayField(code, { code = it; failed = false }, "초대 코드")
+        // 버튼과 같은 조건으로 — 빈 칸에서 친 엔터로 헛되이 참여를 시도하지 않는다
+        val join = { if (code.isNotBlank()) onJoin(code) { failed = true } }
+        OverlayField(code, { code = it; failed = false }, "초대 코드", onSubmit = join, autoFocus = true)
         if (failed) {
             Spacer(Modifier.height(DesktopDimens.gap2))
             Text("방을 찾지 못했습니다. 코드를 확인해주세요.", fontSize = 11.sp, color = Tokens.Danger)
         }
         Spacer(Modifier.height(DesktopDimens.gap4))
         Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
-            YellowButton("참여", Modifier.weight(1f)) { if (code.isNotBlank()) onJoin(code) { failed = true } }
+            YellowButton("참여", Modifier.weight(1f)) { join() }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }
@@ -241,7 +276,8 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
 internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     OverlayScaffold("새 세션", onDismiss) {
-        OverlayField(name, { name = it }, "방 이름")
+        // 이름 한 줄만 받는 창이다 — 열면 바로 치고 엔터로 끝낸다
+        OverlayField(name, { name = it }, "방 이름", onSubmit = { onCreate(name) }, autoFocus = true)
         Spacer(Modifier.height(DesktopDimens.gap2))
         // 방 아이콘 폐지 — 배경으로만 구분. TRPG 룰은 크툴루의 부름 7판 고정 (모바일과 동일)
         Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 11.sp, color = Tokens.Ink)

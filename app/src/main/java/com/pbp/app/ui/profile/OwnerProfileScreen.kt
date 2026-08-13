@@ -336,6 +336,16 @@ private fun GoogleAccountRow() {
     var email by remember { mutableStateOf(sync.linkedGoogleEmail) }
     var busy by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    // 저장된 로그인은 복원에 잠깐 걸릴 수 있다 — 처음 읽어 비어 있으면 한 번 더 본다.
+    // 이 확인이 없으면 연결해 둔 계정이 "연결 안 됨"으로 보여 풀린 것처럼 읽힌다
+    LaunchedEffect(Unit) {
+        if (email == null) {
+            repeat(6) {
+                kotlinx.coroutines.delay(500)
+                sync.linkedGoogleEmail?.let { email = it; return@LaunchedEffect }
+            }
+        }
+    }
 
     Surface(
         color = tokens.panel2,
@@ -381,11 +391,18 @@ private fun GoogleAccountRow() {
                                     val adopted = sync.adoptAccountRooms()
                                     if (adopted > 0) note = "다른 기기의 세션 ${adopted}개를 가져왔습니다"
                                 }
-                                com.pbp.app.sync.GoogleAccountLinker.Result.AlreadyLinked ->
-                                    note = "이 구글 계정은 다른 기기에 이미 연결돼 있습니다"
+                                is com.pbp.app.sync.GoogleAccountLinker.Result.Recovered -> {
+                                    // 덧붙이지는 못했지만 원래 계정을 되찾았다 — 결과는 같다
+                                    email = result.email ?: sync.linkedGoogleEmail
+                                    note = "이 계정으로 쓰던 신원을 되찾았습니다"
+                                    val adopted = sync.adoptAccountRooms()
+                                    if (adopted > 0) note = "다른 기기의 세션 ${adopted}개를 가져왔습니다"
+                                }
                                 com.pbp.app.sync.GoogleAccountLinker.Result.NoAccount ->
                                     note = "기기에 구글 계정이 없습니다"
-                                com.pbp.app.sync.GoogleAccountLinker.Result.Cancelled -> Unit
+                                // 아무 표시도 없으면 "눌렀는데 그냥 풀렸다"로 읽힌다
+                                com.pbp.app.sync.GoogleAccountLinker.Result.Cancelled ->
+                                    note = "계정 선택이 취소되었습니다"
                                 is com.pbp.app.sync.GoogleAccountLinker.Result.Failed ->
                                     note = result.message
                             }

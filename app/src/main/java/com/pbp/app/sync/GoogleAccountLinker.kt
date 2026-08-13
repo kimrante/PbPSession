@@ -24,9 +24,11 @@ import kotlinx.coroutines.tasks.await
  * 지난 대화가 하나도 어긋나지 않는다 — 새로 로그인하면 UID가 바뀌어 방에서
  * 떨어져 나간다.
  *
- * 한 구글 계정에 덧붙일 수 있는 익명 계정은 하나뿐이다. 두 번째 기기는 덧붙이지
- * 못하고 '갈아타야' 하는데, 그 이관은 다음 단계에서 다룬다 — 지금은 [Result.AlreadyLinked]로
- * 분명히 알리고 아무것도 건드리지 않는다.
+ * 한 구글 계정에 덧붙일 수 있는 익명 계정은 하나뿐이다. 이미 딸린 계정이 있으면
+ * 덧붙이기가 실패하는데, 거기서 멈추면 **영영 연결되지 않는다** — 앱을 지웠다 깔거나
+ * 다른 기기가 먼저 그 계정을 가져간 뒤가 그렇다. 그때는 그 계정으로 로그인해 원래
+ * 신원을 되찾는다([Result.Recovered]). 지금 익명 계정은 버려지므로, 부르는 쪽은
+ * 방 멤버 재등록까지 함께 해야 한다.
  */
 internal class GoogleAccountLinker(
     private val context: Context,
@@ -36,8 +38,11 @@ internal class GoogleAccountLinker(
         /** 연결 성공. UID는 그대로다 */
         data class Linked(val email: String?) : Result
 
-        /** 이 구글 계정은 이미 다른 기기의 계정에 붙어 있다 (기기 간 이어하기는 다음 단계) */
-        data object AlreadyLinked : Result
+        /**
+         * 이 구글 계정은 이미 다른 Firebase 계정에 붙어 있었다 — 그쪽으로 **되돌아갔다**.
+         * 덧붙이기는 실패했지만 신원은 원래 것을 되찾은 상태다.
+         */
+        data class Recovered(val email: String?, val uid: String) : Result
 
         /** 사용자가 계정 선택을 닫았다 — 실패로 알릴 일이 아니다 */
         data object Cancelled : Result
@@ -49,6 +54,10 @@ internal class GoogleAccountLinker(
     }
 
     private fun auth(): FirebaseAuth = FirebaseAuth.getInstance(firebaseApp())
+
+    /** 구글 계정이 아직 붙지 않은 상태인가 */
+    val isAnonymous: Boolean
+        get() = runCatching { auth().currentUser?.isAnonymous ?: true }.getOrDefault(true)
 
     /** 연결된 구글 계정 주소. 연결 전이면 null */
     val linkedEmail: String?
@@ -79,11 +88,24 @@ internal class GoogleAccountLinker(
             Result.Linked(linked?.email)
         }.getOrElse { error ->
             when (error) {
-                is FirebaseAuthUserCollisionException -> Result.AlreadyLinked
-                else -> Result.Failed(error.message ?: "연결에 실패했습니다")
+                // 이 구글 계정에 이미 Firebase 계정이 딸려 있다 — 앱을 지웠다 깔거나
+                // 다른 기기가 먼저 가져간 경우다. 여기서 멈추면 영영 연결이 안 되므로,
+                // **그 계정으로 로그인해 원래 신원을 되찾는다.** 지금 익명 계정은 버려진다
+                is FirebaseAuthUserCollisionException -> recover(credential)
+                else -> Result.Failed(error.message ?: "연결에 실패했습니다 (${error.javaClass.simpleName})")
             }
         }
     }
+
+    /** 이미 이 구글 계정에 딸린 Firebase 계정으로 로그인한다 */
+    private suspend fun recover(credential: com.google.firebase.auth.AuthCredential): Result =
+        runCatching {
+            val user = auth().signInWithCredential(credential).await().user
+                ?: return Result.Failed("계정을 되찾지 못했습니다")
+            Result.Recovered(user.email, user.uid)
+        }.getOrElse { error ->
+            Result.Failed(error.message ?: "계정을 되찾지 못했습니다")
+        }
 
     private sealed interface TokenResult {
         data class Ok(val idToken: String) : TokenResult

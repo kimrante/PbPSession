@@ -101,11 +101,66 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             authUid?.let { return it }
             val uid = runCatching {
                 val auth = com.google.firebase.auth.FirebaseAuth.getInstance(firebaseApp)
-                (auth.currentUser ?: auth.signInAnonymously().await().user)?.uid
+                val restored = awaitRestoredUser(auth)
+                when {
+                    restored != null -> restored.uid
+                    // **한 번이라도 신원이 있었다면 새로 만들지 않는다.**
+                    // 여기서 익명 계정을 새로 파면 구글 연결도, 방 멤버십도 통째로 잃는다 —
+                    // "연결이 자꾸 풀린다"로 나타난다. 복구를 다음 실행에 맡기는 편이 낫다
+                    knownUid() != null -> {
+                        android.util.Log.w(
+                            "PbpSync",
+                            "저장된 계정을 복원하지 못했습니다 — 새로 만들지 않고 기다립니다",
+                        )
+                        null
+                    }
+                    else -> auth.signInAnonymously().await().user?.uid
+                }
             }.getOrNull()
-            if (uid != null) authUid = uid
+            if (uid != null) {
+                authUid = uid
+                rememberUid(uid)
+            }
         }
         return myUid
+    }
+
+    /**
+     * 디스크에 저장된 로그인을 복원할 때까지 잠깐 기다린다.
+     *
+     * `currentUser`는 보통 즉시 채워지지만, 그렇지 않은 순간에 익명 로그인을 새로 하면
+     * 기존 신원이 사라진다. 리스너는 등록 즉시 현재 상태로 한 번 불리므로, 이미 있으면
+     * 바로 돌아온다.
+     */
+    private suspend fun awaitRestoredUser(
+        auth: com.google.firebase.auth.FirebaseAuth,
+    ): com.google.firebase.auth.FirebaseUser? {
+        auth.currentUser?.let { return it }
+        if (knownUid() == null) return null // 처음 켠 기기 — 기다릴 것이 없다
+        return kotlinx.coroutines.withTimeoutOrNull(RESTORE_WAIT_MS) {
+            kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                val listener = object : com.google.firebase.auth.FirebaseAuth.AuthStateListener {
+                    override fun onAuthStateChanged(
+                        instance: com.google.firebase.auth.FirebaseAuth,
+                    ) {
+                        val user = instance.currentUser ?: return
+                        instance.removeAuthStateListener(this)
+                        if (continuation.isActive) continuation.resumeWith(Result.success(user))
+                    }
+                }
+                auth.addAuthStateListener(listener)
+                continuation.invokeOnCancellation { auth.removeAuthStateListener(listener) }
+            }
+        }
+    }
+
+    /** 마지막으로 쓰던 신원 — 앱 데이터와 함께 지워지므로 Firebase 저장본과 수명이 같다 */
+    private fun knownUid(): String? =
+        context.getSharedPreferences("pbp", Context.MODE_PRIVATE).getString("lastAuthUid", null)
+
+    private fun rememberUid(uid: String) {
+        context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+            .edit().putString("lastAuthUid", uid).apply()
     }
 
     /** 구글 계정 연결 — 폰과 PC가 같은 신원을 쓰기 위한 첫 단계 */
@@ -114,9 +169,29 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     /** 연결된 구글 계정 주소. 연결 전이면 null */
     val linkedGoogleEmail: String? get() = if (isDemo) null else googleAccount.linkedEmail
 
+    /** 지금 신원이 익명인지 (구글 계정이 붙지 않은 상태) */
+    val isAnonymousAccount: Boolean get() = !isDemo && googleAccount.isAnonymous
+
     internal suspend fun linkGoogleAccount(
         activity: android.app.Activity,
-    ): GoogleAccountLinker.Result = googleAccount.link(activity)
+    ): GoogleAccountLinker.Result {
+        val before = myUid
+        val result = googleAccount.link(activity)
+        if (result is GoogleAccountLinker.Result.Recovered) {
+            // 신원이 바뀌었다 — 새 uid로 방마다 멤버를 다시 등록하지 않으면
+            // 규칙상 지금 쓰던 방을 읽지도 쓰지도 못한다
+            authUid = result.uid
+            rememberUid(result.uid)
+            android.util.Log.i("PbpSync", "계정 복구: $before → ${result.uid}")
+            db.roomDao().listSynced().forEach { room ->
+                val remote = room.remoteId ?: return@forEach
+                runCatching { ensureMembership(remote) }
+                indexRoom(remote, room.name, room.isMaster)
+            }
+            registerFcmToken()
+        }
+        return result
+    }
 
     private val firestore: FirebaseFirestore by lazy {
         FirebaseFirestore.getInstance(firebaseApp).apply {
@@ -1109,6 +1184,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     private companion object {
         /** 초대 코드 자리를 찾는 시도 횟수 (A4). 32^8 공간이라 한 번이면 거의 끝난다 */
         const val CODE_ATTEMPTS = 5
+
+        /** 저장된 로그인이 복원되기를 기다리는 상한 */
+        const val RESTORE_WAIT_MS = 3_000L
     }
 
     // ── FCM 백그라운드 푸시 ──────────────────────────────

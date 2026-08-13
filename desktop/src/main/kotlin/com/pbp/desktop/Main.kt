@@ -32,6 +32,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -79,9 +80,17 @@ fun main() = application {
         state = rememberWindowState(width = 1200.dp, height = 760.dp),
         // Esc = 캡처 모드 종료. 입력창에 포커스가 있어도 먹도록 프리뷰 단계에서 잡는다
         onPreviewKeyEvent = { event ->
-            event.key == Key.Escape &&
-                event.type == KeyEventType.KeyUp &&
-                escapeHandler.get()?.invoke() == true
+            when {
+                event.key == Key.Escape && event.type == KeyEventType.KeyUp ->
+                    escapeHandler.get()?.invoke() == true
+                // Tab = 다음 프로필. 입력창에 포커스가 있어도 먹도록 프리뷰에서 잡는다
+                // (여기서 소비하지 않으면 포커스만 옮겨 간다).
+                // Shift+Tab은 뒤로 — 프로필이 여럿일 때 되돌아오기 편하다
+                event.key == Key.Tab && event.type == KeyEventType.KeyDown ->
+                    tabHandler.get()?.invoke(event.isShiftPressed) == true
+                event.key == Key.Tab -> tabHandler.get() != null // KeyUp도 함께 소비
+                else -> false
+            }
         },
     ) {
         // 창 포커스 추적 — 포커스가 없을 때만 OS 알림 (모바일 isForeground와 동일 역할)
@@ -109,6 +118,13 @@ fun main() = application {
  */
 private val escapeHandler =
     java.util.concurrent.atomic.AtomicReference<(() -> Boolean)?>(null)
+
+/**
+ * Tab 처리기 — 창이 키를 먼저 받지만 프로필 목록은 [App]이 들고 있다.
+ * 인자는 Shift 동반 여부(뒤로 전환). 처리했으면 true.
+ */
+private val tabHandler =
+    java.util.concurrent.atomic.AtomicReference<((Boolean) -> Boolean)?>(null)
 
 /**
  * 종료 처리기 — 방 캐시는 [App]이 들고 있고 창 닫기는 여기서 받는다.
@@ -1108,6 +1124,19 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         persist()
     }
 
+    // Tab = 이 방에서 쓸 수 있는 프로필을 옆으로 넘긴다
+    DisposableEffect(selected?.remoteId, profiles.size) {
+        tabHandler.set { backwards ->
+            val room = selected
+            val count = profiles.size
+            if (room == null || count <= 1) false else {
+                val step = if (backwards) -1 else 1
+                switchProfile(((room.activeProfileIndex + step) % count + count) % count)
+                true
+            }
+        }
+        onDispose { tabHandler.set(null) }
+    }
     // 앱 전체 글꼴 적용 — 서술(명조)처럼 명시 지정한 곳은 그대로 유지된다
     CompositionLocalProvider(
         LocalTextStyle provides LocalTextStyle.current.merge(

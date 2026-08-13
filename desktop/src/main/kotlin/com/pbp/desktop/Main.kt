@@ -176,6 +176,14 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     /** 이 방이 서버에서 사라졌다 (DC7) — 연속 404에서만 켠다 */
     var roomMissing by remember { mutableStateOf(false) }
     var profiles by remember { mutableStateOf(config.profiles.toList()) }
+    /** 이 방에 속한 프로필만. 프로필은 만들어진 방에서만 보인다 */
+    fun profilesOf(room: JoinedRoom?): List<Profile> =
+        if (room == null) emptyList() else profiles.filter { it.roomId == room.remoteId }
+
+    /** 지금 이 방에서 말하고 있는 프로필. activeProfileIndex는 **방 목록 기준**이다 */
+    fun activeProfile(room: JoinedRoom?): Profile? =
+        room?.let { profilesOf(it).getOrNull(it.activeProfileIndex) }
+
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
     // 최근 사용한 커스텀 색 — 자리(name/bubble/owner/theme)별로 따로 (버그 수정)
@@ -208,7 +216,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var messageDelete by remember { mutableStateOf<Message?>(null) }
 
     // 프로필 칩 길게 눌러 편집 — 앱과 동일 흐름
-    var editProfileIndex by remember { mutableStateOf<Int?>(null) }
+    /** 편집 중인 프로필 — 목록 위치가 아니라 id로 잡는다(방마다 목록이 다르다) */
+    var editProfileId by remember { mutableStateOf<String?>(null) }
 
     // 판정 요청 (J8) — 창을 열었는지, 후보 명단(null이면 불러오는 중),
     // 그리고 대상 캐릭터에 값이 없어 물어봐야 하는 요청
@@ -266,6 +275,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 bubbleColor = profile.bubbleColor,
                 textColor = profile.textColor,
                 isGm = profile.isGm,
+                roomId = profile.roomId,
                 stats = profile.stats.orEmpty(),
                 avatarId = avatarId,
                 updatedAt = profile.updatedAt,
@@ -290,8 +300,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      */
     suspend fun syncProfiles(): Int {
         if (accountEmail == null) return 0
+        // 프로필은 방에 속한다 — 이 PC가 들고 있는 방의 것만 자리를 잡을 수 있다.
+        // 없는 방의 프로필은 그 방을 가져온 뒤 다음 동기화에서 따라온다
+        val known = rooms.map { it.remoteId }.toSet()
         val remote = withContext(Dispatchers.IO) { firestore.listProfiles() }
-            .filter { it.roomId == null }
+            .filter { it.roomId != null && it.roomId in known }
         if (remote.isEmpty()) return 0
         var changed = 0
         val byId = profiles.associateBy { it.characterId }
@@ -304,6 +317,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             changed++
             (local ?: Profile(characterId = entry.characterId, name = entry.name)).copy(
                 characterId = entry.characterId,
+                roomId = entry.roomId,
                 name = entry.name,
                 emoji = entry.emoji,
                 nameColor = entry.nameColor ?: 0xFFFFC46B,
@@ -364,8 +378,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 isMaster = isMaster,
                 rule = meta.rule,
                 createdAt = meta.createdAt,
-                activeProfileIndex = if (isMaster) 0
-                else profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
+                // 가져온 방의 프로필은 이 PC에 아직 없다 — 목록이 채워지면 0번부터
+                activeProfileIndex = 0,
             )
         }
         if (selected == null) selected = rooms.firstOrNull()
@@ -399,9 +413,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     // 과거 빌드는 참여 방에서도 GM이 기본 발화 프로필이었다 — 일회성 교정
     // (서술 권한은 마스터 전용, 모바일과 동일 규칙)
     LaunchedEffect(Unit) {
-        val firstPlayer = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0)
+        val firstPlayer = 0
         val fixed = rooms.map { r ->
-            if (!r.isMaster && profiles.getOrNull(r.activeProfileIndex)?.isGm == true) {
+            if (!r.isMaster && profilesOf(r).getOrNull(r.activeProfileIndex)?.isGm == true) {
                 r.copy(activeProfileIndex = firstPlayer)
             } else r
         }
@@ -447,7 +461,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         withContext(Dispatchers.IO) {
             firestore.pushCharacters(
                 room.remoteId,
-                profiles.filterNot { it.isGm }.map { profile ->
+                profilesOf(room).filterNot { it.isGm }.map { profile ->
                     profile.name to ProfileStats.sanitize(profile.stats.orEmpty())
                         .filterValues { it.trim().toIntOrNull() != null }
                         .keys.toList()
@@ -628,7 +642,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         val body = text.trim()
         if (body.isEmpty()) return onResult(true, true)
         // 참여자는 GM 프로필로 발화할 수 없다 — 서술 권한은 마스터 전용
-        val sender = profiles.getOrNull(room.activeProfileIndex)
+        val sender = activeProfile(room)
             ?.takeIf { room.isMaster || !it.isGm }
             ?: profiles.firstOrNull { room.isMaster || !it.isGm }
             ?: return onResult(false, true)
@@ -915,7 +929,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 }.toMap()
             }
             // 오너 프로필은 캐릭터가 아니라 애초에 이 목록에 들어오지 않는다
-            val mine = profiles.filterNot { it.isGm }.map { profile ->
+            val mine = profilesOf(room).filterNot { it.isGm }.map { profile ->
                 JudgeCandidate(
                     id = profile.characterId,
                     name = profile.name,
@@ -940,7 +954,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     /** 판정 요청을 보낸다 (J8) — 값 **이름**만 싣는다. 숫자는 소유자 기기에만 있다 */
     fun sendJudgeRequest(targetId: String?, targetName: String, statName: String) {
         val room = selected ?: return
-        val gm = profiles.getOrNull(room.activeProfileIndex) ?: return
+        val gm = activeProfile(room) ?: return
         lastLocalSendAt.set(System.currentTimeMillis())
         scope.launch(Dispatchers.IO) {
             firestore.postMessage(
@@ -965,9 +979,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      * 프로필이 둘일 때 엉뚱한 쪽이 굴렸다. 구버전 요청에는 id가 없으니 그때만 이름으로
      */
     fun judgeProfile(request: Message): Profile? {
-        request.judgeTargetId?.let { id -> return profiles.find { it.characterId == id } }
+        val here = profilesOf(selected)
+        request.judgeTargetId?.let { id -> return here.find { it.characterId == id } }
         val target = request.judgeTarget ?: return null
-        return profiles.find { it.name == target }
+        return here.find { it.name == target }
     }
 
     /**
@@ -1009,12 +1024,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     /** 요청에 값을 채워 넣고 바로 굴린다 — 대상 캐릭터에 그 값이 없었을 때 (J8) */
     fun addStatAndRoll(request: Message, statName: String, value: Int) {
         val picked = judgeProfile(request) ?: return
-        val index = profiles.indexOfFirst { it.characterId == picked.characterId }
-        if (index < 0) return
-        val merged = profiles[index].stats.orEmpty() + (statName to value.toString())
-        profiles = profiles.mapIndexed { i, profile ->
-            if (i == index) profile.copy(stats = ProfileStats.sortByName(merged.toList()).toMap())
-            else profile
+        val merged = picked.stats.orEmpty() + (statName to value.toString())
+        profiles = profiles.map { profile ->
+            if (profile.characterId == picked.characterId) {
+                profile.copy(stats = ProfileStats.sortByName(merged.toList()).toMap())
+            } else profile
         }
         persist()
         rollJudge(request)
@@ -1061,27 +1075,34 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
     }
 
-    /** 프로필 삭제 — 전역 목록의 인덱스를 참조하는 각 방의 활성 인덱스도 함께 재매핑 */
-    fun deleteProfileAt(index: Int) {
-        if (profiles.size <= 1) return
+    /**
+     * 프로필 삭제 — 그 방 목록에서 빠지므로 **그 방의 활성 인덱스만** 다시 잡으면 된다.
+     * 다른 방의 목록은 이 프로필과 무관하다(프로필은 한 방에만 속한다).
+     */
+    fun deleteProfile(characterId: String) {
+        val target = profiles.firstOrNull { it.characterId == characterId } ?: return
+        val roomId = target.roomId
+        val remaining = profiles.filterNot { it.characterId == characterId }
         // 계정에서도 뺀다 — 남겨 두면 다른 기기가 다시 내려받아 되살아난다
-        profiles.getOrNull(index)?.characterId?.let { characterId ->
-            if (accountEmail != null) {
-                scope.launch(Dispatchers.IO) { firestore.deleteProfile(characterId) }
-            }
+        if (accountEmail != null) {
+            scope.launch(Dispatchers.IO) { firestore.deleteProfile(characterId) }
         }
-        val newProfiles = profiles.filterIndexed { i, _ -> i != index }
-        rooms = rooms.map { r ->
-            val idx = r.activeProfileIndex
-            val fixed = when {
-                idx > index -> idx - 1
-                idx == index -> newProfiles.indexOfFirst { !it.isGm }.coerceAtLeast(0)
-                else -> idx
+        rooms = rooms.map { room ->
+            if (room.remoteId != roomId) room else {
+                val list = profilesOf(room)
+                val removedAt = list.indexOfFirst { it.characterId == characterId }
+                val idx = room.activeProfileIndex
+                val fixed = when {
+                    removedAt < 0 -> idx
+                    idx > removedAt -> idx - 1
+                    idx == removedAt -> 0
+                    else -> idx
+                }
+                if (fixed != idx) room.copy(activeProfileIndex = fixed) else room
             }
-            if (fixed != idx) r.copy(activeProfileIndex = fixed) else r
         }
         selected = rooms.firstOrNull { it.remoteId == selected?.remoteId }
-        profiles = newProfiles
+        profiles = remaining
         persist()
     }
 
@@ -1130,7 +1151,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     DisposableEffect(selected?.remoteId, profiles.size) {
         tabHandler.set { backwards ->
             val room = selected
-            val count = profiles.size
+            val count = profilesOf(room).size
             if (room == null || count <= 1) false else {
                 val step = if (backwards) -1 else 1
                 switchProfile(((room.activeProfileIndex + step) % count + count) % count)
@@ -1169,7 +1190,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ChatPane(
                 room = room,
                 messages = messages,
-                profiles = profiles,
+                profiles = profilesOf(room),
                 // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
                 // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
                 myUid = authorUid(),
@@ -1202,11 +1223,14 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 },
                 onOpenSettings = { overlay = OverlayKind.RoomSettings },
                 onMessageLongPress = { messageAction = it },
-                onEditProfile = { editProfileIndex = it },
+                // ChatPane이 주는 값은 **이 방 목록의 위치**다
+                onEditProfile = { index ->
+                    editProfileId = profilesOf(selected).getOrNull(index)?.characterId
+                },
                 onShowMarkupHelp = { overlay = OverlayKind.MarkupHelp },
                 // 데스크톱은 입력 중을 올리기만 한다 — 표시하지 않으므로 읽기가 늘지 않는다
                 onTyping = {
-                    val name = profiles.getOrNull(room.activeProfileIndex)?.name
+                    val name = activeProfile(room)?.name
                     if (name != null) {
                         scope.launch(Dispatchers.IO) { firestore.pushTyping(room.remoteId, name) }
                     }
@@ -1259,7 +1283,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             rule = meta.rule,
                             createdAt = meta.createdAt,
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
-                            activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
+                            // 새로 들어온 방에는 아직 프로필이 없다 — 목록이 채워지면 0번부터
+                            activeProfileIndex = 0,
                         )
                         // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
                         // 겹치면 한쪽 갱신이 통째로 사라진다 (resetRoomLogs의 M2와 같은 이유).
@@ -1329,7 +1354,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             onColorUsed = ::rememberColor,
             onDismiss = { overlay = null },
             onSave = { profile ->
-                val stamped = profile.copy(updatedAt = System.currentTimeMillis())
+                // 프로필은 만들어진 방에 귀속된다 — 방을 고르지 않았으면 만들 수 없다
+                val room = selected ?: return@ProfileOverlay
+                val stamped = profile.copy(
+                    roomId = room.remoteId,
+                    updatedAt = System.currentTimeMillis(),
+                )
                 saveProfiles(profiles + stamped, stamped)
                 overlay = null
             },
@@ -1390,12 +1420,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             ownerName = ownerName,
             ownerColor = ownerColor,
             ownerImagePath = ownerImagePath,
-            profiles = profiles,
+            profiles = profilesOf(selected),
             onDismiss = { overlay = null },
             onOwner = { overlay = OverlayKind.OwnerProfile },
             onProfile = { index ->
                 overlay = null
-                editProfileIndex = index
+                editProfileId = profilesOf(selected).getOrNull(index)?.characterId
             },
             onAdd = { overlay = OverlayKind.AddProfileChoice },
         )
@@ -1412,6 +1442,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 }.getOrNull()
                 if (imported != null) {
                     profiles = profiles + Profile(
+                        roomId = selected?.remoteId,
                         name = imported.name,
                         stats = ProfileStats.sanitize(imported.stats.toMap())
                             .takeIf { it.isNotEmpty() },
@@ -1557,26 +1588,26 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             },
         )
     }
-    editProfileIndex?.let { idx ->
-        profiles.getOrNull(idx)?.let { prof ->
+    editProfileId?.let { editing ->
+        profiles.firstOrNull { it.characterId == editing }?.let { prof ->
             ProfileOverlay(
                 recentColors = recentColors,
                 onColorUsed = ::rememberColor,
-                onDismiss = { editProfileIndex = null },
+                onDismiss = { editProfileId = null },
                 onSave = { updated ->
                     val stamped = updated.copy(updatedAt = System.currentTimeMillis())
                     saveProfiles(
-                        profiles.mapIndexed { i, p -> if (i == idx) stamped else p },
+                        profiles.map { if (it.characterId == editing) stamped else it },
                         stamped,
                     )
-                    editProfileIndex = null
+                    editProfileId = null
                 },
                 editing = prof,
-                // GM은 서술의 주체라 삭제 불가, 마지막 남은 프로필도 삭제 불가
-                onDelete = if (!prof.isGm && profiles.size > 1) {
+                // GM은 서술의 주체라 삭제 불가, 이 방의 마지막 프로필도 삭제 불가
+                onDelete = if (!prof.isGm && profilesOf(selected).size > 1) {
                     {
-                        deleteProfileAt(idx)
-                        editProfileIndex = null
+                        deleteProfile(editing)
+                        editProfileId = null
                     }
                 } else null,
             )

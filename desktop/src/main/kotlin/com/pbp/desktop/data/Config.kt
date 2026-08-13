@@ -18,6 +18,11 @@ data class Profile(
     val nameColor: Long = 0xFFFFC46B,
     val bubbleColor: Long = 0xFFFFD9A8,
     val isGm: Boolean = false,
+    /**
+     * 이 프로필이 속한 방(원격 id). 프로필은 방 안에서 만들어지고 그 방에서만 보인다.
+     * null은 방 개념이 생기기 전에 만들어진 것 — 불러올 때 방마다 사본으로 나뉜다.
+     */
+    val roomId: String? = null,
     /** 캐릭터 값(모바일과 동일 개념) — {값이름} 치환·판정 팔레트에 쓰인다 */
     val stats: Map<String, String>? = null,
     /** 프로필 이미지 로컬 경로 — 전송 시 축소본이 방 avatars 문서로 업로드된다 */
@@ -135,6 +140,7 @@ class AppConfig private constructor(
                     // 이미 만들어진 config에는 예전 GM 아바타 글자가 남아 있다 — 기본값을
                     // 바꾸는 것만으로는 쓰던 사람 화면이 그대로라 여기서 함께 비운다
                     .map { if (it.isGm && it.emoji == LEGACY_GM_EMOJI) it.copy(emoji = "") else it }
+                    .let { spreadIntoRooms(it, (loaded?.rooms ?: emptyList())) }
                     .toMutableList(),
                 rooms = (loaded?.rooms ?: emptyList()).toMutableList(),
                 authRefreshToken = loaded?.authRefreshToken,
@@ -152,6 +158,29 @@ class AppConfig private constructor(
                     .mapValues { (_, v) -> v.take(RECENT_COLORS_MAX).toMutableList() }
                     .toMutableMap(),
             ).also { it.save() }
+        }
+
+        /**
+         * 방 개념이 생기기 전의 프로필을 **방마다 사본으로 나눈다**.
+         *
+         * 쓰던 캐릭터가 어느 방에서든 그대로 보이도록 복제한다 — 한 방에만 남기면
+         * 나머지 방이 갑자기 빈손이 된다. 사본은 각자 새 id를 받아 이후로는 따로 산다.
+         * 방이 아직 없으면 그대로 둔다(방을 만들 때 자리를 잡는다).
+         */
+        private fun spreadIntoRooms(
+            profiles: List<Profile>,
+            rooms: List<JoinedRoom>,
+        ): List<Profile> {
+            val (roomless, owned) = profiles.partition { it.roomId == null }
+            if (roomless.isEmpty() || rooms.isEmpty()) return profiles
+            return owned + rooms.flatMap { room ->
+                roomless.map { profile ->
+                    profile.copy(
+                        characterId = UUID.randomUUID().toString(),
+                        roomId = room.remoteId,
+                    )
+                }
+            }
         }
 
         private fun defaultProfiles() = listOf(

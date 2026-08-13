@@ -601,6 +601,7 @@ class FirestoreRest(
         bubbleColor: Long?,
         textColor: Long?,
         isGm: Boolean,
+        roomId: String?,
         stats: Map<String, String>,
         avatarId: String?,
         updatedAt: Long,
@@ -617,7 +618,7 @@ class FirestoreRest(
                         ProfileSyncKeys.BUBBLE_COLOR to bubbleColor,
                         ProfileSyncKeys.TEXT_COLOR to textColor,
                         ProfileSyncKeys.IS_GM to isGm,
-                        // PC 프로필에는 방 구분이 없다 — 늘 방 공용으로 올린다
+                        ProfileSyncKeys.ROOM_ID to roomId,
                         ProfileSyncKeys.STATS to ProfileStatsCodec.encode(stats),
                         ProfileSyncKeys.AVATAR_ID to avatarId,
                         ProfileSyncKeys.UPDATED_AT to updatedAt,

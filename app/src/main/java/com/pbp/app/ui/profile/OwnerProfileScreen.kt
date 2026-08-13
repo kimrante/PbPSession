@@ -376,6 +376,10 @@ private fun GoogleAccountRow() {
                             when (val result = sync.linkGoogleAccount(activity)) {
                                 is com.pbp.app.sync.GoogleAccountLinker.Result.Linked -> {
                                     email = result.email ?: sync.linkedGoogleEmail
+                                    // 다른 기기에서 하던 세션이 있으면 지금 가져온다
+                                    // (연결 직후에 보이지 않으면 됐는지 알 수가 없다)
+                                    val adopted = sync.adoptAccountRooms()
+                                    if (adopted > 0) note = "다른 기기의 세션 ${adopted}개를 가져왔습니다"
                                 }
                                 com.pbp.app.sync.GoogleAccountLinker.Result.AlreadyLinked ->
                                     note = "이 구글 계정은 다른 기기에 이미 연결돼 있습니다"

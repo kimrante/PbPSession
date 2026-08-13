@@ -552,6 +552,42 @@ class FirestoreRest(
         ),
     )
 
+    /**
+     * 내 세션 목록에 이 방을 적어 둔다 — 같은 계정으로 붙은 **다른 기기가 방을 찾는
+     * 유일한 통로**다(방 목록 열거는 규칙이 막는다).
+     */
+    fun indexRoom(remoteRoomId: String, name: String, isMaster: Boolean): Boolean {
+        val myUid = uid ?: return false
+        return patch(
+            "$base/users/$myUid/rooms/${encodePath(remoteRoomId)}?key=$apiKey",
+            gson.toJson(
+                fields(
+                    mapOf(
+                        "name" to name,
+                        "joinedAt" to System.currentTimeMillis(),
+                        // 다른 기기에서도 GM 권한이 이어져야 한다
+                        "master" to isMaster,
+                    )
+                )
+            ),
+        )
+    }
+
+    /** 색인에 적힌 세션 하나 */
+    data class IndexedRoom(val remoteId: String, val name: String, val isMaster: Boolean)
+
+    /** 다른 기기에서 적어 둔 것까지, 이 계정이 참여 중인 방들 */
+    fun listIndexedRooms(): List<IndexedRoom> {
+        val myUid = uid ?: return emptyList()
+        val res = get("$base/users/$myUid/rooms?key=$apiKey") ?: return emptyList()
+        val documents = res.getAsJsonArray("documents") ?: return emptyList()
+        return documents.mapNotNull { element ->
+            val doc = runCatching { element.asJsonObject }.getOrNull() ?: return@mapNotNull null
+            val id = doc.docId().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            IndexedRoom(id, doc.str("name") ?: "공유 캠페인", doc.bool("master"))
+        }
+    }
+
     /** 이 코드가 가리키는 방. 매핑이 없으면(=참가에 쓰여 사라졌으면) null */
     private fun inviteCodeRoom(code: String): String? =
         get("$base/inviteCodes/${encodePath(code)}?key=$apiKey")?.str("roomId")
@@ -837,6 +873,8 @@ class FirestoreRest(
     fun leaveRoom(remoteRoomId: String, deviceId: String) {
         val myUid = uid ?: deviceId
         deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
+        // 내 세션 목록에서도 뺀다 — 남겨 두면 다음 시작 때 이 방이 되살아난다
+        deleteDoc("$base/users/$myUid/rooms/${encodePath(remoteRoomId)}?key=$apiKey")
     }
 
     /** 프로필 이미지 업로드 — 모바일 ensureAvatarUploaded와 같은 문서 형태 (data=base64) */

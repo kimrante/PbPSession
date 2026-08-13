@@ -84,6 +84,19 @@ service cloud.firestore {
       allow delete: if isMember(resource.data.roomId);
     }
 
+    // 내 세션 목록 — 기기를 바꿔도 참여 중인 방을 찾을 수 있게 하는 색인.
+    // 방 목록(rooms) 열거는 여전히 막혀 있고, 내가 내 것만 적어 두는 자리다.
+    // 남의 목록은 존재조차 확인할 수 없다.
+    match /users/{userId}/rooms/{roomId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      // 이름·참여 시각·마스터 여부만. 이 자리를 임의의 큰 문서로 쓰지 못하게 모양을 못 박는다
+      allow create, update: if signedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly(['name', 'joinedAt', 'master']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() < 200;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -40,7 +40,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     var createLocalRoom: (
         suspend (
             name: String, themeColor: Long, backgroundKey: String, rule: String,
-            remoteId: String, inviteCode: String,
+            remoteId: String, inviteCode: String, isMaster: Boolean,
         ) -> Long
         )? = null
 
@@ -138,12 +138,20 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      */
     fun start() = scope.launch {
         val synced = db.roomDao().listSynced()
-        if (synced.isEmpty()) return@launch
         ensureAuth()
+        // 공유 중인 방이 하나도 없어도 계정에 적힌 세션은 가져와야 한다 —
+        // 앱을 새로 깐 기기가 여기로 이어받는다
+        if (synced.isEmpty()) {
+            adoptAccountRooms()
+            return@launch
+        }
         // 구버전(deviceId 키) 방들에 auth UID 멤버 문서를 1회 보충 — 규칙 배포 후에도 접근 유지
         val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
         val memberFixKey = "memberFix-$myUid"
         val needMemberFix = !prefs.getBoolean(memberFixKey, false)
+        // 세션 목록도 uid마다 한 번 채운다 — 구글 계정으로 갈아타면 새 uid에는 목록이 비어 있다
+        val indexKey = "roomIndex-$myUid"
+        val needIndex = !prefs.getBoolean(indexKey, false)
         val memberFixOk = java.util.concurrent.atomic.AtomicBoolean(true)
         // 방별 독립 코루틴 (S5) — 오프라인의 무기한 await가 다른 방의 attach를 막지 않는다.
         // attach를 먼저 해도 안전: 삭제 대조 기준선이 attach 시점의 uploaded=1 집합이라
@@ -156,6 +164,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                         memberFixOk.set(false)
                     }
                 }
+                if (needIndex) indexRoom(remote, room.name, room.isMaster)
                 attach(room.id, remote)
                 // 아웃박스는 메시지별로 격리 — 1건 실패가 나머지를 막지 않는다 (C7 패턴)
                 db.messageDao().listUnsent(room.id).forEach { message ->
@@ -167,7 +176,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
         registerFcmToken()
         jobs.joinAll()
+        adoptAccountRooms()
         if (needMemberFix && memberFixOk.get()) prefs.edit().putBoolean(memberFixKey, true).apply()
+        if (needIndex) prefs.edit().putBoolean(indexKey, true).apply()
     }
 
     /**
@@ -179,6 +190,27 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             val ok = runCatching { work() }.getOrDefault(false)
             android.os.Handler(android.os.Looper.getMainLooper()).post { onDone(ok) }
         }
+    }
+
+    /**
+     * 내 세션 목록에 이 방을 적어 둔다 — 같은 계정으로 붙은 **다른 기기가 방을 찾는
+     * 유일한 통로**다(방 목록 열거는 규칙이 막는다). 실패해도 이 기기의 동작에는
+     * 영향이 없으므로 호출부를 막지 않는다.
+     */
+    private suspend fun indexRoom(remoteRoomId: String, name: String, isMaster: Boolean) {
+        runCatching {
+            firestore.collection("users").document(myUid)
+                .collection("rooms").document(remoteRoomId)
+                .set(
+                    mapOf(
+                        "name" to name,
+                        "joinedAt" to System.currentTimeMillis(),
+                        // 내가 이 방의 마스터인지 — 다른 기기에서도 GM 권한이 이어져야 한다
+                        "master" to isMaster,
+                    )
+                )
+                .await()
+        }.onFailure { android.util.Log.w("PbpSync", "세션 목록 기록 실패 room=$remoteRoomId", it) }
     }
 
     /**
@@ -530,8 +562,62 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
         attach(roomId, roomDoc.id)
         registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
+        indexRoom(roomDoc.id, room.name, room.isMaster)
         code
     }.getOrNull()
+
+    /**
+     * 같은 계정으로 다른 기기에서 참여 중인 세션을 이 기기에도 만든다.
+     *
+     * 초대 코드로 들어오는 것과 달리 **참여 인사를 남기지 않는다** — 새 사람이 온 게
+     * 아니라 같은 사람이 기기를 하나 더 켠 것이다. 멤버 문서도 이미 내 uid 것이 있다.
+     *
+     * @return 로컬 방 ID. 이미 있으면 그 방
+     */
+    private suspend fun adoptRoom(remoteRoomId: String, isMaster: Boolean): Long? = runCatching {
+        db.roomDao().findByRemoteId(remoteRoomId)?.let { return it.id }
+        val create = createLocalRoom ?: return null
+        val roomDoc = firestore.collection("rooms").document(remoteRoomId).get().await()
+            .takeIf { it.exists() } ?: return null
+        // 계정이 같아도 멤버 문서는 방마다 있어야 한다 (규칙의 접근 근거) — 멱등
+        ensureMembership(remoteRoomId)
+        val roomId = create(
+            roomDoc.getString("name") ?: "공유 캠페인",
+            roomDoc.getLong("themeColor") ?: com.pbp.shared.Protocol.DEFAULT_THEME_COLOR,
+            com.pbp.shared.Protocol.DEFAULT_BACKGROUND,
+            roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
+            remoteRoomId,
+            roomDoc.getString("inviteCode") ?: "",
+            isMaster,
+        )
+        attach(roomId, remoteRoomId) // 초기 스냅샷이 지금까지의 대화를 채운다
+        registerFcmTokenForRoom(remoteRoomId)
+        roomId
+    }.getOrNull()
+
+    /**
+     * 계정에 적혀 있는 세션 중 이 기기에 없는 것을 가져온다.
+     * 구글 계정을 연결하지 않았으면 목록이 곧 내 로컬 방이라 읽지 않는다(읽기 과금).
+     *
+     * @return 새로 가져온 세션 수
+     */
+    suspend fun adoptAccountRooms(): Int = runCatching {
+        if (linkedGoogleEmail == null) return 0
+        ensureAuth()
+        val indexed = firestore.collection("users").document(myUid)
+            .collection("rooms").get().await().documents
+        var adopted = 0
+        indexed.forEach { entry ->
+            val mine = entry.getBoolean("master") ?: false
+            if (db.roomDao().findByRemoteId(entry.id) == null && adoptRoom(entry.id, mine) != null) {
+                adopted++
+            }
+        }
+        adopted
+    }.getOrElse {
+        android.util.Log.w("PbpSync", "계정 세션 가져오기 실패", it)
+        0
+    }
 
     /** 초대 코드로 상대의 방에 참여한다. 성공하면 로컬 방 ID를 돌려준다. */
     suspend fun joinRoom(code: String): Long? {
@@ -576,6 +662,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
             roomDoc.getString("rule") ?: com.pbp.shared.Rules.COC7,
             roomDoc.id,
             code,
+            false,
         )
         // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번)
         val greeting = Message(
@@ -588,6 +675,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         push(roomDoc.id, listOf(insertedGreeting))
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
         registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
+        indexRoom(roomDoc.id, roomDoc.getString("name") ?: "공유 캠페인", isMaster = false)
         // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이라, 이후 그 코드를 손에
         // 넣은 제3자는 방을 찾지 못한다. 참가가 끝난 다음이라야 실패해도 잃는 게 없다
         runCatching {
@@ -996,6 +1084,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 // 때에는 상대의 푸시를 끊고 방에서 쫓아낼 수 있었다
                 firestore.collection("rooms").document(remoteRoomId)
                     .collection("members").document(myUid).delete().await()
+                // 내 세션 목록에서도 뺀다 — 남겨 두면 다음 시작 때 이 방이 되살아난다
+                runCatching {
+                    firestore.collection("users").document(myUid)
+                        .collection("rooms").document(remoteRoomId).delete().await()
+                }
             }
         }
     }

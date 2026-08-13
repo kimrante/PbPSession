@@ -134,7 +134,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     // 라이브 리스트를 IO에서 순회하면 persist의 clear/addAll과 겹쳐 CME (C1) — 사본 사용
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            config.roomsCopy().forEach { runCatching { firestore.ensureMember(it.remoteId) } }
+            config.roomsCopy().forEach { room ->
+                runCatching { firestore.ensureMember(room.remoteId) }
+                // 세션 목록도 함께 — 다른 기기가 이 방을 찾는 유일한 통로다
+                runCatching { firestore.indexRoom(room.remoteId, room.name, room.isMaster) }
+            }
         }
     }
 
@@ -202,6 +206,39 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 이게 없으면 연속 저장에서 옛 스냅샷이 최종본으로 남을 수 있다
         val generation = config.nextSnapshotGeneration()
         scope.launch(Dispatchers.IO) { config.writeSnapshot(json, generation) }
+    }
+
+    /**
+     * 같은 계정으로 다른 기기에서 하던 세션을 이 PC에도 만든다 (연동 4단계).
+     *
+     * 계정이 붙은 뒤에만 읽는다 — 익명일 때는 목록이 곧 내 로컬 방이라 읽어 봐야
+     * 읽기 과금만 는다. 로그인 직후에도 바로 돌도록 accountEmail을 키로 둔다.
+     */
+    LaunchedEffect(accountEmail) {
+        if (accountEmail == null) return@LaunchedEffect
+        val known = rooms.map { it.remoteId }.toSet()
+        val fetched = withContext(Dispatchers.IO) {
+            firestore.listIndexedRooms()
+                .filterNot { it.remoteId in known }
+                .mapNotNull { indexed -> firestore.getRoom(indexed.remoteId)?.to(indexed.isMaster) }
+        }
+        if (fetched.isEmpty()) return@LaunchedEffect
+        rooms = rooms + fetched.map { (meta, isMaster) ->
+            JoinedRoom(
+                remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
+                inviteCode = meta.inviteCode, themeColor = meta.themeColor,
+                // 배경은 공유 대상이 아니다 — 기본으로 시작해 각자 바꾼다 (참여와 동일)
+                backgroundKey = Protocol.DEFAULT_BACKGROUND,
+                // 폰에서 내가 만든 방이면 여기서도 마스터 — GM 권한이 기기를 따라온다
+                isMaster = isMaster,
+                rule = meta.rule,
+                createdAt = meta.createdAt,
+                activeProfileIndex = if (isMaster) 0
+                else profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
+            )
+        }
+        if (selected == null) selected = rooms.firstOrNull()
+        persist()
     }
 
     /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
@@ -1018,6 +1055,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                                 ),
                             )
                         }
+                        firestore.indexRoom(meta.remoteId, meta.name, isMaster = false)
                         // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이다
                         firestore.consumeInviteCode(code.trim().uppercase())
                         // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
@@ -1044,6 +1082,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         if (!firestore.createInviteCode(code, meta.remoteId)) {
                             System.err.println("초대 코드 매핑 생성 실패 — 방 설정에서 다시 공유해야 합니다")
                         }
+                        firestore.indexRoom(meta.remoteId, meta.name, isMaster = true)
                         val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = code, themeColor = meta.themeColor,
@@ -1170,8 +1209,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             firestore.applyGoogleAccount(result.account)
                             // 신원이 바뀌었으니 참여 중인 방마다 멤버를 다시 등록한다 —
                             // 안 하면 규칙상 그 방을 읽지도 쓰지도 못한다
-                            config.roomsCopy().forEach {
-                                runCatching { firestore.ensureMember(it.remoteId) }
+                            config.roomsCopy().forEach { room ->
+                                runCatching { firestore.ensureMember(room.remoteId) }
+                                // 새 uid의 세션 목록은 비어 있다 — 여기서 채워야 폰에서도 보인다
+                                runCatching { firestore.indexRoom(room.remoteId, room.name, room.isMaster) }
                             }
                             result.account.email ?: "구글 계정"
                         }

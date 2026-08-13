@@ -803,6 +803,43 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         roomId
     }.getOrNull()
 
+    /**
+     * 세션을 서버에서 통째로 지운다 — 상대 기기에서도 사라진다.
+     *
+     * 메시지·아바타를 먼저 비우고 마지막에 방 문서를 지운다. 순서가 반대면 방이
+     * 사라진 뒤에는 하위 문서를 지울 권한(멤버 확인)이 없어져 쓰레기가 남는다.
+     * 상대의 멤버 문서는 규칙상 내가 지울 수 없다(SV6) — 방이 없으니 무해하다.
+     *
+     * @return 방 문서까지 지웠으면 true
+     */
+    suspend fun destroyRoom(remoteRoomId: String, knownRemoteIds: List<String>): Boolean =
+        kotlinx.coroutines.withTimeoutOrNull(60_000) {
+            runCatching {
+                ensureAuth()
+                wipeMessagesInternal(remoteRoomId, knownRemoteIds)
+                val room = firestore.collection("rooms").document(remoteRoomId)
+                // 남은 메시지·아바타 정리 — 로컬이 모르는 문서도 여기서 걷는다
+                listOf("messages", "avatars").forEach { name ->
+                    runCatching {
+                        room.collection(name).get().await().documents
+                            .chunked(Protocol.BATCH_SIZE)
+                            .forEach { chunk ->
+                                val batch = firestore.batch()
+                                chunk.forEach { batch.delete(it.reference) }
+                                batch.commit().await()
+                            }
+                    }
+                }
+                runCatching { room.collection("members").document(myUid).delete().await() }
+                runCatching {
+                    firestore.collection("users").document(myUid)
+                        .collection("rooms").document(remoteRoomId).delete().await()
+                }
+                room.delete().await()
+                true
+            }.getOrDefault(false)
+        } ?: false
+
     /** 로그 초기화 중 리스너 재접속용 — attach의 공개 통로 (L1) */
     fun reattach(localRoomId: Long, remoteRoomId: String) = attach(localRoomId, remoteRoomId)
 

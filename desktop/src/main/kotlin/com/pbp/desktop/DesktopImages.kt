@@ -209,3 +209,23 @@ internal fun loadLocalBitmap(path: String): androidx.compose.ui.graphics.ImageBi
         org.jetbrains.skia.Image.makeFromEncoded(java.io.File(path).readBytes())
             .toComposeImageBitmap()
     }.getOrNull()
+
+/**
+ * 계정에 올려 둔 프로필 이미지를 로컬 파일로 내려받는다 (기기 간 프로필 동기화).
+ *
+ * 방 아바타 캐시와 달리 **지워지면 안 되는 파일**이다 — 프로필이 이 경로를 계속
+ * 가리키므로 avatars-local에 둔다(고아 정리는 프로필이 가리키는 경로를 남긴다).
+ */
+internal fun storeUserAvatar(firestore: FirestoreRest, avatarId: String): String? {
+    if (!com.pbp.shared.Identifiers.isValidAvatarId(avatarId)) return null
+    val dir = AppPaths.dir(AppPaths.AVATARS_LOCAL)
+    val file = java.io.File(dir, "profile-$avatarId.img")
+    if (file.exists()) return file.absolutePath
+    val bytes = firestore.fetchUserAvatar(avatarId) ?: return null
+    return runCatching {
+        dir.mkdirs()
+        val tmp = java.io.File(dir, "profile-$avatarId.${java.util.UUID.randomUUID()}.tmp")
+        tmp.writeBytes(bytes)
+        if (tmp.renameTo(file)) file.absolutePath else { tmp.delete(); null }
+    }.getOrNull()
+}

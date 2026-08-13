@@ -590,6 +590,78 @@ class FirestoreRest(
         }
     }
 
+    // ── 계정 프로필 (기기 사이 이어 쓰기) ────────────────────
+
+    /** 프로필 하나를 계정에 올린다. 이미지가 있으면 avatarId로 가리킨다 */
+    fun pushProfile(
+        characterId: String,
+        name: String,
+        emoji: String,
+        nameColor: Long?,
+        bubbleColor: Long?,
+        textColor: Long?,
+        isGm: Boolean,
+        stats: Map<String, String>,
+        avatarId: String?,
+        updatedAt: Long,
+    ): Boolean {
+        val myUid = uid ?: return false
+        return patch(
+            "$base/users/$myUid/profiles/${encodePath(characterId)}?key=$apiKey",
+            gson.toJson(
+                fields(
+                    mapOf(
+                        ProfileSyncKeys.NAME to name,
+                        ProfileSyncKeys.EMOJI to emoji,
+                        ProfileSyncKeys.NAME_COLOR to nameColor,
+                        ProfileSyncKeys.BUBBLE_COLOR to bubbleColor,
+                        ProfileSyncKeys.TEXT_COLOR to textColor,
+                        ProfileSyncKeys.IS_GM to isGm,
+                        // PC 프로필에는 방 구분이 없다 — 늘 방 공용으로 올린다
+                        ProfileSyncKeys.STATS to ProfileStatsCodec.encode(stats),
+                        ProfileSyncKeys.AVATAR_ID to avatarId,
+                        ProfileSyncKeys.UPDATED_AT to updatedAt,
+                    )
+                )
+            ),
+        )
+    }
+
+    fun deleteProfile(characterId: String) {
+        val myUid = uid ?: return
+        deleteDoc("$base/users/$myUid/profiles/${encodePath(characterId)}?key=$apiKey")
+    }
+
+    /** 계정에 있는 프로필 전부 */
+    internal fun listProfiles(): List<RemoteProfile> {
+        val myUid = uid ?: return emptyList()
+        val res = get("$base/users/$myUid/profiles?key=$apiKey") ?: return emptyList()
+        val documents = res.getAsJsonArray("documents") ?: return emptyList()
+        return documents.mapNotNull { element ->
+            runCatching {
+                val doc = element.asJsonObject
+                parseRemoteProfile(doc.docId(), doc.getAsJsonObject("fields"))
+            }.getOrNull()
+        }
+    }
+
+    /** 프로필 이미지를 계정에 올린다 (방 아바타와 같은 모양, 위치만 다르다) */
+    fun uploadUserAvatar(avatarId: String, base64: String): Boolean {
+        val myUid = uid ?: return false
+        return patch(
+            "$base/users/$myUid/avatars/${encodePath(avatarId)}?key=$apiKey",
+            gson.toJson(fields(mapOf("data" to base64))),
+        )
+    }
+
+    /** 계정에 올려 둔 프로필 이미지 */
+    fun fetchUserAvatar(avatarId: String): ByteArray? {
+        val myUid = uid ?: return null
+        val doc = get("$base/users/$myUid/avatars/${encodePath(avatarId)}?key=$apiKey") ?: return null
+        val data = doc.str("data") ?: return null
+        return runCatching { java.util.Base64.getDecoder().decode(data) }.getOrNull()
+    }
+
     /** 이 코드가 가리키는 방. 매핑이 없으면(=참가에 쓰여 사라졌으면) null */
     private fun inviteCodeRoom(code: String): String? =
         get("$base/inviteCodes/${encodePath(code)}?key=$apiKey")?.str("roomId")
@@ -940,6 +1012,32 @@ class FirestoreRest(
      * 지울 수 있는 것은 내 멤버 문서뿐이다 (SV6) — 상대 문서까지 지울 수 있던 때에는
      * 상대의 푸시를 끊고 방에서 쫓아낼 수 있었다.
      */
+    /**
+     * 세션을 서버에서 통째로 지운다 (룸 삭제). 메시지·아바타를 먼저 비우고 마지막에
+     * 방 문서를 지운다 — 순서가 반대면 멤버 확인이 깨져 하위 문서가 남는다.
+     * 상대의 멤버 문서는 규칙상 내가 못 지운다(SV6). 방이 없으니 무해하다.
+     */
+    fun destroyRoom(remoteRoomId: String): Boolean {
+        val myUid = uid ?: return false
+        listOf("messages", "avatars").forEach { name ->
+            var guard = 0
+            while (guard++ < 40) {
+                val res = get("$base/rooms/$remoteRoomId/$name?key=$apiKey&pageSize=300") ?: break
+                val docs = res.getAsJsonArray("documents") ?: break
+                if (docs.size() == 0) break
+                docs.forEach { element ->
+                    runCatching {
+                        val id = element.asJsonObject.docId()
+                        deleteDoc("$base/rooms/$remoteRoomId/$name/${encodePath(id)}?key=$apiKey")
+                    }
+                }
+            }
+        }
+        deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
+        deleteDoc("$base/users/$myUid/rooms/${encodePath(remoteRoomId)}?key=$apiKey")
+        return deleteDoc("$base/rooms/$remoteRoomId?key=$apiKey")
+    }
+
     fun leaveRoom(remoteRoomId: String, deviceId: String) {
         val myUid = uid ?: deviceId
         deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")

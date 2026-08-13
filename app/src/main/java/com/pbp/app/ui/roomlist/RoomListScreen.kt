@@ -97,7 +97,11 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
         repo.createRoom(name.trim().ifEmpty { "새 세션" }, rule = rule)
     }
 
+    /** 이 기기에서만 뺀다 */
     fun deleteRoom(room: ChatRoom) = safeLaunch(app) { repo.deleteRoom(room) }
+
+    /** 서버까지 지운다 — 상대 기기에서도 사라진다 */
+    fun destroyRoom(room: ChatRoom) = safeLaunch(app) { repo.destroyRoom(room) }
 
     fun joinRoom(code: String, onResult: (Long?) -> Unit) = safeLaunch(app) {
         onResult(app.syncManager.joinRoom(code.trim().uppercase()))
@@ -328,16 +332,38 @@ fun RoomListScreen(nav: NavController) {
     deleteTarget?.let { room ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { PbpDialogTitle("방 삭제") },
-            text = { Text("'${room.name}' 방과 모든 메시지, GM 프로필이 삭제됩니다.") },
+            title = { PbpDialogTitle("세션 삭제") },
+            text = {
+                Text(
+                    if (room.remoteId == null) {
+                        "'${room.name}' 세션과 모든 메시지가 이 기기에서 삭제됩니다."
+                    } else {
+                        "'${room.name}' 세션을 어떻게 할까요?\n\n" +
+                            "• 완전 삭제 — 서버의 대화까지 지웁니다. 상대 기기에서도 사라지며 " +
+                            "되돌릴 수 없습니다.\n" +
+                            "• 이 기기에서만 — 서버 기록은 남고, 초대 코드로 다시 참여할 수 있습니다."
+                    }
+                )
+            },
             confirmButton = {
-                PbpDialogButton("삭제", kind = PbpButtonKind.Danger, onClick = {
-                    vm.deleteRoom(room)
-                    deleteTarget = null
-                })
+                PbpDialogButton(
+                    if (room.remoteId == null) "삭제" else "완전 삭제",
+                    kind = PbpButtonKind.Danger,
+                    onClick = {
+                        vm.destroyRoom(room)
+                        deleteTarget = null
+                    },
+                )
             },
             dismissButton = {
-                PbpDialogButton("취소", { deleteTarget = null }, kind = PbpButtonKind.Cancel)
+                if (room.remoteId != null) {
+                    PbpDialogButton("이 기기에서만", {
+                        vm.deleteRoom(room)
+                        deleteTarget = null
+                    }, kind = PbpButtonKind.Cancel)
+                } else {
+                    PbpDialogButton("취소", { deleteTarget = null }, kind = PbpButtonKind.Cancel)
+                }
             },
         )
     }

@@ -88,11 +88,25 @@ class PbpRepository(private val db: AppDatabase) {
         roomId
     }
 
+    /** 이 기기에서만 뺀다 — 서버와 상대 기기는 그대로 */
     suspend fun deleteRoom(room: ChatRoom) {
         syncManager?.detach(room.id)
         // 원격 멤버 문서(FCM 토큰) 정리 — 삭제한 방의 유령 푸시 방지 (P2-2)
         room.remoteId?.let { syncManager?.leaveRoom(it) }
         db.roomDao().delete(room)
+    }
+
+    /**
+     * 세션을 서버에서 통째로 지운다 — **상대 기기에서도 사라진다.**
+     * 공유하지 않은 방이면 그냥 로컬 삭제와 같다.
+     */
+    suspend fun destroyRoom(room: ChatRoom): Boolean {
+        val remoteId = room.remoteId ?: run { deleteRoom(room); return true }
+        syncManager?.detach(room.id)
+        val known = db.messageDao().listRemoteIdsForWipe(room.id)
+        val ok = syncManager?.destroyRoom(remoteId, known) ?: false
+        db.roomDao().delete(room)
+        return ok
     }
 
     /** 방 테마 컬러 변경(누구나 가능) — 공유 방이면 상대에게 실시간 전파 */

@@ -24,6 +24,11 @@ data class Profile(
     val imagePath: String? = null,
     /** 말풍선 안 글씨색(ARGB). null이면 테마 기본 잉크 */
     val textColor: Long? = null,
+    /**
+     * 마지막으로 고친 시각. 같은 프로필을 두 기기에서 고쳤을 때 **나중 것을 남기는**
+     * 기준이다. 0이면 아직 계정에 올린 적 없는 프로필.
+     */
+    val updatedAt: Long = 0,
 )
 
 /**

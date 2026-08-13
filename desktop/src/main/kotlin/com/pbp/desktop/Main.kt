@@ -227,6 +227,86 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
 
     /**
+     * 프로필 하나를 계정에 올린다 (만들거나 고친 직후).
+     * 이미지가 있으면 축소본을 계정 아바타로 함께 올려 id로 가리킨다.
+     */
+    fun pushProfile(profile: Profile) {
+        if (accountEmail == null) return
+        val characterId = profile.characterId ?: return
+        scope.launch(Dispatchers.IO) {
+            val avatarId = profile.imagePath?.let { path ->
+                encodedAvatarFor(path)?.let { (bytes, hash) ->
+                    val base64 = java.util.Base64.getEncoder().encodeToString(bytes)
+                    if (firestore.uploadUserAvatar(hash, base64)) hash else null
+                }
+            }
+            firestore.pushProfile(
+                characterId = characterId,
+                name = profile.name,
+                emoji = profile.emoji,
+                nameColor = profile.nameColor,
+                bubbleColor = profile.bubbleColor,
+                textColor = profile.textColor,
+                isGm = profile.isGm,
+                stats = profile.stats.orEmpty(),
+                avatarId = avatarId,
+                updatedAt = profile.updatedAt,
+            )
+        }
+    }
+
+    /** 고친 시각을 찍어 저장하고 계정에도 올린다 — 저장 경로를 한 곳으로 모은다 */
+    fun saveProfiles(updated: List<Profile>, changed: Profile?) {
+        profiles = updated
+        persist()
+        changed?.let { pushProfile(it) }
+    }
+
+    /**
+     * 계정의 프로필을 이 PC로 가져온다.
+     *
+     * **방 전용 프로필은 건너뛴다** — PC의 프로필 목록에는 방 구분이 없어서, 가져오면
+     * 폰의 방별 캐릭터가 모든 방에 섞여 버린다. 방 공용 프로필만 따라온다.
+     *
+     * @return 새로 오거나 갱신된 프로필 수
+     */
+    suspend fun syncProfiles(): Int {
+        if (accountEmail == null) return 0
+        val remote = withContext(Dispatchers.IO) { firestore.listProfiles() }
+            .filter { it.roomId == null }
+        if (remote.isEmpty()) return 0
+        var changed = 0
+        val byId = profiles.associateBy { it.characterId }
+        val incoming = remote.mapNotNull { entry ->
+            val local = byId[entry.characterId]
+            if (local != null && local.updatedAt >= entry.updatedAt) return@mapNotNull null
+            val imagePath = entry.avatarId?.let { avatarId ->
+                withContext(Dispatchers.IO) { storeUserAvatar(firestore, avatarId) }
+            } ?: local?.imagePath
+            changed++
+            (local ?: Profile(characterId = entry.characterId, name = entry.name)).copy(
+                characterId = entry.characterId,
+                name = entry.name,
+                emoji = entry.emoji,
+                nameColor = entry.nameColor ?: 0xFFFFC46B,
+                bubbleColor = entry.bubbleColor ?: 0xFFFFD9A8,
+                textColor = entry.textColor,
+                isGm = entry.isGm,
+                stats = entry.stats,
+                imagePath = imagePath,
+                updatedAt = entry.updatedAt,
+            )
+        }
+        if (incoming.isEmpty()) return 0
+        val merged = profiles.map { existing ->
+            incoming.firstOrNull { it.characterId == existing.characterId } ?: existing
+        } + incoming.filterNot { fresh -> profiles.any { it.characterId == fresh.characterId } }
+        profiles = merged
+        persist()
+        return changed
+    }
+
+    /**
      * 같은 계정으로 다른 기기에서 하던 세션을 이 PC에도 만든다 (연동 4단계).
      *
      * 계정이 붙은 뒤에만 읽는다 — 익명일 때는 목록이 곧 내 로컬 방이라 읽어 봐야
@@ -248,6 +328,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 .mapNotNull { entry -> firestore.getRoom(entry.remoteId)?.to(entry.isMaster) }
         }
         if (fetched.isEmpty()) {
+            // 세션은 다 있어도 프로필은 새로 왔을 수 있다
+            val pulled = syncProfiles()
+            if (pulled > 0) return "프로필 ${pulled}개를 가져왔습니다"
             // 목록에 있는 게 전부 이 PC 것이면, 다른 기기가 아직 안 올린 것이다 —
             // "이미 다 있습니다"로만 말하면 정상처럼 읽혀 원인을 못 찾는다
             return "계정 목록 ${indexed.size}개가 모두 이 PC 세션입니다. " +
@@ -274,12 +357,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         withContext(Dispatchers.IO) {
             fetched.forEach { (meta, _) -> runCatching { firestore.ensureMember(meta.remoteId) } }
         }
-        return "세션 ${fetched.size}개를 불러왔습니다"
+        val pulled = syncProfiles()
+        return if (pulled > 0) "세션 ${fetched.size}개와 프로필 ${pulled}개를 불러왔습니다"
+        else "세션 ${fetched.size}개를 불러왔습니다"
     }
 
-    // 로그인 직후·시작 시 자동으로 한 번 (버튼은 같은 일을 손으로 다시 시킨다)
+    // 로그인 직후·시작 시 자동으로 한 번 (버튼은 같은 일을 손으로 다시 시킨다).
+    // 방을 먼저 — 방 전용 프로필은 방이 있어야 자리를 잡는다
     LaunchedEffect(accountEmail) {
-        if (accountEmail != null) adoptAccountRooms()
+        if (accountEmail != null) {
+            adoptAccountRooms()
+            syncProfiles()
+        }
     }
 
     /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
@@ -635,6 +724,23 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
     }
 
+    /**
+     * 세션을 서버에서 통째로 지운다 — **상대 기기에서도 사라진다.**
+     *
+     * 메시지·아바타를 먼저 비우고 마지막에 방 문서를 지운다. 순서가 반대면 방이
+     * 사라진 뒤에는 하위 문서를 지울 권한(멤버 확인)이 없어져 쓰레기가 남는다.
+     */
+    fun destroyRoom(room: JoinedRoom) {
+        rooms = rooms.filterNot { it.remoteId == room.remoteId }
+        if (selected?.remoteId == room.remoteId) selected = rooms.firstOrNull()
+        roomSessions.remove(room.remoteId)
+        persist()
+        scope.launch(Dispatchers.IO) {
+            RoomCacheStore.delete(room.remoteId)
+            runCatching { firestore.destroyRoom(room.remoteId) }
+        }
+    }
+
     /** HTML 로그 내보내기 — 모바일과 동일 형식. 아바타는 방 avatars 문서에서 받아 내장 */
     /** 선택 구간(messages 인덱스). 시작점이 없으면 null = 캡처 모드 아님 */
     val captureIdx: IntRange? = remember(messages, captureStart, captureEnd) {
@@ -940,6 +1046,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     /** 프로필 삭제 — 전역 목록의 인덱스를 참조하는 각 방의 활성 인덱스도 함께 재매핑 */
     fun deleteProfileAt(index: Int) {
         if (profiles.size <= 1) return
+        // 계정에서도 뺀다 — 남겨 두면 다른 기기가 다시 내려받아 되살아난다
+        profiles.getOrNull(index)?.characterId?.let { characterId ->
+            if (accountEmail != null) {
+                scope.launch(Dispatchers.IO) { firestore.deleteProfile(characterId) }
+            }
+        }
         val newProfiles = profiles.filterIndexed { i, _ -> i != index }
         rooms = rooms.map { r ->
             val idx = r.activeProfileIndex
@@ -1184,8 +1296,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             onColorUsed = ::rememberColor,
             onDismiss = { overlay = null },
             onSave = { profile ->
-                profiles = profiles + profile
-                persist()
+                val stamped = profile.copy(updatedAt = System.currentTimeMillis())
+                saveProfiles(profiles + stamped, stamped)
                 overlay = null
             },
         )
@@ -1339,11 +1451,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     // 메시지 편집/삭제 팝업 — 앱의 길게 누르기 액션 시트와 동일 흐름
     leaveTarget?.let { target ->
-        OverlayScaffold("방 나가기", onDismiss = { leaveTarget = null }) {
+        OverlayScaffold("세션 정리", onDismiss = { leaveTarget = null }) {
             Text(
-                "'${target.name}' 방을 이 PC의 목록에서 제거합니다.\n" +
-                    "서버 로그는 남아 있으며, 초대 코드로 다시 참여할 수 있습니다.",
-                fontSize = 13.sp, color = Tokens.InkDim,
+                "'${target.name}' 세션을 어떻게 할까요?",
+                fontSize = 13.sp, color = Tokens.Ink,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "나가기 — 이 PC의 목록에서만 뺍니다. 서버 로그는 남고 초대 코드로 " +
+                    "다시 참여할 수 있습니다.\n" +
+                    "완전 삭제 — 서버의 대화까지 지웁니다. 상대 기기에서도 사라지며 " +
+                    "되돌릴 수 없습니다.",
+                fontSize = 11.sp, color = Tokens.InkDim,
             )
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1352,6 +1471,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     leaveTarget = null
                 }
                 GhostButton("취소", Modifier.weight(1f)) { leaveTarget = null }
+            }
+            Spacer(Modifier.height(8.dp))
+            // 되돌릴 수 없는 쪽은 한 칸 떼어 둔다 — 손이 미끄러져 눌릴 자리가 아니다
+            GhostButton("완전 삭제 (서버까지)", Modifier.fillMaxWidth()) {
+                destroyRoom(target)
+                leaveTarget = null
             }
         }
     }
@@ -1404,8 +1529,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onColorUsed = ::rememberColor,
                 onDismiss = { editProfileIndex = null },
                 onSave = { updated ->
-                    profiles = profiles.mapIndexed { i, p -> if (i == idx) updated else p }
-                    persist()
+                    val stamped = updated.copy(updatedAt = System.currentTimeMillis())
+                    saveProfiles(
+                        profiles.mapIndexed { i, p -> if (i == idx) stamped else p },
+                        stamped,
+                    )
                     editProfileIndex = null
                 },
                 editing = prof,

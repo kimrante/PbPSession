@@ -413,12 +413,22 @@ class PbpRepository(private val db: AppDatabase) {
         }
 
     suspend fun saveProfile(profile: CharacterProfile) {
-        if (profile.id == 0L) db.profileDao().insert(profile) else db.profileDao().update(profile)
+        // 고친 시각을 남긴다 — 다른 기기와 부딪히면 나중 것이 남는 기준이 된다
+        val stamped = profile.copy(updatedAt = System.currentTimeMillis())
+        val saved = if (stamped.id == 0L) {
+            stamped.copy(id = db.profileDao().insert(stamped))
+        } else {
+            stamped.also { db.profileDao().update(it) }
+        }
+        syncManager?.pushProfile(saved)
     }
 
-    suspend fun deleteProfile(profile: CharacterProfile) = db.withTransaction {
-        db.roomDao().clearActiveProfile(profile.id)
-        db.profileDao().delete(profile)
+    suspend fun deleteProfile(profile: CharacterProfile) {
+        db.withTransaction {
+            db.roomDao().clearActiveProfile(profile.id)
+            db.profileDao().delete(profile)
+        }
+        syncManager?.deleteProfileRemote(profile.characterId)
     }
 
     private suspend fun pushIfSynced(roomId: Long, messages: List<Message>) {

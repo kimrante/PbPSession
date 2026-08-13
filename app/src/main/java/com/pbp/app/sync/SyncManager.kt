@@ -47,6 +47,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     /** 프로필 이미지 업로드·복원 (B5로 분리) */
     private val avatars by lazy { AvatarStore(context) { firestore } }
 
+    /** 캐릭터 프로필을 계정에 보관해 기기 사이로 옮긴다 */
+    private val profileSync by lazy { ProfileSync(db, { firestore }, avatars) }
+
     /** 상대 메시지 수신 시 호출(알림용, 두 번째 인자는 원격 방 ID). PbpApp에서 주입한다. */
     var onIncomingMessage: ((Message, String) -> Unit)? = null
 
@@ -218,6 +221,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // 앱을 새로 깐 기기가 여기로 이어받는다
         if (synced.isEmpty()) {
             adoptAccountRooms()
+            syncProfiles()
             return@launch
         }
         // 구버전(deviceId 키) 방들에 auth UID 멤버 문서를 1회 보충 — 규칙 배포 후에도 접근 유지
@@ -257,6 +261,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         registerFcmToken()
         jobs.joinAll()
         adoptAccountRooms()
+        syncProfiles()
         if (needMemberFix && memberFixOk.get()) prefs.edit().putBoolean(memberFixKey, true).apply()
         if (needIndex && indexOk.get()) prefs.edit().putBoolean(indexKey, true).apply()
     }
@@ -675,6 +680,39 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         registerFcmTokenForRoom(remoteRoomId)
         roomId
     }.getOrNull()
+
+    /** 프로필 하나를 계정에 올린다 (만들거나 고친 직후) */
+    fun pushProfile(profile: com.pbp.app.data.CharacterProfile) = scope.launch {
+        if (linkedGoogleEmail == null) return@launch
+        ensureAuth()
+        profileSync.push(myUid, profile)
+    }
+
+    /** 지운 프로필은 계정에서도 뺀다 */
+    fun deleteProfileRemote(characterId: String) = scope.launch {
+        if (linkedGoogleEmail == null) return@launch
+        ensureAuth()
+        profileSync.delete(myUid, characterId)
+    }
+
+    /**
+     * 계정의 프로필을 이 기기로 가져오고, 아직 안 올린 내 프로필은 올린다.
+     *
+     * 방을 먼저 가져온 뒤에 불러야 한다 — 방 전용 프로필은 그 방이 있어야 자리를 잡는다.
+     *
+     * @return 새로 오거나 갱신된 프로필 수
+     */
+    suspend fun syncProfiles(): Int {
+        if (linkedGoogleEmail == null) return 0
+        ensureAuth()
+        val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+        val key = "profilesPushed-$myUid"
+        if (!prefs.getBoolean(key, false)) {
+            profileSync.pushAll(myUid)
+            prefs.edit().putBoolean(key, true).apply()
+        }
+        return profileSync.pull(myUid)
+    }
 
     /**
      * 계정에 적혀 있는 세션 중 이 기기에 없는 것을 가져온다.

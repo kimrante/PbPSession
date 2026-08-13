@@ -75,6 +75,11 @@ data class CharacterProfile(
     val textColor: Long? = null,
     /** 캐릭터별 value 목록(ProfileStats 인코딩). 메시지의 {값이름}이 값으로 치환된다 */
     val stats: String = "",
+    /**
+     * 마지막으로 고친 시각. 기기 두 곳에서 같은 프로필을 고쳤을 때 **나중 것을 남기는**
+     * 기준이다. 0이면 아직 한 번도 올린 적 없는 프로필.
+     */
+    val updatedAt: Long = 0,
 )
 
 /**

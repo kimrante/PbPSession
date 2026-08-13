@@ -98,6 +98,14 @@ interface ProfileDao {
     @Query("SELECT * FROM profiles WHERE id = :id")
     suspend fun get(id: Long): CharacterProfile?
 
+    /** 계정 동기화용 — 전부 */
+    @Query("SELECT * FROM profiles")
+    suspend fun all(): List<CharacterProfile>
+
+    /** 기기를 넘어 같은 캐릭터를 찾는 유일한 기준 */
+    @Query("SELECT * FROM profiles WHERE characterId = :characterId LIMIT 1")
+    suspend fun byCharacterId(characterId: String): CharacterProfile?
+
     @Insert
     suspend fun insert(profile: CharacterProfile): Long
 

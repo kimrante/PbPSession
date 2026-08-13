@@ -388,15 +388,16 @@ private fun GoogleAccountRow() {
                                     email = result.email ?: sync.linkedGoogleEmail
                                     // 다른 기기에서 하던 세션이 있으면 지금 가져온다
                                     // (연결 직후에 보이지 않으면 됐는지 알 수가 없다)
-                                    val adopted = sync.adoptAccountRooms()
-                                    if (adopted > 0) note = "다른 기기의 세션 ${adopted}개를 가져왔습니다"
+                                    note = summarize(
+                                        sync.adoptAccountRooms(), sync.syncProfiles(),
+                                    )
                                 }
                                 is com.pbp.app.sync.GoogleAccountLinker.Result.Recovered -> {
                                     // 덧붙이지는 못했지만 원래 계정을 되찾았다 — 결과는 같다
                                     email = result.email ?: sync.linkedGoogleEmail
                                     note = "이 계정으로 쓰던 신원을 되찾았습니다"
-                                    val adopted = sync.adoptAccountRooms()
-                                    if (adopted > 0) note = "다른 기기의 세션 ${adopted}개를 가져왔습니다"
+                                    summarize(sync.adoptAccountRooms(), sync.syncProfiles())
+                                        ?.let { note = it }
                                 }
                                 com.pbp.app.sync.GoogleAccountLinker.Result.NoAccount ->
                                     note = "기기에 구글 계정이 없습니다"
@@ -433,4 +434,12 @@ private fun signingHint(context: android.content.Context, message: String): Stri
             .joinToString(":") { "%02X".format(it) }
     }.getOrNull() ?: return ""
     return "\n\n이 빌드의 SHA-1이 Firebase 프로젝트에 등록돼 있어야 합니다:\n$sha1"
+}
+
+/** 연결 직후 무엇을 가져왔는지 한 줄로. 가져온 게 없으면 null (기존 문구를 덮지 않는다) */
+private fun summarize(rooms: Int, profiles: Int): String? = when {
+    rooms > 0 && profiles > 0 -> "다른 기기의 세션 ${rooms}개와 프로필 ${profiles}개를 가져왔습니다"
+    rooms > 0 -> "다른 기기의 세션 ${rooms}개를 가져왔습니다"
+    profiles > 0 -> "다른 기기의 프로필 ${profiles}개를 가져왔습니다"
+    else -> null
 }

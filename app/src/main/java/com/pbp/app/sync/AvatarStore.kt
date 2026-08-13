@@ -55,13 +55,31 @@ internal class AvatarStore(
         return bytes
     }
 
-    suspend fun ensureUploaded(remoteRoomId: String, imagePath: String): String? {
+    /** 방 아바타 — 상대가 내 말풍선 옆 얼굴을 받아 간다 */
+    private fun roomAvatars(remoteRoomId: String) =
+        firestore().collection("rooms").document(remoteRoomId).collection("avatars")
+
+    /** 계정 아바타 — 내 다른 기기가 프로필 이미지를 받아 간다 (상대는 못 읽는다) */
+    private fun userAvatars(uid: String) =
+        firestore().collection("users").document(uid).collection("avatars")
+
+    suspend fun ensureUploaded(remoteRoomId: String, imagePath: String): String? =
+        upload(roomAvatars(remoteRoomId), "room:$remoteRoomId", imagePath)
+
+    /** 프로필 이미지를 계정에 올린다 — 기기 간 프로필 동기화용 */
+    suspend fun ensureUploadedForUser(uid: String, imagePath: String): String? =
+        upload(userAvatars(uid), "user:$uid", imagePath)
+
+    private suspend fun upload(
+        collection: com.google.firebase.firestore.CollectionReference,
+        scopeKey: String,
+        imagePath: String,
+    ): String? {
         val bytes = avatarBytes(imagePath) ?: return null
         val hash = md5(bytes)
-        val key = "$remoteRoomId/$hash"
+        val key = "$scopeKey/$hash"
         if (key !in uploadedAvatars) {
-            firestore().collection("rooms").document(remoteRoomId)
-                .collection("avatars").document(hash)
+            collection.document(hash)
                 .set(mapOf("data" to Base64.encodeToString(bytes, Base64.NO_WRAP)))
                 .await()
             uploadedAvatars += key
@@ -70,15 +88,23 @@ internal class AvatarStore(
         return hash
     }
 
-    suspend fun resolve(remoteRoomId: String, avatarId: String): String? {
+    /** 계정에 올려 둔 프로필 이미지를 파일로 (내 다른 기기에서 받는다) */
+    suspend fun resolveForUser(uid: String, avatarId: String): String? =
+        download(userAvatars(uid), avatarId)
+
+    suspend fun resolve(remoteRoomId: String, avatarId: String): String? =
+        download(roomAvatars(remoteRoomId), avatarId)
+
+    private suspend fun download(
+        collection: com.google.firebase.firestore.CollectionReference,
+        avatarId: String,
+    ): String? {
         // 상대가 보낸 값이 그대로 파일 이름·문서 경로가 되는 자리다. 보내는 쪽은 늘
         // md5 hex라 그 밖의 값은 지어낸 것 — 경로를 벗어나기 전에 막는다 (SV1)
         if (!com.pbp.shared.Identifiers.isValidAvatarId(avatarId)) return null
         val file = File(context.filesDir, "avatars/remote-$avatarId.jpg")
         if (file.exists()) return file.absolutePath
-        val doc = firestore().collection("rooms").document(remoteRoomId)
-            .collection("avatars").document(avatarId).get().await()
-        val data = doc.getString("data") ?: return null
+        val data = collection.document(avatarId).get().await().getString("data") ?: return null
         file.parentFile?.mkdirs()
         // 임시 파일에 쓴 뒤 교체 — 쓰다 중단되면 깨진 파일이 영구 캐시되는 것 방지
         val tmp = File(file.parentFile, "remote-$avatarId.tmp")

@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatRoom::class, CharacterProfile::class, Message::class],
-    version = 12,
+    version = 13,
     // 마이그레이션이 10개인데 스키마 JSON이 없어 MigrationTestHelper를 쓸 수 없었다 (I1).
     // 내보낸 스키마는 schemas/에 커밋한다 — 다음 버전부터 마이그레이션 테스트가 가능해진다
     exportSchema = true,
@@ -108,7 +108,14 @@ abstract class AppDatabase : RoomDatabase() {
          * 캐릭터 고유 id — 판정 대상을 이름 대신 이 값으로 가린다.
          * 기존 행은 randomblob로 행마다 다른 값을 채운다(SQLite가 행별로 평가한다).
          */
-        private val MIGRATION_11_12 = object : Migration(11, 12) {
+        /** 프로필 동기화 — 어느 쪽이 최신인지 가릴 기준이 필요하다 */
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE profiles ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE profiles ADD COLUMN characterId TEXT NOT NULL DEFAULT ''")
                 db.execSQL("UPDATE profiles SET characterId = lower(hex(randomblob(16)))")
@@ -137,7 +144,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_10_11, MIGRATION_11_12,
+                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                 )
                 .build()
     }

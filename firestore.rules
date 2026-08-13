@@ -29,7 +29,9 @@ service cloud.firestore {
       allow update: if isMember(roomId) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['themeColor', 'logsClearedAt', 'inviteCode', 'name', 'rule']);
-      allow delete: if false;
+      // 세션 완전 삭제 — 멤버 누구나. '로그 초기화가 상대 메시지도 지운다'와 같은
+      // 정책이다(2인이 서로 신뢰하는 방). 앱은 지우기 전에 메시지·아바타를 먼저 비운다
+      allow delete: if isMember(roomId);
 
       match /messages/{messageId} {
         allow read: if isMember(roomId);
@@ -94,6 +96,31 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(['name', 'joinedAt', 'master']) &&
         request.resource.data.name is string &&
         request.resource.data.name.size() < 200;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 내 캐릭터 프로필 — 기기를 바꿔도 쓰던 프로필 그대로 이어 쓰기 위한 보관소.
+    // **상대에게는 보이지 않는다** (판정 후보 목록에 나가는 요약은 members 문서에 따로 있다).
+    match /users/{userId}/profiles/{profileId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'name', 'emoji', 'nameColor', 'bubbleColor', 'textColor',
+          'isGm', 'roomId', 'stats', 'avatarId', 'updatedAt'
+        ]) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() < 200;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // 프로필 이미지 — 방 아바타와 같은 모양(base64 한 필드)이지만 계정에 딸린다.
+    // 방과 달리 상대가 읽지 않으므로 내 것만 열어 둔다
+    match /users/{userId}/avatars/{avatarId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly(['data']) &&
+        request.resource.data.data is string &&
+        request.resource.data.data.size() < 700000;
       allow delete: if signedIn() && request.auth.uid == userId;
     }
 

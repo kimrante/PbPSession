@@ -11,9 +11,13 @@
     <string name="firebase_api_key" translatable="false">AIzaSyCTgWzPb62iJ5rASCZ6WEiKi7kwNPVC2m4</string>
     <string name="firebase_sender_id" translatable="false">573066454943</string>
     <!--
-      구글 로그인용 웹 클라이언트 ID. Android 클라이언트 ID가 아니라 이것을 쓴다
-      (Credential Manager가 "이 ID 토큰을 누구에게 줄 것인가"로 받는 값).
-      비밀이 아니다 — 클라이언트 식별자다.
+      구글 로그인용 **웹** 클라이언트 ID (Firebase 콘솔 → Authentication → Google →
+      웹 SDK 구성). 비밀이 아니라 클라이언트 식별자다.
+
+      **Android 클라이언트 ID를 넣으면 안 된다.** 넣으면 계정 선택 단계에서
+      "[28444] Developer console is not set up correctly"로 실패한다 — 콘솔에는
+      아무 이상이 없어 보여서 원인을 찾기 어렵다. 두 값을 가르는 방법:
+      Android 클라이언트에는 패키지 이름·SHA-1이 붙어 있고 시크릿이 없다.
     -->
-    <string name="firebase_web_client_id" translatable="false">573066454943-tfsqo682drlboohonc9qgovcu7586lkl.apps.googleusercontent.com</string>
+    <string name="firebase_web_client_id" translatable="false">573066454943-7pg9ds9n7rb99q6b34sqmqcni4k4cinm.apps.googleusercontent.com</string>
 </resources>

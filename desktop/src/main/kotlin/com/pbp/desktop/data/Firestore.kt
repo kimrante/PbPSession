@@ -388,7 +388,9 @@ class FirestoreRest(
             } ?: return null
             if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
         }.getOrNull() ?: return null
-        val doc = res.firstOrNull { it.asJsonObject.has("document") }
+        // 이 한 줄만 runCatching 밖이었다 (DC4) — 응답 요소가 객체가 아니면 여기서 던져
+        // scope의 자식이 죽고, 그 스코프의 전송·편집·참여가 통째로 무력화된다
+        val doc = res.firstOrNull { runCatching { it.asJsonObject.has("document") }.getOrDefault(false) }
             ?.asJsonObject?.getAsJsonObject("document") ?: return null
         return roomMeta(doc)
     }
@@ -621,6 +623,32 @@ class FirestoreRest(
         getRoomInternal(remoteId)
     }.getOrNull()
 
+    /**
+     * 방 조회 결과 — **없음(404)과 일시 오류를 가른다** (DC7).
+     * 둘을 똑같이 null로 뭉개면, 서버에서 방이 사라져도 폴이 조용히 실패만 반복하고
+     * 화면에는 옛 메시지가 그대로 남아 사용자가 알 길이 없다.
+     */
+    sealed interface RoomLookup {
+        data class Found(val meta: RoomMeta) : RoomLookup
+        data object NotFound : RoomLookup
+        data object Error : RoomLookup
+    }
+
+    fun lookupRoom(remoteId: String): RoomLookup = runCatching {
+        val url = "$base/rooms/$remoteId?key=$apiKey"
+        val res = sendWithRetry {
+            HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout).auth().GET().build()
+        } ?: return RoomLookup.Error
+        when {
+            res.statusCode() == 404 -> RoomLookup.NotFound
+            res.statusCode() !in 200..299 -> RoomLookup.Error
+            else -> {
+                val doc = JsonParser.parseString(res.body()).asJsonObject
+                RoomLookup.Found(roomMeta(doc))
+            }
+        }
+    }.getOrDefault(RoomLookup.Error)
+
     private fun getRoomInternal(remoteId: String): RoomMeta? =
         get("$base/rooms/$remoteId?key=$apiKey")?.let { roomMeta(it) }
 
@@ -633,18 +661,20 @@ class FirestoreRest(
         backgroundKey = doc.str("backgroundKey"),
         rule = doc.str("rule"),
         createdAt = doc.long("createdAt"),
-        logsClearedAt = doc.long(Protocol.Field.LOGS_CLEARED_AT),
+        // 서버 시각(timestamp)으로 적힌다 (DC5). 그전에 적힌 숫자 값도 그대로 읽는다
+        logsClearedAt = doc.timestamp(Protocol.Field.LOGS_CLEARED_AT)
+            ?: doc.long(Protocol.Field.LOGS_CLEARED_AT),
     )
 
     /**
      * "이 시각 이전 로그를 비웠다"를 방 문서에 남긴다 (A6) — 폴링만 쓰는 상대가
      * 문서 삭제를 볼 수 없어서 필요한 표식. 이미 받아 오는 방 메타에 얹으므로 읽기가 늘지 않는다.
      */
-    fun setLogsClearedAt(remoteRoomId: String, millis: Long): Boolean = patch(
-        "$base/rooms/$remoteRoomId?key=$apiKey" +
-            "&updateMask.fieldPaths=${Protocol.Field.LOGS_CLEARED_AT}",
-        gson.toJson(fields(mapOf(Protocol.Field.LOGS_CLEARED_AT to millis))),
-    )
+    fun setLogsClearedAt(remoteRoomId: String): Boolean =
+        commitWithServerValue(
+            path = "rooms/$remoteRoomId",
+            serverTimeField = Protocol.Field.LOGS_CLEARED_AT,
+        )
 
     fun createRoom(name: String, inviteCode: String, rule: String): RoomMeta? {
         val body = fields(
@@ -702,12 +732,15 @@ class FirestoreRest(
             val url = "$base/rooms/$remoteRoomId/messages?key=$apiKey&pageSize=300&orderBy=createdAt" +
                 (pageToken?.let { "&pageToken=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: "")
             // 페이지 하나라도 실패하면 부분 결과로 커서를 오염시키지 않도록 에러로 처리.
-            // 파싱 예외도 오류로 — 기형 응답 1건이 폴링을 영구 정지시키지 않게 (C2)
             val res = get(url) ?: return null
             runCatching {
                 res.getAsJsonArray("documents")?.forEach { el ->
-                    // docId가 비면(기형 name) LazyColumn 키 충돌·dedup 오염 — 버린다
-                    parseMessage(el.asJsonObject).takeIf { it.docId.isNotEmpty() }?.let { out += it }
+                    // **문서 하나씩** 감싼다 (DC2) — 배치째 감싸면 기형 문서 1건이 이 방의
+                    // 수신을 영구 정지시킨다(커서가 못 나가 매 폴이 같은 문서에서 또 터진다).
+                    // docId가 비면(기형 name) LazyColumn 키 충돌·dedup 오염 — 함께 버린다
+                    runCatching {
+                        parseMessage(el.asJsonObject).takeIf { it.docId.isNotEmpty() }
+                    }.getOrNull()?.let { out += it }
                 }
                 pageToken = res.get("nextPageToken")?.takeIf { it.isJsonPrimitive }?.asString
             }.getOrElse { return null }
@@ -764,13 +797,14 @@ class FirestoreRest(
             } ?: return null
             if (r.statusCode() in 200..299) JsonParser.parseString(r.body()).asJsonArray else null
         }.getOrNull() ?: return null
-        // 파싱 예외도 오류(null)로 — 커서 미전진 계약(P1-6)이 흡수한다 (C2)
-        return runCatching {
-            res.mapNotNull { el ->
+        // 문서 하나씩 감싼다 (DC2) — 기형 문서 1건은 건너뛰고 나머지와 커서는 살린다.
+        // 네트워크·HTTP 오류는 위에서 이미 null이라 커서 미전진 계약(P1-6)은 그대로다
+        return res.mapNotNull { el ->
+            runCatching {
                 el.asJsonObject.getAsJsonObject("document")?.let { parseMessage(it) }
                     ?.takeIf { it.docId.isNotEmpty() } // 기형 문서 방어 — 위 listMessages와 동일
-            }
-        }.getOrNull()
+            }.getOrNull()
+        }
     }
 
     /**
@@ -836,6 +870,42 @@ class FirestoreRest(
                     },
                 )
             }
+        }
+        val body = JsonObject().apply {
+            add("writes", com.google.gson.JsonArray().apply { add(write) })
+        }
+        return post("$base:commit?key=$apiKey", gson.toJson(body)) != null
+    }
+
+    /**
+     * 값 없이 **서버 시각 한 필드만** 세운다 (DC5).
+     *
+     * 로컬 시계로 적으면 시계가 앞선 기기에서 초기화했을 때, 직후에 올라가는 안내
+     * 메시지의 서버 시각이 그보다 앞서 **"로그가 초기화되었습니다" 안내만 걸러진다.**
+     * 재는 자와 재이는 자를 둘 다 서버 시각으로 맞춘다.
+     */
+    private fun commitWithServerValue(path: String, serverTimeField: String): Boolean {
+        val write = JsonObject().apply {
+            add(
+                "update",
+                JsonObject().apply { addProperty("name", "$documentRoot/$path") },
+            )
+            add(
+                "updateTransforms",
+                com.google.gson.JsonArray().apply {
+                    add(
+                        JsonObject().apply {
+                            addProperty("fieldPath", serverTimeField)
+                            addProperty("setToServerValue", "REQUEST_TIME")
+                        }
+                    )
+                },
+            )
+            // 빈 마스크 — 이 쓰기로 바꾸는 값은 변환뿐이라 다른 필드를 건드리지 않는다
+            add(
+                "updateMask",
+                JsonObject().apply { add("fieldPaths", com.google.gson.JsonArray()) },
+            )
         }
         val body = JsonObject().apply {
             add("writes", com.google.gson.JsonArray().apply { add(write) })

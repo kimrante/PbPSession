@@ -715,7 +715,12 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         // 그쪽 메타 폴이 자기 캐시를 비우게 한다 (A6). 실패해도 삭제 자체는 성공이다
         runCatching {
             firestore.collection("rooms").document(remoteRoomId)
-                .update(Protocol.Field.LOGS_CLEARED_AT, System.currentTimeMillis())
+                // 로컬 시계로 적으면 시계가 앞선 기기에서 초기화했을 때 안내 메시지가
+                // 상대 화면에서 걸러진다 (DC5) — 재는 자를 서버 시각으로 통일
+                .update(
+                    Protocol.Field.LOGS_CLEARED_AT,
+                    com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                )
                 .await()
         }
         true

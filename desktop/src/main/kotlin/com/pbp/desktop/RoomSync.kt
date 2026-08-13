@@ -14,7 +14,19 @@ import com.pbp.shared.Protocol
 internal class RoomSession {
     var messages: List<Message> = emptyList()
     var lastCreatedAt: Long = 0L
-    val deletedDocIds: MutableSet<String> = mutableSetOf()
+    /**
+     * 삭제한 문서 id — 폴이 되살리지 못하게 막는 목록. 끝없이 늘면 폴마다 도는
+     * 대조 비용이 서서히 는다(DC8). 오래된 것부터 밀어내는 상한을 둔다 —
+     * 억제가 필요한 것은 최근 삭제뿐이고, 그보다 옛 문서는 이미 서버에서 사라졌다.
+     */
+    val deletedDocIds: MutableSet<String> =
+        object : java.util.LinkedHashSet<String>() {
+            override fun add(element: String): Boolean {
+                val added = super.add(element)
+                while (size > DELETED_IDS_MAX) iterator().let { it.next(); it.remove() }
+                return added
+            }
+        }
     /** 파일 캐시(P3 근본 수정)에서 이미 복원 시도했는지 */
     var diskLoaded: Boolean = false
     /** 마지막 파일 캐시 저장 시각 — 30초 스로틀 */
@@ -26,6 +38,11 @@ internal class RoomSession {
      * 리셋 직후 상대가 보낸 메시지가 떴다 사라졌다를 반복했다.
      */
     var appliedClearedAt: Long = 0L
+
+    private companion object {
+        /** 2인 방의 한 세션에서 이보다 많이 지우는 일은 없다 */
+        const val DELETED_IDS_MAX = 2_000
+    }
 }
 
 

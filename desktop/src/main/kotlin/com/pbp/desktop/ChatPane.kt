@@ -108,6 +108,8 @@ internal fun ChatPane(
     onShowMarkupHelp: () -> Unit,
     onTyping: () -> Unit,
     onTypingStopped: () -> Unit,
+    /** 이 방이 서버에서 사라졌다 (DC7) — 폴이 조용히 실패만 반복하지 않도록 알린다 */
+    roomMissing: Boolean = false,
     /** 캡처 범위 (messages 인덱스). null이면 캡처 모드가 아니다 */
     captureIdx: IntRange?,
     onCaptureTap: (Int) -> Unit,
@@ -174,6 +176,21 @@ internal fun ChatPane(
                         if (room.isMaster) "GM" else "PL",
                         fontSize = 11.sp, lineHeight = 11.sp,
                         fontWeight = FontWeight.Medium, color = Tokens.InkSub,
+                    )
+                }
+            }
+
+            // 방이 서버에 없다 — 화면에는 옛 메시지가 그대로 남아 있어서, 말해 주지
+            // 않으면 "그냥 조용한 방"과 구분이 되지 않는다 (DC7)
+            if (roomMissing) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .background(Tokens.Danger.copy(alpha = .12f))
+                        .padding(horizontal = DesktopDimens.edge, vertical = DesktopDimens.gap2),
+                ) {
+                    Text(
+                        "이 세션을 서버에서 찾을 수 없습니다. 아래 대화는 이 PC에 남아 있는 사본입니다.",
+                        fontSize = 11.sp, color = Tokens.Danger,
                     )
                 }
             }

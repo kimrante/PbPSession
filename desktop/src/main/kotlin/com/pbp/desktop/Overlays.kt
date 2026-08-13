@@ -256,9 +256,17 @@ private fun GhostButtonBase(
 internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> Unit) -> Unit) {
     var code by remember { mutableStateOf("") }
     var failed by remember { mutableStateOf(false) }
+    // 참여는 네트워크 왕복이라 창이 몇 초간 열려 있다 — 그동안 한 번 더 누르면
+    // 같은 방이 목록에 둘 들어가 앱이 죽는다 (DC1). 한 번만 보낸다
+    var joining by remember { mutableStateOf(false) }
     OverlayScaffold("초대 코드로 참여", onDismiss) {
         // 버튼과 같은 조건으로 — 빈 칸에서 친 엔터로 헛되이 참여를 시도하지 않는다
-        val join = { if (code.isNotBlank()) onJoin(code) { failed = true } }
+        val join = {
+            if (!joining && code.isNotBlank()) {
+                joining = true
+                onJoin(code) { joining = false; failed = true }
+            }
+        }
         OverlayField(code, { code = it; failed = false }, "초대 코드", onSubmit = join, autoFocus = true)
         if (failed) {
             Spacer(Modifier.height(DesktopDimens.gap2))
@@ -266,18 +274,26 @@ internal fun JoinOverlay(onDismiss: () -> Unit, onJoin: (String, onFail: () -> U
         }
         Spacer(Modifier.height(DesktopDimens.gap4))
         Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
-            YellowButton("참여", Modifier.weight(1f)) { join() }
+            YellowButton(if (joining) "참여 중…" else "참여", Modifier.weight(1f)) { join() }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }
 }
 
 @Composable
-internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String, onFail: () -> Unit) -> Unit) {
     var name by remember { mutableStateOf("") }
+    // 만들기도 왕복이다 — 두 번 누르면 서버에 방이 둘 생긴다 (DC3)
+    var creating by remember { mutableStateOf(false) }
     OverlayScaffold("새 세션", onDismiss) {
+        val create = {
+            if (!creating) {
+                creating = true
+                onCreate(name) { creating = false }
+            }
+        }
         // 이름 한 줄만 받는 창이다 — 열면 바로 치고 엔터로 끝낸다
-        OverlayField(name, { name = it }, "방 이름", onSubmit = { onCreate(name) }, autoFocus = true)
+        OverlayField(name, { name = it }, "방 이름", onSubmit = create, autoFocus = true)
         Spacer(Modifier.height(DesktopDimens.gap2))
         // 방 아이콘 폐지 — 배경으로만 구분. TRPG 룰은 크툴루의 부름 7판 고정 (모바일과 동일)
         Text("TRPG 룰: 크툴루의 부름 7판", fontSize = 11.sp, color = Tokens.Ink)
@@ -285,7 +301,7 @@ internal fun CreateOverlay(onDismiss: () -> Unit, onCreate: (String) -> Unit) {
         Text("방을 만들면 마스터 권한과 초대 코드가 부여됩니다.", fontSize = 11.sp, color = Tokens.InkDim)
         Spacer(Modifier.height(DesktopDimens.gap4))
         Row(horizontalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
-            YellowButton("만들기", Modifier.weight(1f)) { onCreate(name) }
+            YellowButton(if (creating) "만드는 중…" else "만들기", Modifier.weight(1f)) { create() }
             GhostButton("취소", Modifier.weight(1f), onDismiss)
         }
     }

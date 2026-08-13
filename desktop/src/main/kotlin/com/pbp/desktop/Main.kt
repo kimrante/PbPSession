@@ -69,7 +69,12 @@ private const val API_KEY = "AIzaSyCTgWzPb62iJ5rASCZ6WEiKi7kwNPVC2m4"
 
 fun main() = application {
     Window(
-        onCloseRequest = ::exitApplication,
+        // 닫기 전에 방 캐시를 확실히 남긴다 (DC9) — 폴 루프의 finally 저장은
+        // JVM 종료와 경합해 마지막 몇십 초가 사라질 수 있다
+        onCloseRequest = {
+            closeHandler.get()?.invoke()
+            exitApplication()
+        },
         title = "PbP — 1:1 TRPG 채팅",
         state = rememberWindowState(width = 1200.dp, height = 760.dp),
         // Esc = 캡처 모드 종료. 입력창에 포커스가 있어도 먹도록 프리뷰 단계에서 잡는다
@@ -104,6 +109,13 @@ fun main() = application {
  */
 private val escapeHandler =
     java.util.concurrent.atomic.AtomicReference<(() -> Boolean)?>(null)
+
+/**
+ * 종료 처리기 — 방 캐시는 [App]이 들고 있고 창 닫기는 여기서 받는다.
+ * 창이 닫히기 전에 동기로 한 번 굳힌다 (DC9).
+ */
+private val closeHandler =
+    java.util.concurrent.atomic.AtomicReference<(() -> Unit)?>(null)
 
 @Composable
 internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
@@ -145,6 +157,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var rooms by remember { mutableStateOf(config.rooms.toList()) }
     var selected by remember { mutableStateOf(rooms.firstOrNull()) }
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    /** 이 방이 서버에서 사라졌다 (DC7) — 연속 404에서만 켠다 */
+    var roomMissing by remember { mutableStateOf(false) }
     var profiles by remember { mutableStateOf(config.profiles.toList()) }
     val avatarCache = remember { mutableStateMapOf<String, ImageBitmap?>() }
 
@@ -193,7 +207,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     var appFont by remember { mutableStateOf(config.appFont) }
 
     // 내 테마/배경 변경 직후 폴링이 옛 서버 값으로 되돌리는 것 방지 (P3-14)
-    var metaFreezeUntil by remember { mutableStateOf(0L) }
+    /**
+     * 메타 폴 유예 — **방별**로 둔다 (DC10). 하나로 두면 방 A에서 테마를 바꾼 뒤
+     * 방 B로 옮겨도 B의 이름·테마 갱신이 그 시간만큼 함께 멈춘다.
+     */
+    val metaFreezeUntil = remember { mutableStateMapOf<String, Long>() }
 
     // 메시지 작성자 신원 — 익명 UID가 있으면 그것을(규칙 정합), 없으면 기존 deviceId (C3)
     fun authorUid(): String = firestore.uid ?: config.deviceId
@@ -279,6 +297,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     LaunchedEffect(selected?.remoteId) {
         val room = selected ?: return@LaunchedEffect
         val session = sessionFor(room.remoteId)
+        roomMissing = false // 방을 바꿨으니 지난 방의 표식은 지운다
+        // 준비 코드까지 try 안에 둔다 (DC6) — 밖에 두면 여기서 난 예외가 폴 루프 진입
+        // 자체를 막아, "방을 골랐는데 아무것도 안 뜨고 오류도 없는" 조용한 정지가 된다
+        try {
         // 재시작 후 첫 진입이면 파일 캐시에서 복원 — 전체 재다운로드 방지 (P3 근본 수정)
         if (!session.diskLoaded) {
             session.diskLoaded = true
@@ -312,7 +334,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 구버전 상대가 쓴 메시지는 syncAt이 없어 새 질의에 안 걸린다 — 가끔 옛 방식으로
         // 훑어 메꾼다. 10분에 한 번이라 비용은 무시할 수준 (V1 전환 안전망)
         var lastLegacySweepAt = System.currentTimeMillis()
-        try {
+        // 연속 404 횟수 — 한 번의 오판으로 "삭제됨"을 띄우지 않기 위한 계수기 (DC7)
+        var missingMetaPolls = 0
         while (isActive) {
             val now = System.currentTimeMillis()
             val focusedNow = windowFocused.get()
@@ -386,9 +409,21 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         }
                     }
                 }
-                if (now - lastMetaPollAt >= DesktopTiming.META_POLL_MS && now > metaFreezeUntil) {
+                if (now - lastMetaPollAt >= DesktopTiming.META_POLL_MS &&
+                    now > (metaFreezeUntil[room.remoteId] ?: 0L)
+                ) {
                     lastMetaPollAt = now
-                    val meta = withContext(Dispatchers.IO) { firestore.getRoom(room.remoteId) }
+                    val lookup = withContext(Dispatchers.IO) { firestore.lookupRoom(room.remoteId) }
+                    // 방이 서버에서 사라졌다 — 일시 404 오판을 피해 연속 3회에서만 알린다.
+                    // 알리기만 하고 목록에서 지우지는 않는다 (DC7): 규칙상 앱은 방을 지울 수
+                    // 없어 이 상태는 콘솔에서 지운 경우뿐이고, 오판으로 방을 없애는 편이 더 나쁘다
+                    missingMetaPolls = when (lookup) {
+                        is FirestoreRest.RoomLookup.NotFound -> missingMetaPolls + 1
+                        is FirestoreRest.RoomLookup.Found -> 0
+                        is FirestoreRest.RoomLookup.Error -> missingMetaPolls
+                    }
+                    roomMissing = missingMetaPolls >= 3
+                    val meta = (lookup as? FirestoreRest.RoomLookup.Found)?.meta
                     // 캡처한 room이 아니라 최신 인스턴스와 비교 — 설정 적용으로 교체됐을 수 있다
                     val cur = rooms.firstOrNull { it.remoteId == room.remoteId }
                     // 배경은 읽지 않는다 — 상대가 바꿔도 내 배경은 그대로 (개인 설정)
@@ -554,7 +589,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 RoomCacheStore.delete(room.remoteId) // 파일 캐시도 초기화
                 // 상대 데스크톱이 초기화를 알아챌 유일한 단서 (A6) — 안내 메시지보다 먼저 찍어
                 // 안내 자체가 걸러지지 않게 한다
-                firestore.setLogsClearedAt(room.remoteId, System.currentTimeMillis())
+                firestore.setLogsClearedAt(room.remoteId)
                 // 리셋 흔적을 양쪽에 남긴다 — 모바일과 동일 문구
                 firestore.postMessage(
                     room.remoteId,
@@ -591,6 +626,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     fun exitCapture() {
         captureStart = null
         captureEnd = null
+    }
+    DisposableEffect(Unit) {
+        closeHandler.set {
+            // 창이 사라지기 전에, 열어 둔 모든 방의 마지막 상태를 굳힌다.
+            // 작은 json 몇 개라 닫는 체감에는 영향이 없다
+            runCatching {
+                roomSessions.forEach { (remoteId, session) ->
+                    RoomCacheStore.save(remoteId, session.messages, session.lastCreatedAt)
+                }
+            }
+        }
+        onDispose { closeHandler.set(null) }
     }
     DisposableEffect(captureStart == null) {
         escapeHandler.set {
@@ -959,6 +1006,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 // mine 판정은 전송 authorUid와 같은 기준(auth UID 우선)이어야 한다 —
                 // 다르면 익명 인증이 켜지는 순간 내 메시지가 상대편으로 렌더링된다
                 myUid = authorUid(),
+                roomMissing = roomMissing,
                 avatarCache = avatarCache,
                 firestore = firestore,
                 onSend = ::sendMessage,
@@ -1034,8 +1082,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         withContext(Dispatchers.Main) { onFail() } // 상태 변경은 UI 스코프 (H3)
                     }
                     else {
-                        val existing = rooms.find { it.remoteId == meta.remoteId }
-                        val joined = existing ?: JoinedRoom(
+                        val joined = JoinedRoom(
                             remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
                             inviteCode = meta.inviteCode, themeColor = meta.themeColor,
                             // 배경은 공유 대상이 아니다 — 기본으로 시작해 각자 바꾼다
@@ -1045,7 +1092,20 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             // 참여자의 기본 발화는 GM이 아닌 첫 캐릭터 (서술 권한은 마스터 전용)
                             activeProfileIndex = profiles.indexOfFirst { !it.isGm }.coerceAtLeast(0),
                         )
-                        if (existing == null) {
+                        // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
+                        // 겹치면 한쪽 갱신이 통째로 사라진다 (resetRoomLogs의 M2와 같은 이유).
+                        // **처음 들어온 방인지도 여기서 판단한다** (DC1): IO 진입 때 본 값을
+                        // 그대로 쓰면 두 번 눌렀을 때 둘 다 "처음"으로 보고 같은 방을 두 번
+                        // 넣어, 목록의 키가 겹치며 앱이 통째로 죽는다
+                        var firstTime = false
+                        withContext(Dispatchers.Main) {
+                            firstTime = rooms.none { it.remoteId == meta.remoteId }
+                            if (firstTime) rooms = rooms + joined
+                            selected = rooms.firstOrNull { it.remoteId == meta.remoteId } ?: joined
+                            persist()
+                            overlay = null
+                        }
+                        if (firstTime) {
                             // 참여 인사 — 오너 프로필명으로 (처음 참여할 때 한 번, 모바일과 동일)
                             firestore.postMessage(
                                 meta.remoteId,
@@ -1054,17 +1114,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                                     authorUid(),
                                 ),
                             )
-                        }
-                        firestore.indexRoom(meta.remoteId, meta.name, isMaster = false)
-                        // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이다
-                        firestore.consumeInviteCode(code.trim().uppercase())
-                        // 상태 변경은 UI 스코프에서 (E4) — 메타 폴의 rooms 읽고-쓰기와
-                        // 겹치면 한쪽 갱신이 통째로 사라진다 (resetRoomLogs의 M2와 같은 이유)
-                        withContext(Dispatchers.Main) {
-                            if (existing == null) rooms = rooms + joined
-                            selected = joined
-                            persist()
-                            overlay = null
+                            firestore.indexRoom(meta.remoteId, meta.name, isMaster = false)
+                            // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이다
+                            firestore.consumeInviteCode(code.trim().uppercase())
                         }
                     }
                 }
@@ -1072,7 +1124,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         )
         OverlayKind.CreateRoom -> CreateOverlay(
             onDismiss = { overlay = null },
-            onCreate = { name ->
+            onCreate = { name, onFail ->
                 scope.launch(Dispatchers.IO) {
                     val code = inviteCode()
                     val meta = firestore.createRoom(name.ifBlank { "새 세션" }, code, "coc7")
@@ -1096,7 +1148,10 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             persist()
                         }
                     }
-                    withContext(Dispatchers.Main) { overlay = null }
+                    withContext(Dispatchers.Main) {
+                        // 만들지 못했으면 창을 닫지 않는다 — 버튼만 풀어 다시 누를 수 있게
+                        if (meta == null) onFail() else overlay = null
+                    }
                 }
             },
         )
@@ -1143,7 +1198,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                     }
                 }
                 // PATCH가 서버에 착지하기 전 폴링이 옛 값을 다시 덮지 않도록 유예 (P3-14)
-                metaFreezeUntil = System.currentTimeMillis() + DesktopTiming.META_FREEZE_MS
+                metaFreezeUntil[room.remoteId] =
+                    System.currentTimeMillis() + DesktopTiming.META_FREEZE_MS
                 scope.launch(Dispatchers.IO) {
                     firestore.updateRoomSettings(room.remoteId, theme)
                 }

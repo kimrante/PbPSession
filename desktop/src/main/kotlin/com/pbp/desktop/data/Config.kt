@@ -174,12 +174,15 @@ class AppConfig private constructor(
             val (roomless, owned) = profiles.partition { it.roomId == null }
             if (roomless.isEmpty() || rooms.isEmpty()) return profiles
             return owned + rooms.flatMap { room ->
-                roomless.map { profile ->
-                    profile.copy(
-                        characterId = UUID.randomUUID().toString(),
-                        roomId = room.remoteId,
-                    )
-                }
+                roomless
+                    // GM은 마스터인 방에만 — 참여자 방에 GM을 두면 없던 서술 권한이 생긴다
+                    .filter { !it.isGm || room.isMaster }
+                    .map { profile ->
+                        profile.copy(
+                            characterId = UUID.randomUUID().toString(),
+                            roomId = room.remoteId,
+                        )
+                    }
             }
         }
 

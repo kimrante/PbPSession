@@ -260,6 +260,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     fun pushProfile(profile: Profile) {
         if (accountEmail == null) return
         val characterId = profile.characterId ?: return
+        // 방을 가리키지 않는 프로필은 올리지 않는다 — 받는 쪽이 놓을 자리가 없다
+        if (profile.roomId == null) return
         scope.launch(Dispatchers.IO) {
             val avatarId = profile.imagePath?.let { path ->
                 encodedAvatarFor(path)?.let { (bytes, hash) ->
@@ -304,7 +306,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         // 없는 방의 프로필은 그 방을 가져온 뒤 다음 동기화에서 따라온다
         val known = rooms.map { it.remoteId }.toSet()
         val remote = withContext(Dispatchers.IO) { firestore.listProfiles() }
-            .filter { it.roomId != null && it.roomId in known }
+            .filter { entry ->
+                val room = rooms.firstOrNull { it.remoteId == entry.roomId } ?: return@filter false
+                // GM 프로필은 그 방의 마스터에게만 — 참여자 방에 들어오면 없던 권한이 생긴다
+                !entry.isGm || room.isMaster
+            }
         if (remote.isEmpty()) return 0
         var changed = 0
         val byId = profiles.associateBy { it.characterId }

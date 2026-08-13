@@ -25,14 +25,19 @@ internal class ProfileSync(
     private fun collection(uid: String) =
         firestore().collection("users").document(uid).collection("profiles")
 
-    /** 프로필 하나를 계정에 올린다. 이미지가 있으면 함께 올려 id로 가리킨다 */
+    /**
+     * 프로필 하나를 계정에 올린다. 이미지가 있으면 함께 올려 id로 가리킨다.
+     *
+     * **아직 공유하지 않은 방의 프로필은 올리지 않는다** — 가리킬 방이 서버에 없어서
+     * 방 없는 프로필로 올라가고, 받는 쪽이 어느 방에 놓을지 알 수 없다.
+     */
     suspend fun push(uid: String, profile: CharacterProfile) {
         runCatching {
             val avatarId = profile.imagePath?.let { path ->
                 runCatching { avatars.ensureUploadedForUser(uid, path) }.getOrNull()
             }
             // 방 전용 프로필은 그 방의 **원격 id**로 가리킨다 — 로컬 방 번호는 기기마다 다르다
-            val roomRemoteId = profile.roomId?.let { db.roomDao().get(it)?.remoteId }
+            val roomRemoteId = profile.roomId?.let { db.roomDao().get(it)?.remoteId } ?: return
             collection(uid).document(profile.characterId).set(
                 mapOf(
                     "name" to profile.name,
@@ -82,10 +87,13 @@ internal class ProfileSync(
             val local = db.profileDao().byCharacterId(characterId)
             if (local != null && local.updatedAt >= updatedAt) return@forEach
 
-            val roomRemoteId = doc.getString("roomId")
-            val roomId = if (roomRemoteId == null) null else {
-                db.roomDao().findByRemoteId(roomRemoteId)?.id ?: return@forEach
-            }
+            // 프로필은 방에 속한다 — 방을 가리키지 않는 문서는 어디에도 놓을 수 없다
+            val roomRemoteId = doc.getString("roomId") ?: return@forEach
+            val room = db.roomDao().findByRemoteId(roomRemoteId) ?: return@forEach
+            // GM 프로필은 그 방의 마스터에게만 — 참여자 방에 들어오면 없던 서술 권한이 생긴다
+            val isGm = doc.getBoolean("isGm") ?: false
+            if (isGm && !room.isMaster) return@forEach
+            val roomId = room.id
             // 이미지는 실패해도 프로필은 살린다 — 이름·값이 훨씬 중요하다
             val imagePath = doc.getString("avatarId")?.let { avatarId ->
                 runCatching { avatars.resolveForUser(uid, avatarId) }.getOrNull()
@@ -96,7 +104,7 @@ internal class ProfileSync(
                 name = doc.getString("name") ?: local?.name ?: "이름 없음",
                 emoji = doc.getString("emoji") ?: "🙂",
                 imagePath = imagePath,
-                isGm = doc.getBoolean("isGm") ?: false,
+                isGm = isGm,
                 roomId = roomId,
                 nameColor = doc.getLong("nameColor"),
                 bubbleColor = doc.getLong("bubbleColor"),

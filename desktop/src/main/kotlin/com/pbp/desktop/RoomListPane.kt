@@ -26,8 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -62,6 +66,11 @@ internal fun LeftPane(
     onJoin: () -> Unit,
     onFontSetting: () -> Unit,
     onLeave: (JoinedRoom) -> Unit,
+    /**
+     * 계정에 적힌 세션을 지금 다시 훑어 온다. 결과 문구를 돌려준다 —
+     * 자동으로 가져오긴 하지만, 폰에서 방금 만든 세션을 기다리지 않고 당겨올 수 있어야 한다.
+     */
+    onReload: (suspend () -> String)? = null,
     ownerName: String,
     ownerColor: Long,
     ownerImagePath: String?,
@@ -180,6 +189,30 @@ internal fun LeftPane(
                             fontSize = 11.sp, color = Tokens.InkDim,
                         )
                     }
+                }
+            }
+        }
+        if (onReload != null) {
+            val scope = rememberCoroutineScope()
+            var loading by remember { mutableStateOf(false) }
+            var note by remember { mutableStateOf<String?>(null) }
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                GhostButton(
+                    if (loading) "불러오는 중…" else "다른 기기 세션 불러오기",
+                    Modifier.fillMaxWidth(),
+                ) {
+                    if (!loading) {
+                        loading = true
+                        note = null
+                        scope.launch {
+                            note = onReload()
+                            loading = false
+                        }
+                    }
+                }
+                note?.let {
+                    Spacer(Modifier.height(DesktopDimens.gap2))
+                    Text(it, fontSize = 11.sp, color = Tokens.InkDim)
                 }
             }
         }

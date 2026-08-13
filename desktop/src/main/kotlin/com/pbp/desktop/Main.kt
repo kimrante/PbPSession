@@ -230,17 +230,29 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      * 같은 계정으로 다른 기기에서 하던 세션을 이 PC에도 만든다 (연동 4단계).
      *
      * 계정이 붙은 뒤에만 읽는다 — 익명일 때는 목록이 곧 내 로컬 방이라 읽어 봐야
-     * 읽기 과금만 는다. 로그인 직후에도 바로 돌도록 accountEmail을 키로 둔다.
+     * 읽기 과금만 는다.
+     *
+     * @return 사용자에게 보여 줄 결과 한 줄. 왜 안 왔는지까지 말해 준다 —
+     *   "아무 일도 없음"으로 끝나면 로그인 문제인지, 상대 기기가 아직 안 올린 것인지
+     *   가릴 방법이 없다
      */
-    LaunchedEffect(accountEmail) {
-        if (accountEmail == null) return@LaunchedEffect
+    suspend fun adoptAccountRooms(): String {
+        if (accountEmail == null) return "구글 로그인을 먼저 해 주세요 (오너 프로필)"
         val known = rooms.map { it.remoteId }.toSet()
-        val fetched = withContext(Dispatchers.IO) {
-            firestore.listIndexedRooms()
-                .filterNot { it.remoteId in known }
-                .mapNotNull { indexed -> firestore.getRoom(indexed.remoteId)?.to(indexed.isMaster) }
+        val indexed = withContext(Dispatchers.IO) { firestore.listIndexedRooms() }
+        if (indexed.isEmpty()) {
+            return "계정에 등록된 세션이 없습니다. 폰에서 앱을 한 번 열어 주세요"
         }
-        if (fetched.isEmpty()) return@LaunchedEffect
+        val fetched = withContext(Dispatchers.IO) {
+            indexed.filterNot { it.remoteId in known }
+                .mapNotNull { entry -> firestore.getRoom(entry.remoteId)?.to(entry.isMaster) }
+        }
+        if (fetched.isEmpty()) {
+            // 목록에 있는 게 전부 이 PC 것이면, 다른 기기가 아직 안 올린 것이다 —
+            // "이미 다 있습니다"로만 말하면 정상처럼 읽혀 원인을 못 찾는다
+            return "계정 목록 ${indexed.size}개가 모두 이 PC 세션입니다. " +
+                "다른 기기에서 아직 올리지 않았습니다"
+        }
         rooms = rooms + fetched.map { (meta, isMaster) ->
             JoinedRoom(
                 remoteId = meta.remoteId, name = meta.name, icon = meta.icon,
@@ -257,6 +269,17 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         }
         if (selected == null) selected = rooms.firstOrNull()
         persist()
+        // 새로 받은 방에도 내 멤버 문서가 있어야 읽고 쓸 수 있다 (규칙의 접근 근거).
+        // 같은 계정이라 이미 있는 게 보통이지만, 없을 때를 위해 멱등으로 한 번 더
+        withContext(Dispatchers.IO) {
+            fetched.forEach { (meta, _) -> runCatching { firestore.ensureMember(meta.remoteId) } }
+        }
+        return "세션 ${fetched.size}개를 불러왔습니다"
+    }
+
+    // 로그인 직후·시작 시 자동으로 한 번 (버튼은 같은 일을 손으로 다시 시킨다)
+    LaunchedEffect(accountEmail) {
+        if (accountEmail != null) adoptAccountRooms()
     }
 
     /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
@@ -988,6 +1011,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             onJoin = { overlay = OverlayKind.JoinRoom },
             onFontSetting = { overlay = OverlayKind.FontSetting },
             onLeave = { leaveTarget = it },
+            onReload = { adoptAccountRooms() },
             ownerName = ownerName,
             ownerColor = ownerColor,
             ownerImagePath = ownerImagePath,

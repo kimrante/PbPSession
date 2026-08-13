@@ -149,10 +149,15 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
         val memberFixKey = "memberFix-$myUid"
         val needMemberFix = !prefs.getBoolean(memberFixKey, false)
-        // 세션 목록도 uid마다 한 번 채운다 — 구글 계정으로 갈아타면 새 uid에는 목록이 비어 있다
-        val indexKey = "roomIndex-$myUid"
+        // 세션 목록도 uid마다 한 번 채운다 — 구글 계정으로 갈아타면 새 uid에는 목록이 비어 있다.
+        // **키에 2를 붙인 이유**: 예전 판은 쓰기가 거부돼도 '했음'을 찍어서, 규칙 배포 전에
+        // 한 번 켠 기기는 영영 목록을 올리지 않았다. 키를 갈아 그 기기들이 한 번 더 올리게 한다
+        val indexKey = "roomIndex2-$myUid"
         val needIndex = !prefs.getBoolean(indexKey, false)
         val memberFixOk = java.util.concurrent.atomic.AtomicBoolean(true)
+        // 색인 쓰기가 실패했는데도 '했음'으로 표시하면 다시는 시도하지 않는다 —
+        // 규칙 배포 전에 한 번 켰다는 이유로 이어하기가 영영 비어 있게 된다
+        val indexOk = java.util.concurrent.atomic.AtomicBoolean(true)
         // 방별 독립 코루틴 (S5) — 오프라인의 무기한 await가 다른 방의 attach를 막지 않는다.
         // attach를 먼저 해도 안전: 삭제 대조 기준선이 attach 시점의 uploaded=1 집합이라
         // 이후 올라가는 아웃박스 메시지는 기준선 밖이다 (R3/L4).
@@ -164,7 +169,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                         memberFixOk.set(false)
                     }
                 }
-                if (needIndex) indexRoom(remote, room.name, room.isMaster)
+                if (needIndex && !indexRoom(remote, room.name, room.isMaster)) indexOk.set(false)
                 attach(room.id, remote)
                 // 아웃박스는 메시지별로 격리 — 1건 실패가 나머지를 막지 않는다 (C7 패턴)
                 db.messageDao().listUnsent(room.id).forEach { message ->
@@ -178,7 +183,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         jobs.joinAll()
         adoptAccountRooms()
         if (needMemberFix && memberFixOk.get()) prefs.edit().putBoolean(memberFixKey, true).apply()
-        if (needIndex) prefs.edit().putBoolean(indexKey, true).apply()
+        if (needIndex && indexOk.get()) prefs.edit().putBoolean(indexKey, true).apply()
     }
 
     /**
@@ -197,7 +202,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      * 유일한 통로**다(방 목록 열거는 규칙이 막는다). 실패해도 이 기기의 동작에는
      * 영향이 없으므로 호출부를 막지 않는다.
      */
-    private suspend fun indexRoom(remoteRoomId: String, name: String, isMaster: Boolean) {
+    private suspend fun indexRoom(remoteRoomId: String, name: String, isMaster: Boolean): Boolean =
         runCatching {
             firestore.collection("users").document(myUid)
                 .collection("rooms").document(remoteRoomId)
@@ -210,8 +215,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                     )
                 )
                 .await()
-        }.onFailure { android.util.Log.w("PbpSync", "세션 목록 기록 실패 room=$remoteRoomId", it) }
-    }
+        }.onFailure {
+            android.util.Log.w("PbpSync", "세션 목록 기록 실패 room=$remoteRoomId", it)
+        }.isSuccess
 
     /**
      * members/{myUid} 문서 보장 — 보안 규칙의 방 접근 근거.

@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,6 +89,11 @@ class RoomSettingsViewModel(private val app: PbpApp, private val roomId: Long) :
 
     fun share(onResult: (String?) -> Unit) = viewModelScope.launch {
         onResult(app.syncManager.shareRoom(roomId))
+    }
+
+    /** 화면을 열 때 한 번 — 죽은 코드를 그대로 보여 주지 않는다 */
+    fun refreshInviteCode() = safeLaunch(app) {
+        app.syncManager.liveInviteCode(roomId)
     }
 
     /**
@@ -167,6 +173,9 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     })
     val tokens = Pbp.colors
     val room by vm.room.collectAsState()
+    // 초대 코드는 1회용이라 상대가 들어온 순간 죽는다 — 화면에 들고 있던 값을 그대로
+    // 보여 주면 통하지 않는 코드를 불러 주게 된다. 열 때 살아 있는 것으로 맞춘다
+    LaunchedEffect(Unit) { vm.refreshInviteCode() }
     var showCustomTheme by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 

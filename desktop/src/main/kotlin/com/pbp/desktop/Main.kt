@@ -218,6 +218,8 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
 
     // 방 카드 길게 눌러 나가기 — 앱의 방 삭제(길게)와 동일 위계
     var leaveTarget by remember { mutableStateOf<JoinedRoom?>(null) }
+    /** 초대 코드가 아직 살아 있는지 확인하는 중 (죽은 코드를 내보이지 않기 위해) */
+    var codeChecking by remember { mutableStateOf(false) }
 
     // 앱 전체 글꼴 — config.json에 유지, 모바일 AppFonts와 동일 선택지
     var appFont by remember { mutableStateOf(config.appFont) }
@@ -1179,10 +1181,12 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                 onAddProfile = { overlay = OverlayKind.NewProfile },
                 onShowCode = {
                     overlay = OverlayKind.ShowCode
+                    codeChecking = true
                     // 참가에 쓰인 코드는 사라진다 (SV2) — 죽은 코드를 계속 보여 주지
                     // 않도록, 열 때 살아 있는지 보고 없으면 새로 발급한다
                     scope.launch(Dispatchers.IO) {
                         val fresh = firestore.refreshInviteCode(room.remoteId, room.inviteCode)
+                        withContext(Dispatchers.Main) { codeChecking = false }
                         if (fresh != null && fresh != room.inviteCode) {
                             withContext(Dispatchers.Main) {
                                 rooms = rooms.map {
@@ -1331,7 +1335,9 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             },
         )
         OverlayKind.ShowCode -> CodeOverlay(
-            code = selected?.inviteCode ?: "-",
+            // 확인이 끝나기 전에는 코드를 내보이지 않는다 — 1회용이라 들고 있던 값이
+            // 이미 죽었을 수 있고, 그 짧은 사이에 복사하면 통하지 않는 코드를 부르게 된다
+            code = if (codeChecking) "확인 중…" else selected?.inviteCode ?: "-",
             onDismiss = { overlay = null },
         )
         OverlayKind.RoomSettings -> SettingsOverlay(

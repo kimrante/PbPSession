@@ -738,6 +738,45 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         0
     }
 
+    /**
+     * 지금 실제로 통하는 초대 코드.
+     *
+     * 코드는 1회용이라(SV2) 상대가 들어온 순간 죽는다. 화면에 들고 있던 값을 그대로
+     * 보여 주면 **이미 통하지 않는 코드를 불러 주게 된다** — PC와 폰이 서로 다른 코드를
+     * 보여 주며 참여가 안 되던 원인이다. 매핑이 살아 있으면 그대로, 없으면 새로 발급한다.
+     *
+     * @return 보여 줄 코드. 발급에 실패하면 null
+     */
+    suspend fun liveInviteCode(roomId: Long): String? = runCatching {
+        val room = db.roomDao().get(roomId) ?: return null
+        val remoteId = room.remoteId ?: return null
+        ensureAuth()
+        val current = room.inviteCode
+        if (current != null) {
+            val mapped = firestore.collection("inviteCodes").document(current).get().await()
+            if (mapped.getString("roomId") == remoteId) return current
+        }
+        // 죽은 코드 — 새로 발급하고 방 문서·로컬을 함께 맞춘다
+        var code: String? = null
+        repeat(CODE_ATTEMPTS) {
+            if (code != null) return@repeat
+            val candidate = randomCode()
+            val doc = firestore.collection("inviteCodes").document(candidate)
+            if (doc.get().await().exists()) return@repeat
+            doc.set(mapOf("roomId" to remoteId, "createdAt" to System.currentTimeMillis())).await()
+            code = candidate
+        }
+        val fresh = code ?: return null
+        runCatching {
+            firestore.collection("rooms").document(remoteId).update("inviteCode", fresh).await()
+        }
+        db.roomDao().setRemote(roomId, remoteId, fresh)
+        fresh
+    }.getOrElse {
+        android.util.Log.w("PbpSync", "초대 코드 확인 실패", it)
+        null
+    }
+
     /** 초대 코드로 상대의 방에 참여한다. 성공하면 로컬 방 ID를 돌려준다. */
     suspend fun joinRoom(code: String): Long? {
         // 더블탭 동시 실행 시 같은 원격 방에 로컬 방 2개가 생기는 분열 방지 (L2)

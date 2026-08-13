@@ -24,11 +24,15 @@ class PbpRepository(private val db: AppDatabase) {
     suspend fun allMessages(roomId: Long) = db.messageDao().listForRoom(roomId)
     fun observeProfilesForRoom(roomId: Long) = db.profileDao().observeForRoom(roomId)
 
-    /** 클립보드에서 가져온 ccfolia 캐릭터를 전역 프로필로 등록 (리뷰 C1) */
-    suspend fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) {
+    /**
+     * 클립보드에서 가져온 ccfolia 캐릭터를 **이 방의** 프로필로 등록 (리뷰 C1).
+     * 방을 주지 않으면 어느 방에도 속하지 않아 모든 방에 새어 나간다.
+     */
+    suspend fun createFromCode(roomId: Long, imported: com.pbp.shared.CharacterCodec.Imported) {
         saveProfile(
             CharacterProfile(
                 name = imported.name,
+                roomId = roomId,
                 stats = ProfileStats.encode(imported.stats),
             )
         )
@@ -89,6 +93,9 @@ class PbpRepository(private val db: AppDatabase) {
 
     /** 이 기기에서만 뺀다 — 서버와 상대 기기는 그대로 */
     suspend fun deleteRoom(room: ChatRoom) {
+        // 계정 목록에 남아 있어도 이 기기로는 다시 가져오지 않는다 (다른 기기가 들고
+        // 있으면 색인이 되살아나므로, 이 표시가 없으면 지운 방이 계속 돌아온다)
+        room.remoteId?.let { syncManager?.dismissRoom(it) }
         syncManager?.detach(room.id)
         // 원격 멤버 문서(FCM 토큰) 정리 — 삭제한 방의 유령 푸시 방지 (P2-2)
         room.remoteId?.let { syncManager?.leaveRoom(it) }
@@ -103,8 +110,11 @@ class PbpRepository(private val db: AppDatabase) {
         val remoteId = room.remoteId ?: run { deleteRoom(room); return true }
         syncManager?.detach(room.id)
         val known = db.messageDao().listRemoteIdsForWipe(room.id)
-        val ok = syncManager?.destroyRoom(remoteId, known) ?: false
-        db.roomDao().delete(room)
+        syncManager?.dismissRoom(remoteId)
+        val ok = syncManager?.destroyRoom(remoteId, known, room.inviteCode) ?: false
+        // **서버에서 지우지 못했으면 로컬도 남긴다** — 지워 버리면 "지웠다"고 믿는데
+        // 서버와 상대 기기에는 그대로 남아 있고, 다시 시도할 방법도 없어진다
+        if (ok) db.roomDao().delete(room) else syncManager?.reattach(room.id, remoteId)
         return ok
     }
 
@@ -351,7 +361,9 @@ class PbpRepository(private val db: AppDatabase) {
     suspend fun addStatAndRoll(request: Message, statName: String, value: Int) {
         val profile = judgeProfile(request) ?: return
         val stats = ProfileStats.decode(profile.stats).filterNot { it.first == statName }
-        db.profileDao().update(
+        // 저장 경로를 거친다 — 여기만 dao를 직접 부르고 있어서 고친 시각이 찍히지 않고
+        // 계정에도 올라가지 않았다. 다음 동기화가 이 값을 옛것으로 보고 지웠다
+        saveProfile(
             profile.copy(
                 stats = ProfileStats.encode(ProfileStats.sortByName(stats + (statName to value.toString())))
             )
@@ -424,6 +436,34 @@ class PbpRepository(private val db: AppDatabase) {
             pushIfSynced(roomId, listOf(inserted))
             true
         }
+
+    /**
+     * 아직 어느 방에도 속하지 않은 프로필을 방마다 사본으로 나눈다.
+     *
+     * 이관(DB 14) 시점에 방이 하나도 없었던 기기는 방 없는 프로필을 그대로 들고 있다.
+     * 방이 생겨도 스스로 자리를 잡지 못해 **어디에도 보이지 않는 유령**이 되므로,
+     * 방이 생긴 뒤 한 번 나눠 준다. GM은 마스터인 방에만 (권한이 새지 않게).
+     */
+    suspend fun spreadRoomlessProfiles() {
+        val roomless = db.profileDao().roomless()
+        if (roomless.isEmpty()) return
+        val rooms: List<ChatRoom> = db.roomDao().listAll()
+        if (rooms.isEmpty()) return
+        db.withTransaction {
+            rooms.forEach { room ->
+                roomless.filter { !it.isGm || room.isMaster }.forEach { profile ->
+                    db.profileDao().insert(
+                        profile.copy(
+                            id = 0,
+                            characterId = java.util.UUID.randomUUID().toString(),
+                            roomId = room.id,
+                        )
+                    )
+                }
+            }
+            roomless.forEach { db.profileDao().delete(it) }
+        }
+    }
 
     /** 방 이름 조회 — 다른 방 캐릭터를 어느 방 것인지 보여 줄 때 */
     suspend fun roomNamesOf(roomIds: List<Long>): Map<Long, String> =

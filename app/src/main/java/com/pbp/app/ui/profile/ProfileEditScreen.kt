@@ -82,6 +82,10 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
     suspend fun load(profileId: Long): CharacterProfile? =
         if (profileId == 0L) null else app.database.profileDao().get(profileId)
 
+    /** 이 방에 남아 있는 프로필 수 — 마지막 하나를 지우면 그 방은 발화할 수 없다 */
+    suspend fun countInRoom(roomId: Long): Int =
+        if (roomId == 0L) 0 else app.database.profileDao().countForRoom(roomId)
+
     fun save(
         existing: CharacterProfile?,
         /** 새로 만드는 경우 속할 방. 기존 프로필을 고칠 때는 쓰이지 않는다 */
@@ -130,6 +134,8 @@ fun ProfileEditScreen(nav: NavController, profileId: Long, roomId: Long = 0L) {
     // 폼 상태는 rememberSaveable — 화면 회전 시 DB 값으로 덮어써 입력이 날아가는 것 방지 (P2-4)
     var loaded by rememberSaveable { mutableStateOf(false) }
     var existing by remember { mutableStateOf<CharacterProfile?>(null) }
+    /** 이 방에 남아 있는 프로필 수 — 마지막 하나는 지울 수 없다 */
+    var siblingCount by remember { mutableStateOf(0) }
     var name by rememberSaveable { mutableStateOf("") }
     var nameColor by rememberSaveable {
         mutableStateOf<Long?>(PbpPalette.namePresets.first())
@@ -171,6 +177,7 @@ fun ProfileEditScreen(nav: NavController, profileId: Long, roomId: Long = 0L) {
 
     LaunchedEffect(profileId) {
         existing = vm.load(profileId)
+        siblingCount = vm.countInRoom(existing?.roomId ?: roomId)
         // DB 로드는 최초 1회만 — 회전 후 재실행 시 편집 중이던 폼을 덮어쓰지 않는다 (P2-4)
         if (!loaded) {
             existing?.let {
@@ -496,8 +503,10 @@ fun ProfileEditScreen(nav: NavController, profileId: Long, roomId: Long = 0L) {
                     }
                 }
 
-                // 삭제 (GM 프로필은 방과 운명을 같이하므로 삭제 불가)
-                if (existing != null && existing?.isGm != true) {
+                // 삭제 (GM 프로필은 방과 운명을 같이하므로 삭제 불가).
+                // 이 방의 마지막 프로필도 막는다 — 지우면 그 방은 발화할 프로필이 없어
+                // 무엇을 써도 전송되지 않는다(앱을 껐다 켜야 복구된다)
+                if (existing != null && existing?.isGm != true && siblingCount > 1) {
                     Spacer(Modifier.height(PbpDimens.gap4))
                     PbpDialogButton(
                         "캐릭터 삭제",

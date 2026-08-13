@@ -567,7 +567,7 @@ internal fun ProfileManagerOverlay(
                         fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Tokens.Ink,
                     )
                     Text(
-                        if (profile.isGm) "GM · 모든 방 공통" else "캐릭터 · 모든 방 공통",
+                        if (profile.isGm) "GM · 이 세션" else "캐릭터 · 이 세션",
                         fontSize = 11.sp, color = Tokens.InkDim,
                     )
                 }

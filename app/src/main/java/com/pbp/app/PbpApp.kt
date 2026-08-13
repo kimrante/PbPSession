@@ -113,6 +113,7 @@ class PbpApp : Application(), coil3.SingletonImageLoader.Factory {
                 // 아무도 가리키지 않는 로컬 이미지 정리 — 교체·취소·방 삭제로 쌓인 고아 (L3).
                 // 시작 시점이라 편집 중인 파일이 있을 수 없다
                 com.pbp.app.data.ImageGc.sweep(this@PbpApp, database)
+                repository.spreadRoomlessProfiles()
                 database.profileDao().deleteGmProfilesOfJoinedRooms()
                 database.roomDao().clearDanglingActiveProfiles()
                 database.roomDao().listJoined().forEach { room ->

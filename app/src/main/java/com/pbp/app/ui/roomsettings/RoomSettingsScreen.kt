@@ -175,7 +175,13 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
     val room by vm.room.collectAsState()
     // 초대 코드는 1회용이라 상대가 들어온 순간 죽는다 — 화면에 들고 있던 값을 그대로
     // 보여 주면 통하지 않는 코드를 불러 주게 된다. 열 때 살아 있는 것으로 맞춘다
-    LaunchedEffect(Unit) { vm.refreshInviteCode() }
+    // 확인이 끝나기 전에는 코드를 내보이지 않는다 — 들고 있던 값이 이미 소비됐을 수
+    // 있고, 그걸 읽어 불러 주면 통하지 않는다 (PC도 같은 규칙)
+    var codeChecking by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        vm.refreshInviteCode()
+        codeChecking = false
+    }
     var showCustomTheme by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
 
@@ -366,8 +372,11 @@ fun RoomSettingsScreen(nav: NavController, roomId: Long) {
             SectionTitle("공유·기타")
             SettingRow(
                 title = "방 공유 · 초대 코드",
-                subtitle = room?.inviteCode?.let { "코드 $it — 탭하면 복사됩니다" }
-                    ?: "초대 코드를 만들어 상대를 부릅니다",
+                subtitle = when {
+                    codeChecking -> "코드 확인 중…"
+                    room?.inviteCode != null -> "코드 ${room?.inviteCode} — 탭하면 복사됩니다"
+                    else -> "초대 코드를 만들어 상대를 부릅니다"
+                },
             ) {
                 // 코드가 이미 있어도 share를 다시 호출한다 — 멤버 등록·코드 매핑·백필이
                 // 중간에 실패해 '죽은 초대코드'가 된 방을 멱등 복구 (R2)

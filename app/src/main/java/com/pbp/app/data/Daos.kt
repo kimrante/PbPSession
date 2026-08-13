@@ -44,6 +44,10 @@ interface RoomDao {
     @Query("SELECT * FROM rooms WHERE remoteId IS NOT NULL")
     suspend fun listSynced(): List<ChatRoom>
 
+    /** 이관·정리용 전체 목록 */
+    @Query("SELECT * FROM rooms")
+    suspend fun listAll(): List<ChatRoom>
+
     @Query("SELECT * FROM rooms WHERE isMaster = 0")
     suspend fun listJoined(): List<ChatRoom>
 
@@ -73,14 +77,14 @@ data class RemoteMessageRow(val remoteId: String, val body: String, val editedAt
 @Dao
 interface ProfileDao {
     /** 방에서 쓸 수 있는 프로필 — 판정 굴림처럼 1회성 조회용 (J6) */
-    @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId")
+    @Query("SELECT * FROM profiles WHERE roomId = :roomId")
     suspend fun forRoom(roomId: Long): List<CharacterProfile>
 
     /** 아직 가리켜지는 이미지 경로 — 고아 정리(ImageGc)용 */
     @Query("SELECT DISTINCT imagePath FROM profiles WHERE imagePath IS NOT NULL")
     suspend fun allImagePaths(): List<String>
 
-    @Query("SELECT * FROM profiles WHERE roomId IS NULL OR roomId = :roomId ORDER BY isGm DESC, name")
+    @Query("SELECT * FROM profiles WHERE roomId = :roomId ORDER BY isGm DESC, name")
     fun observeForRoom(roomId: Long): Flow<List<CharacterProfile>>
 
     /** 과거 버전이 참여자 방에도 만들었던 GM 프로필 제거 — 서술 권한은 마스터 전용 */
@@ -88,7 +92,7 @@ interface ProfileDao {
     suspend fun deleteGmProfilesOfJoinedRooms(): Int
 
     /** 이 방에서 고를 수 있는 프로필 수(전역 + 방 귀속) */
-    @Query("SELECT COUNT(*) FROM profiles WHERE roomId IS NULL OR roomId = :roomId")
+    @Query("SELECT COUNT(*) FROM profiles WHERE roomId = :roomId")
     suspend fun countForRoom(roomId: Long): Int
 
     @Query("SELECT * FROM profiles WHERE id = :id")
@@ -104,6 +108,10 @@ interface ProfileDao {
            ORDER BY name"""
     )
     suspend fun fromOtherRooms(roomId: Long): List<CharacterProfile>
+
+    /** 아직 어느 방에도 속하지 않은 프로필 — 방이 없을 때 이관이 미뤄진 것들 */
+    @Query("SELECT * FROM profiles WHERE roomId IS NULL")
+    suspend fun roomless(): List<CharacterProfile>
 
     /** 계정 동기화용 — 전부 */
     @Query("SELECT * FROM profiles")

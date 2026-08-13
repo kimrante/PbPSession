@@ -663,9 +663,25 @@ class FirestoreRest(
         return runCatching { java.util.Base64.getDecoder().decode(data) }.getOrNull()
     }
 
-    /** 이 코드가 가리키는 방. 매핑이 없으면(=참가에 쓰여 사라졌으면) null */
-    private fun inviteCodeRoom(code: String): String? =
-        get("$base/inviteCodes/${encodePath(code)}?key=$apiKey")?.str("roomId")
+    /**
+     * 이 코드가 가리키는 방. **없음(404)과 통신 오류를 가른다** — 둘을 뭉개면
+     * 오프라인에서 코드 창을 여는 것만으로 멀쩡한 코드가 버려진다.
+     */
+    private fun lookupInviteCode(code: String): RoomLookup {
+        val url = "$base/inviteCodes/${encodePath(code)}?key=$apiKey"
+        val res = sendWithRetry {
+            HttpRequest.newBuilder(URI.create(url)).timeout(requestTimeout).auth().GET().build()
+        } ?: return RoomLookup.Error
+        return when {
+            res.statusCode() == 404 -> RoomLookup.NotFound
+            res.statusCode() !in 200..299 -> RoomLookup.Error
+            else -> runCatching {
+                val roomId = JsonParser.parseString(res.body()).asJsonObject.str("roomId")
+                if (roomId == null) RoomLookup.NotFound
+                else RoomLookup.Found(RoomMeta(roomId, "", "", null, 0, null))
+            }.getOrDefault(RoomLookup.Error)
+        }
+    }
 
     /**
      * 참가에 쓰인 코드를 없앤다 (SV2) — 코드는 1회용이라, 나중에 그 코드를 손에 넣은
@@ -682,7 +698,15 @@ class FirestoreRest(
      * @return 보여 줄 코드. 발급에 실패하면 null
      */
     fun refreshInviteCode(remoteRoomId: String, current: String?): String? {
-        if (current != null && inviteCodeRoom(current) == remoteRoomId) return current
+        if (current != null) {
+            when (lookupInviteCode(current)) {
+                is RoomLookup.Found -> return current // 아직 살아 있다
+                // 통신이 안 되는 것을 '죽었다'로 읽으면 멀쩡한 코드를 버리고 새로
+                // 발급해, 유효한 코드가 둘로 늘어난다
+                RoomLookup.Error -> return current
+                RoomLookup.NotFound -> Unit // 소비됐다 — 새로 발급한다
+            }
+        }
         val fresh = com.pbp.shared.Identifiers.newInviteCode()
         if (!createInviteCode(fresh, remoteRoomId)) return null
         patch(
@@ -1018,8 +1042,11 @@ class FirestoreRest(
      * 방 문서를 지운다 — 순서가 반대면 멤버 확인이 깨져 하위 문서가 남는다.
      * 상대의 멤버 문서는 규칙상 내가 못 지운다(SV6). 방이 없으니 무해하다.
      */
-    fun destroyRoom(remoteRoomId: String): Boolean {
+    fun destroyRoom(remoteRoomId: String, inviteCode: String?): Boolean {
         val myUid = uid ?: return false
+        // 상대는 폴링이라 '문서가 사라졌다'를 볼 수 없다 — 표식을 먼저 남겨 그쪽
+        // 캐시가 비워지게 한다(모바일 로그 초기화와 같은 장치)
+        setLogsClearedAt(remoteRoomId)
         listOf("messages", "avatars").forEach { name ->
             var guard = 0
             while (guard++ < 40) {
@@ -1034,9 +1061,14 @@ class FirestoreRest(
                 }
             }
         }
+        // 초대 매핑도 지운다 — 방이 사라진 뒤에는 아무도 못 지우는 문서로 남는다
+        inviteCode?.let { deleteDoc("$base/inviteCodes/${encodePath(it)}?key=$apiKey") }
+        // **방 문서를 내 멤버 문서보다 먼저.** 순서가 반대면 멤버 자격이 사라져
+        // 방 삭제가 규칙에 거부된다 (하위 컬렉션은 부모 삭제로 사라지지 않는다)
+        val removed = deleteDoc("$base/rooms/$remoteRoomId?key=$apiKey")
         deleteDoc("$base/rooms/$remoteRoomId/members/$myUid?key=$apiKey")
         deleteDoc("$base/users/$myUid/rooms/${encodePath(remoteRoomId)}?key=$apiKey")
-        return deleteDoc("$base/rooms/$remoteRoomId?key=$apiKey")
+        return removed
     }
 
     fun leaveRoom(remoteRoomId: String, deviceId: String) {

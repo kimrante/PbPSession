@@ -157,6 +157,27 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         }
     }
 
+    /**
+     * 이 기기에서 일부러 뺀 방 — 계정 목록에 남아 있어도 다시 가져오지 않는다.
+     *
+     * 목록은 계정 단위라 **다른 기기가 아직 그 방을 들고 있으면 색인이 되살아난다.**
+     * 그때 이 표시가 없으면 지운 방이 다음 실행마다 되돌아온다.
+     */
+    private fun dismissedRooms(): Set<String> =
+        context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+            .getStringSet("dismissedRooms", emptySet()).orEmpty()
+
+    fun dismissRoom(remoteRoomId: String) {
+        val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("dismissedRooms", dismissedRooms() + remoteRoomId).apply()
+    }
+
+    /** 다시 참여하면 표시를 지운다 — 그래야 이후 동기화가 정상으로 돌아온다 */
+    private fun undismissRoom(remoteRoomId: String) {
+        val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
+        prefs.edit().putStringSet("dismissedRooms", dismissedRooms() - remoteRoomId).apply()
+    }
+
     /** 마지막으로 쓰던 신원 — 앱 데이터와 함께 지워지므로 Firebase 저장본과 수명이 같다 */
     private fun knownUid(): String? =
         context.getSharedPreferences("pbp", Context.MODE_PRIVATE).getString("lastAuthUid", null)
@@ -191,7 +212,9 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                 runCatching { ensureMembership(remote) }
                 indexRoom(remote, room.name, room.isMaster)
             }
-            registerFcmToken()
+            // 토큰은 그대로여도 **멤버 문서가 새 uid로 바뀌었다** — 강제로 다시 올리지
+            // 않으면 그 문서에 fcmToken이 없어 백그라운드 푸시가 조용히 죽는다
+            registerFcmToken(force = true)
         }
         return result
     }
@@ -708,8 +731,8 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         val prefs = context.getSharedPreferences("pbp", Context.MODE_PRIVATE)
         val key = "profilesPushed-$myUid"
         if (!prefs.getBoolean(key, false)) {
-            profileSync.pushAll(myUid)
-            prefs.edit().putBoolean(key, true).apply()
+            // 실제로 다 올라갔을 때만 표시한다 — 실패했는데 찍어 두면 다시는 시도하지 않는다
+            if (profileSync.pushAll(myUid)) prefs.edit().putBoolean(key, true).apply()
         }
         return profileSync.pull(myUid)
     }
@@ -725,8 +748,10 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         ensureAuth()
         val indexed = firestore.collection("users").document(myUid)
             .collection("rooms").get().await().documents
+        val dismissed = dismissedRooms()
         var adopted = 0
         indexed.forEach { entry ->
+            if (entry.id in dismissed) return@forEach // 이 기기에서 일부러 뺀 방
             val mine = entry.getBoolean("master") ?: false
             if (db.roomDao().findByRemoteId(entry.id) == null && adoptRoom(entry.id, mine) != null) {
                 adopted++
@@ -833,6 +858,7 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
         push(roomDoc.id, listOf(insertedGreeting))
         attach(roomId, roomDoc.id) // 리스너 초기 스냅샷이 기존 대화를 채운다
         registerFcmTokenForRoom(roomDoc.id) // 새 방의 멤버 문서에만 등록 (F3)
+        undismissRoom(roomDoc.id)
         indexRoom(roomDoc.id, roomDoc.getString("name") ?: "공유 캠페인", isMaster = false)
         // 다 들어온 뒤 코드를 없앤다 (SV2) — 코드는 1회용이라, 이후 그 코드를 손에
         // 넣은 제3자는 방을 찾지 못한다. 참가가 끝난 다음이라야 실패해도 잃는 게 없다
@@ -851,7 +877,11 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
      *
      * @return 방 문서까지 지웠으면 true
      */
-    suspend fun destroyRoom(remoteRoomId: String, knownRemoteIds: List<String>): Boolean =
+    suspend fun destroyRoom(
+        remoteRoomId: String,
+        knownRemoteIds: List<String>,
+        inviteCode: String?,
+    ): Boolean =
         kotlinx.coroutines.withTimeoutOrNull(60_000) {
             runCatching {
                 ensureAuth()
@@ -869,12 +899,22 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
                             }
                     }
                 }
+                // 초대 매핑도 지운다 — 방이 사라진 뒤에는 멤버 확인이 성립하지 않아
+                // 아무도 못 지우는 문서로 영영 남는다
+                inviteCode?.let { code ->
+                    runCatching {
+                        firestore.collection("inviteCodes").document(code).delete().await()
+                    }
+                }
+                // **방 문서를 내 멤버 문서보다 먼저** 지운다. 순서가 반대면 멤버 자격이
+                // 사라져 방 삭제가 규칙에 거부된다 — 로그만 지워지고 방은 서버에 남았다.
+                // (하위 컬렉션은 부모 삭제로 사라지지 않으므로 멤버 확인은 여기까지 유효하다)
+                room.delete().await()
                 runCatching { room.collection("members").document(myUid).delete().await() }
                 runCatching {
                     firestore.collection("users").document(myUid)
                         .collection("rooms").document(remoteRoomId).delete().await()
                 }
-                room.delete().await()
                 true
             }.getOrDefault(false)
         } ?: false

@@ -99,8 +99,10 @@ class RoomListViewModel(private val app: PbpApp) : ViewModel() {
     /** 이 기기에서만 뺀다 */
     fun deleteRoom(room: ChatRoom) = safeLaunch(app) { repo.deleteRoom(room) }
 
-    /** 서버까지 지운다 — 상대 기기에서도 사라진다 */
-    fun destroyRoom(room: ChatRoom) = safeLaunch(app) { repo.destroyRoom(room) }
+    /** 서버까지 지운다 — 상대 기기에서도 사라진다. 실패하면 알린다(로컬도 남는다) */
+    fun destroyRoom(room: ChatRoom, onResult: (Boolean) -> Unit) = safeLaunch(app) {
+        onResult(repo.destroyRoom(room))
+    }
 
     fun joinRoom(code: String, onResult: (Long?) -> Unit) = safeLaunch(app) {
         onResult(app.syncManager.joinRoom(code.trim().uppercase()))
@@ -307,7 +309,17 @@ fun RoomListScreen(nav: NavController) {
                     if (room.remoteId == null) "삭제" else "완전 삭제",
                     kind = PbpButtonKind.Danger,
                     onClick = {
-                        vm.destroyRoom(room)
+                        vm.destroyRoom(room) { ok ->
+                            // 실패를 삼키면 "지웠다"고 믿는데 서버와 상대 기기에는
+                            // 그대로 남아 있다 — 다시 시도할 수 있게 알린다
+                            if (!ok) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "삭제하지 못했습니다. 네트워크를 확인하고 다시 시도해주세요.",
+                                    android.widget.Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
                         deleteTarget = null
                     },
                 )

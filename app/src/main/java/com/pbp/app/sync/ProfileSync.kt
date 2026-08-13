@@ -31,13 +31,14 @@ internal class ProfileSync(
      * **아직 공유하지 않은 방의 프로필은 올리지 않는다** — 가리킬 방이 서버에 없어서
      * 방 없는 프로필로 올라가고, 받는 쪽이 어느 방에 놓을지 알 수 없다.
      */
-    suspend fun push(uid: String, profile: CharacterProfile) {
+    suspend fun push(uid: String, profile: CharacterProfile): Boolean =
         runCatching {
             val avatarId = profile.imagePath?.let { path ->
                 runCatching { avatars.ensureUploadedForUser(uid, path) }.getOrNull()
             }
             // 방 전용 프로필은 그 방의 **원격 id**로 가리킨다 — 로컬 방 번호는 기기마다 다르다
-            val roomRemoteId = profile.roomId?.let { db.roomDao().get(it)?.remoteId } ?: return
+            val roomRemoteId = profile.roomId?.let { db.roomDao().get(it)?.remoteId }
+                ?: return false // 아직 공유하지 않은 방 — 공유한 뒤 다시 시도한다
             collection(uid).document(profile.characterId).set(
                 mapOf(
                     "name" to profile.name,
@@ -52,22 +53,33 @@ internal class ProfileSync(
                     "updatedAt" to profile.updatedAt,
                 )
             ).await()
-        }.onFailure { android.util.Log.w("PbpSync", "프로필 올리기 실패 ${profile.name}", it) }
-    }
+            true
+        }.getOrElse {
+            android.util.Log.w("PbpSync", "프로필 올리기 실패 ${profile.name}", it)
+            false
+        }
 
     suspend fun delete(uid: String, characterId: String) {
         runCatching { collection(uid).document(characterId).delete().await() }
     }
 
-    /** 아직 한 번도 올리지 않은 프로필을 모두 올린다 (계정을 붙인 직후 한 번) */
-    suspend fun pushAll(uid: String) {
+    /**
+     * 아직 한 번도 올리지 않은 프로필을 모두 올린다 (계정을 붙인 직후 한 번).
+     *
+     * @return 하나도 빠짐없이 올렸으면 true. **하나라도 못 올렸으면 false** —
+     *   부르는 쪽이 '했음'으로 찍어 버리면 그 프로필들은 영영 안 올라간다
+     *   (아직 공유하지 않은 방의 캐릭터가 대표적이다).
+     */
+    suspend fun pushAll(uid: String): Boolean {
+        var all = true
         db.profileDao().all().forEach { profile ->
             val stamped = if (profile.updatedAt == 0L) {
                 profile.copy(updatedAt = System.currentTimeMillis())
                     .also { db.profileDao().update(it) }
             } else profile
-            push(uid, stamped)
+            if (!push(uid, stamped)) all = false
         }
+        return all
     }
 
     /**

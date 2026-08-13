@@ -290,6 +290,22 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         profiles = updated
         persist()
         changed?.let { pushProfile(it) }
+        // 이 방의 캐릭터 명단을 상대에게 다시 알린다 — 방에 들어와 캐릭터를 만드는 것이
+        // 기본 흐름이 되면서, 방 전환 때만 올리면 방금 만든 캐릭터가 상대의 판정 요청
+        // 목록에 뜨지 않았다
+        val room = selected ?: return
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                firestore.pushCharacters(
+                    room.remoteId,
+                    profilesOf(room).filterNot { it.isGm }.map { profile ->
+                        profile.name to ProfileStats.sanitize(profile.stats.orEmpty())
+                            .filterValues { it.trim().toIntOrNull() != null }
+                            .keys.toList()
+                    },
+                )
+            }
+        }
     }
 
     /**
@@ -300,6 +316,61 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      *
      * @return 새로 오거나 갱신된 프로필 수
      */
+    /**
+     * 계정을 붙이기 전에 만들어 둔 프로필을 한 번 전부 올린다.
+     *
+     * 없으면 이 PC에서 만든 캐릭터는 **계정에 존재하지 않아** 폰에서 영영 보이지 않는다
+     * (하나씩 열어 저장해야 올라갔다). 신원마다 한 번이면 된다.
+     */
+    suspend fun pushAllProfiles() {
+        val myUid = firestore.uid ?: return
+        if (config.profilesPushedUid == myUid) return
+        val pending = profiles.filter { it.roomId != null }
+        val stamped = pending.map {
+            if (it.updatedAt == 0L) it.copy(updatedAt = System.currentTimeMillis()) else it
+        }
+        if (stamped.isNotEmpty()) {
+            profiles = profiles.map { p ->
+                stamped.firstOrNull { it.characterId == p.characterId } ?: p
+            }
+            persist()
+            stamped.forEach { pushProfile(it) }
+        }
+        config.profilesPushedUid = myUid
+        persist()
+    }
+
+    /**
+     * 프로필이 하나도 없는 방에 기본 프로필을 만들어 준다 (모바일과 같은 규칙).
+     *
+     * 방을 만들거나 참여해도 이 PC에는 그 방의 프로필이 생기지 않았다 — 프로필 목록이
+     * 비고, 판정 요청 칩도 안 뜨고, 전송은 다른 방 캐릭터로 나갔다.
+     * 동기화 뒤에 부른다 — 계정에서 받아 온 것이 있으면 그것을 쓴다.
+     */
+    fun seedMissingProfiles() {
+        val empty = rooms.filter { room -> profilesOf(room).isEmpty() }
+        if (empty.isEmpty()) return
+        val created = empty.map { room ->
+            if (room.isMaster) {
+                // GM 아바타는 글자 없이 무채색 원 (모바일 기본 GM과 동일)
+                Profile(
+                    roomId = room.remoteId, name = "GM", emoji = "", isGm = true,
+                    nameColor = 0xFFFFD972, bubbleColor = 0xFFE7E2D4,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            } else {
+                // 참여자는 서술 권한이 없다 — GM이 아닌 기본 캐릭터로 시작
+                Profile(
+                    roomId = room.remoteId, name = "플레이어",
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+        }
+        profiles = profiles + created
+        persist()
+        created.forEach { pushProfile(it) }
+    }
+
     suspend fun syncProfiles(): Int {
         if (accountEmail == null) return 0
         // 프로필은 방에 속한다 — 이 PC가 들고 있는 방의 것만 자리를 잡을 수 있다.
@@ -336,12 +407,23 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
             )
         }
         if (incoming.isEmpty()) return 0
-        val merged = profiles.map { existing ->
-            incoming.firstOrNull { it.characterId == existing.characterId } ?: existing
-        } + incoming.filterNot { fresh -> profiles.any { it.characterId == fresh.characterId } }
-        profiles = merged
+        // 위 IO(목록 조회·아바타 내려받기) 동안 사용자가 고치거나 지웠을 수 있다.
+        // **지금 목록을 기준으로 다시 판정한다** — 스냅샷으로 통째로 갈아 끼우면
+        // 그 사이의 편집이 옛 값으로 되돌아가고 방금 지운 프로필이 되살아난다
+        val applicable = incoming.filter { fresh ->
+            val nowLocal = profiles.firstOrNull { it.characterId == fresh.characterId }
+            when {
+                nowLocal != null -> nowLocal.updatedAt < fresh.updatedAt
+                // 진입 때는 있었는데 지금 없다 = 그 사이 지웠다. 되살리지 않는다
+                else -> byId[fresh.characterId] == null
+            }
+        }
+        if (applicable.isEmpty()) return 0
+        profiles = profiles.map { existing ->
+            applicable.firstOrNull { it.characterId == existing.characterId } ?: existing
+        } + applicable.filterNot { fresh -> profiles.any { it.characterId == fresh.characterId } }
         persist()
-        return changed
+        return applicable.size
     }
 
     /**
@@ -356,7 +438,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      */
     suspend fun adoptAccountRooms(): String {
         if (accountEmail == null) return "구글 로그인을 먼저 해 주세요 (오너 프로필)"
-        val known = rooms.map { it.remoteId }.toSet()
+        val known = rooms.map { it.remoteId }.toSet() + config.dismissedRooms
         val indexed = withContext(Dispatchers.IO) { firestore.listIndexedRooms() }
         if (indexed.isEmpty()) {
             return "계정에 등록된 세션이 없습니다. 폰에서 앱을 한 번 열어 주세요"
@@ -405,8 +487,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     LaunchedEffect(accountEmail) {
         if (accountEmail != null) {
             adoptAccountRooms()
+            pushAllProfiles()
             syncProfiles()
         }
+        // 계정을 안 붙였어도 방에 프로필은 있어야 한다
+        seedMissingProfiles()
     }
 
     /** 커스텀 색 적용 기록 — 자리별 최대 5개, 넘치면 가장 오래된 것부터 밀려난다 */
@@ -648,9 +733,11 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
         val body = text.trim()
         if (body.isEmpty()) return onResult(true, true)
         // 참여자는 GM 프로필로 발화할 수 없다 — 서술 권한은 마스터 전용
+        // 폴백도 **이 방 안에서만** 찾는다 — 전역 목록에서 집으면 다른 방 캐릭터(심지어
+        // 다른 방의 GM)로 메시지가 나간다
         val sender = activeProfile(room)
             ?.takeIf { room.isMaster || !it.isGm }
-            ?: profiles.firstOrNull { room.isMaster || !it.isGm }
+            ?: profilesOf(room).firstOrNull { room.isMaster || !it.isGm }
             ?: return onResult(false, true)
         // 캐릭터 값 치환 — 안드로이드와 동일 순서: 저장은 {{값}} 마커, 다이스는 순수 값 (P2-5)
         val (plain, marked) = ProfileStats.substitute(body, sender.stats ?: emptyMap())
@@ -751,7 +838,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     }
 
     /** 방 나가기 — 이 PC의 목록에서 제거 + 서버 멤버 문서 정리. 서버 로그는 남는다 */
+    /**
+     * 이 방에 속한 프로필을 함께 걷는다 — 방이 사라지면 그 프로필은 어디에도 보이지
+     * 않으면서 '다른 방에서 가져오기' 후보로만 남고, 아바타 파일도 영영 안 지워진다.
+     */
+    fun dropProfilesOf(room: JoinedRoom): List<Profile> =
+        profiles.filterNot { it.roomId == room.remoteId }
+
     fun leaveRoom(room: JoinedRoom) {
+        config.dismissedRooms = config.dismissedRooms + room.remoteId
+        profiles = dropProfilesOf(room)
         rooms = rooms.filterNot { it.remoteId == room.remoteId }
         if (selected?.remoteId == room.remoteId) selected = rooms.firstOrNull()
         roomSessions.remove(room.remoteId)
@@ -769,13 +865,15 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
      * 사라진 뒤에는 하위 문서를 지울 권한(멤버 확인)이 없어져 쓰레기가 남는다.
      */
     fun destroyRoom(room: JoinedRoom) {
+        config.dismissedRooms = config.dismissedRooms + room.remoteId
+        profiles = dropProfilesOf(room)
         rooms = rooms.filterNot { it.remoteId == room.remoteId }
         if (selected?.remoteId == room.remoteId) selected = rooms.firstOrNull()
         roomSessions.remove(room.remoteId)
         persist()
         scope.launch(Dispatchers.IO) {
             RoomCacheStore.delete(room.remoteId)
-            runCatching { firestore.destroyRoom(room.remoteId) }
+            runCatching { firestore.destroyRoom(room.remoteId, room.inviteCode) }
         }
     }
 
@@ -1031,12 +1129,16 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
     fun addStatAndRoll(request: Message, statName: String, value: Int) {
         val picked = judgeProfile(request) ?: return
         val merged = picked.stats.orEmpty() + (statName to value.toString())
-        profiles = profiles.map { profile ->
-            if (profile.characterId == picked.characterId) {
-                profile.copy(stats = ProfileStats.sortByName(merged.toList()).toMap())
-            } else profile
-        }
-        persist()
+        // 저장 경로를 거친다 — 고친 시각이 찍히고 계정에도 올라가야 다음 동기화가
+        // 이 값을 옛것으로 보고 지우지 않는다
+        val updated = picked.copy(
+            stats = ProfileStats.sortByName(merged.toList()).toMap(),
+            updatedAt = System.currentTimeMillis(),
+        )
+        saveProfiles(
+            profiles.map { if (it.characterId == picked.characterId) updated else it },
+            updated,
+        )
         rollJudge(request)
     }
 
@@ -1303,6 +1405,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             if (firstTime) rooms = rooms + joined
                             selected = rooms.firstOrNull { it.remoteId == meta.remoteId } ?: joined
                             persist()
+                            seedMissingProfiles()
                             overlay = null
                         }
                         if (firstTime) {
@@ -1346,6 +1449,7 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                             rooms = rooms + joined
                             selected = joined
                             persist()
+                            seedMissingProfiles()
                         }
                     }
                     withContext(Dispatchers.Main) {
@@ -1446,14 +1550,18 @@ internal fun App(windowFocused: java.util.concurrent.atomic.AtomicBoolean) {
                         .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
                     CharacterCodec.parse(clip ?: "")
                 }.getOrNull()
-                if (imported != null) {
-                    profiles = profiles + Profile(
-                        roomId = selected?.remoteId,
+                val room = selected
+                if (imported != null && room != null) {
+                    // 다른 생성 경로와 같은 문을 쓴다 — 여기만 빠져 있어서 고친 시각이
+                    // 찍히지 않고 계정에도 올라가지 않았다
+                    val created = Profile(
+                        roomId = room.remoteId,
                         name = imported.name,
                         stats = ProfileStats.sanitize(imported.stats.toMap())
                             .takeIf { it.isNotEmpty() },
+                        updatedAt = System.currentTimeMillis(),
                     )
-                    persist()
+                    saveProfiles(profiles + created, created)
                     overlay = OverlayKind.ProfileManager
                     true
                 } else {

@@ -70,6 +70,13 @@ class AppConfig private constructor(
      * 그대로라, 이 목록이 있어야 지난 내 대화가 상대 쪽으로 넘어가지 않는다.
      */
     @Volatile var pastUids: List<String> = emptyList(),
+    /**
+     * 이 PC에서 일부러 뺀 방 — 계정 목록에 남아 있어도 다시 가져오지 않는다.
+     * 목록은 계정 단위라 다른 기기가 그 방을 들고 있으면 색인이 되살아난다.
+     */
+    @Volatile var dismissedRooms: List<String> = emptyList(),
+    /** 이 신원으로 프로필을 한 번 전부 올렸는지 (계정을 붙인 직후 1회) */
+    @Volatile var profilesPushedUid: String? = null,
     /** 앱 전체 글꼴 — "system" / "gowun" / "pretendard" (모바일 AppFonts와 동일 값) */
     @Volatile var appFont: String = "system",
     /** 오너 프로필 — 잡담·참여 인사에 쓰이는 플레이어 본인 (모바일 OwnerProfile과 동일 개념) */
@@ -146,6 +153,8 @@ class AppConfig private constructor(
                 authRefreshToken = loaded?.authRefreshToken,
                 accountEmail = loaded?.accountEmail,
                 pastUids = loaded?.pastUids.orEmpty(),
+                dismissedRooms = loaded?.dismissedRooms.orEmpty(),
+                profilesPushedUid = loaded?.profilesPushedUid,
                 appFont = loaded?.appFont ?: "system",
                 ownerName = loaded?.ownerName ?: "",
                 ownerColor = loaded?.ownerColor ?: 0xFFFFD9A8,
@@ -201,6 +210,8 @@ class AppConfig private constructor(
         val authRefreshToken: String? = null,
         val accountEmail: String? = null,
         val pastUids: List<String>? = null,
+        val dismissedRooms: List<String>? = null,
+        val profilesPushedUid: String? = null,
         val appFont: String? = null,
         val ownerName: String? = null,
         val ownerColor: Long? = null,
@@ -220,7 +231,7 @@ class AppConfig private constructor(
     fun snapshot(): String = gson.toJson(
         Saved(
             deviceId, profiles.toList(), rooms.toList(), authRefreshToken, accountEmail,
-            pastUids.toList(), appFont,
+            pastUids.toList(), dismissedRooms.toList(), profilesPushedUid, appFont,
             ownerName, ownerColor, ownerImagePath, ownerTextColor, captureWithBackground,
             captureExcludeOoc, recentColorsBySlot.toMap(),
         )

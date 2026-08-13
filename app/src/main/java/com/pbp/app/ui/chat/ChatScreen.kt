@@ -266,7 +266,7 @@ class ChatViewModel(private val app: PbpApp, private val roomId: Long) : ViewMod
     }
 
     fun createFromCode(imported: com.pbp.shared.CharacterCodec.Imported) =
-        safeLaunch(app) { repo.createFromCode(imported) }
+        safeLaunch(app) { repo.createFromCode(roomId, imported) }
 
     /** 방을 떠나면 캡처 결과도 정리한다 — 화면 밖에 있어도 메모리는 이 방의 것이다 */
     override fun onCleared() {

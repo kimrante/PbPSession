@@ -54,8 +54,10 @@ object Rules {
         val success = result.success ?: return null
         val command = result.command
         val threshold = command.threshold
+        // 굴림 뒤에 계산이 붙으면 1·100 같은 눈금이 뜻을 잃는다 — 대성공/대실패 판정을
+        // 그 값에 그대로 적용하면 엉뚱한 등급이 나온다. 성공/실패만 가린다
         val coc7Downward = rule == COC7 && command.op == "<=" && threshold != null &&
-            command.sides == 100
+            command.sides == 100 && command.modifiers.isEmpty()
         if (!coc7Downward) return if (success) Outcome.SUCCESS else Outcome.FAIL
         return when {
             result.total == 1 -> Outcome.CRITICAL

@@ -133,4 +133,67 @@ class DiceBotTest {
         assertNull(DiceBot.parse("1d66>=30"))
         assertEquals(DiceBot.Command(1, 66), DiceBot.parse("1d66"))
     }
+
+    // ── 굴림 뒤 사칙연산 ──
+
+    @Test
+    fun `곱셈이 붙으면 계산까지 마친 값이 나온다`() {
+        val command = DiceBot.parse("3d6*5")!!
+        assertEquals(listOf(DiceBot.Modifier('*', 5)), command.modifiers)
+        // 4+3+5 = 12 → ×5 = 60
+        val result = DiceBot.Result(command, listOf(4, 3, 5))
+        assertEquals(12, result.rollTotal)
+        assertEquals(60, result.total)
+        assertEquals("4 + 3 + 5 = 12 → ×5 = 60", result.breakdown)
+        assertEquals("3d6×5", command.expr)
+    }
+
+    @Test
+    fun `여러 연산은 왼쪽부터 차례로`() {
+        val command = DiceBot.parse("2d6+3*2")!!
+        // (5+5)=10 → +3 = 13 → ×2 = 26
+        assertEquals(26, DiceBot.Result(command, listOf(5, 5)).total)
+    }
+
+    @Test
+    fun `대문자 D와 x 곱셈기호도 받는다`() {
+        assertEquals(60, DiceBot.Result(DiceBot.parse("3D6x5")!!, listOf(4, 3, 5)).total)
+        assertEquals(60, DiceBot.Result(DiceBot.parse("3d6 × 5")!!, listOf(4, 3, 5)).total)
+    }
+
+    @Test
+    fun `주사위 하나여도 계산식을 보여 준다`() {
+        val result = DiceBot.Result(DiceBot.parse("1d100-10")!!, listOf(40))
+        assertEquals("40 → -10 = 30", result.breakdown)
+    }
+
+    @Test
+    fun `비교식은 계산까지 마친 값으로 가린다`() {
+        val command = DiceBot.parse("3d6*5<=60")!!
+        assertEquals(true, DiceBot.Result(command, listOf(4, 3, 5)).success)   // 60 <= 60
+        assertEquals(false, DiceBot.Result(command, listOf(5, 5, 5)).success)  // 75 > 60
+    }
+
+    @Test
+    fun `연산 뒤에도 대사를 이어 쓸 수 있다`() {
+        assertEquals(60, DiceBot.Result(DiceBot.parse("3d6*5 능력치!")!!, listOf(4, 3, 5)).total)
+    }
+
+    @Test
+    fun `0으로 나누는 명령은 받지 않는다`() {
+        assertNull(DiceBot.parse("3d6/0"))
+    }
+
+    @Test
+    fun `상한을 넘는 수나 너무 긴 식은 받지 않는다`() {
+        assertNull(DiceBot.parse("3d6*100000"))
+        assertNull(DiceBot.parse("3d6+1+1+1+1+1"))
+    }
+
+    @Test
+    fun `연산이 없으면 지금까지와 똑같다`() {
+        val result = DiceBot.Result(DiceBot.parse("2d6")!!, listOf(3, 5))
+        assertEquals("3 + 5 = 8", result.breakdown)
+        assertEquals("2d6", DiceBot.parse("2d6")!!.expr)
+    }
 }

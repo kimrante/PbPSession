@@ -39,6 +39,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -59,6 +61,48 @@ private val ARROW_KEYS = setOf(
     Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
 )
 
+/**
+ * 방향키로 커서를 옮긴 결과를 돌려준다. 옮길 수 없으면 null.
+ *
+ * 블루투스 키보드에서 방향키가 커서를 움직이지 못하고 포커스만 튀던 것을 여기서
+ * 직접 처리한다. 위·아래는 줄바꿈을 기준으로 **같은 칸**을 찾아간다 — 화면에서
+ * 접힌 줄은 알 수 없으므로, 적어도 사람이 친 줄 단위로는 예측대로 움직인다.
+ */
+internal fun moveCaret(value: TextFieldValue, key: Key): TextFieldValue? {
+    val text = value.text
+    val at = value.selection.end
+    val target = when (key) {
+        Key.DirectionLeft ->
+            // 범위를 잡아 둔 상태면 그 왼쪽 끝으로 (지우지 않고 커서만 접는다)
+            if (!value.selection.collapsed) value.selection.min else (at - 1).coerceAtLeast(0)
+        Key.DirectionRight ->
+            if (!value.selection.collapsed) value.selection.max else (at + 1).coerceAtMost(text.length)
+        Key.DirectionUp -> {
+            val lineStart = text.lastIndexOf('\n', (at - 1).coerceAtLeast(0)).let {
+                if (at == 0) -1 else it
+            }
+            if (lineStart < 0) 0 else {
+                val column = at - lineStart - 1
+                val prevStart = text.lastIndexOf('\n', (lineStart - 1).coerceAtLeast(0))
+                    .let { if (lineStart == 0) -1 else it }
+                (prevStart + 1 + column).coerceAtMost(lineStart)
+            }
+        }
+        Key.DirectionDown -> {
+            val lineStart = text.lastIndexOf('\n', (at - 1).coerceAtLeast(0))
+            val column = at - lineStart - 1
+            val nextBreak = text.indexOf('\n', at)
+            if (nextBreak < 0) text.length else {
+                val nextEnd = text.indexOf('\n', nextBreak + 1).let { if (it < 0) text.length else it }
+                (nextBreak + 1 + column).coerceAtMost(nextEnd)
+            }
+        }
+        else -> return null
+    }
+    if (target == at && value.selection.collapsed) return null
+    return value.copy(selection = TextRange(target))
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun InputZone(
@@ -67,6 +111,10 @@ internal fun InputZone(
     themeColor: Color,
     onSend: (String, Boolean) -> Unit,
     rule: String,
+    /**
+     * Tab으로 다음 프로필. 인자는 Shift 동반 여부(이전으로). null이면 전환하지 않는다.
+     */
+    onCycleProfile: ((backwards: Boolean) -> Unit)? = null,
     /** 상대 이름 — "○○님이 입력 중…". 만료 판정은 [TypingLine]이 스스로 한다 (E2) */
     typingName: String? = null,
     typingUntil: Long = 0L,
@@ -229,16 +277,27 @@ internal fun InputZone(
                     // 입력창이 처리하지 않은 방향키를 여기서 삼킨다. 그냥 두면 컴포즈의
                     // 포커스 이동이 받아 커서가 말풍선·버튼으로 튀어 나간다
                     .onKeyEvent { event -> event.key in ARROW_KEYS }
-                    // 물리 키보드에서 Ctrl+Enter로 바로 전송
                     .onPreviewKeyEvent { event ->
-                        if (event.type == KeyEventType.KeyDown &&
-                            event.key == Key.Enter &&
-                            event.isCtrlPressed &&
-                            canSend
-                        ) {
-                            doSend()
-                            true
-                        } else false
+                        when {
+                            event.type != KeyEventType.KeyDown -> false
+                            // 물리 키보드에서 Ctrl+Enter로 바로 전송
+                            event.key == Key.Enter && event.isCtrlPressed && canSend -> {
+                                doSend()
+                                true
+                            }
+                            // Tab — 이 방의 다음 프로필로 (Shift+Tab은 이전)
+                            event.key == Key.Tab && onCycleProfile != null -> {
+                                onCycleProfile(event.isShiftPressed)
+                                true
+                            }
+                            // 방향키로 커서를 옮긴다. 조합키(Ctrl·Alt·Shift)는 기본 동작에
+                            // 맡긴다 — 단어 단위 이동·범위 선택까지 흉내 내지 않는다
+                            event.key in ARROW_KEYS && !event.isCtrlPressed &&
+                                !event.isAltPressed && !event.isShiftPressed -> {
+                                moveCaret(input, event.key)?.let { input = it } != null
+                            }
+                            else -> false
+                        }
                     },
                 placeholder = {
                     Text(

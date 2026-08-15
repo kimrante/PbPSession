@@ -886,6 +886,17 @@ fun ChatScreen(nav: NavController, roomId: Long) {
                 InputZone(
                     profiles = profiles,
                     activeId = active?.id,
+                    // Tab — 이 방의 프로필 목록에서 다음(Shift+Tab은 이전)으로.
+                    // 목록 순서는 화면에 보이는 것과 같다(GM 먼저, 그다음 이름순)
+                    onCycleProfile = { backwards ->
+                        if (profiles.size > 1) {
+                            val at = profiles.indexOfFirst { it.id == active?.id }
+                            val step = if (backwards) -1 else 1
+                            val next = ((at.coerceAtLeast(0) + step) % profiles.size + profiles.size) %
+                                profiles.size
+                            vm.switchTo(profiles[next])
+                        }
+                    },
                     themeColor = themeColor,
                     onSend = { text, ooc ->
                         vm.send(text, ooc)

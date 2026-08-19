@@ -46,16 +46,18 @@ exports.notifyNewMessage = onDocumentCreated(
       .collection(`rooms/${roomId}/members`)
       .get();
 
-    const tokens = [];
+    // Set으로 중복 제거 — 레거시(deviceId)와 신규(auth UID) 멤버 문서가 같은
+    // 토큰을 들고 있는 과도기에 같은 기기로 푸시가 두 번 나가지 않게 (9회차 리뷰)
+    const tokens = new Set();
     members.forEach((member) => {
       if (member.id !== authorUid && member.data().fcmToken) {
-        tokens.push(member.data().fcmToken);
+        tokens.add(member.data().fcmToken);
       }
     });
-    if (tokens.length === 0) return;
+    if (tokens.size === 0) return;
 
     await Promise.all(
-      tokens.map((token) =>
+      [...tokens].map((token) =>
         admin
           .messaging()
           .send({

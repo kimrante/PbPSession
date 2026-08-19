@@ -134,6 +134,17 @@ class PbpMarkupTest {
     }
 
     @Test
+    fun `루비 경계에 걸친 별표 짝도 닫힘으로 본다 — 꼬리 탐색 회귀 (Z4)`() {
+        // 여는 *의 닫는 짝이 루비 '너머 조각'에 있다 — 꼬리 결합 방식을 바꿔도
+        // 이 판정이 달라지면 안 된다
+        val nodes = PbpMarkup.parse("*기울임 (독음)[本文]* 끝")
+        val spans = nodes.filterIsInstance<PbpMarkup.Node.Span>().filter { it.text.isNotBlank() }
+        assertTrue(spans.first().italic)
+        assertFalse(spans.last().italic)
+        assertFalse(spans.joinToString("") { it.text }.contains("*"))
+    }
+
+    @Test
     fun `마커가 수백 개인 초장문도 금방 끝난다 — 예전에는 조각마다 뒤를 다시 이었다`() {
         // 마커 500개 × 본문 2,000자 남짓. O(n²)이던 시절에는 수 초가 걸려
         // 첫 컴포지션이 멎고 시스템이 ANR로 앱을 죽였다 (Z4)

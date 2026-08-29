@@ -117,7 +117,10 @@ class ProfileEditViewModel(private val app: PbpApp) : ViewModel() {
     fun delete(profile: CharacterProfile, onDone: () -> Unit) = safeLaunch(app) {
         withContext(Dispatchers.IO) {
             app.repository.deleteProfile(profile)
-            profile.imagePath?.let { File(it).delete() }
+            // 이미지 파일은 여기서 지우지 않는다 (6회차 리뷰) — 과거 메시지들이 같은
+            // 경로를 senderImagePath 스냅샷으로 참조하고 있어, 즉시 지우면 채팅 로그의
+            // 아바타가 빈 원이 된다. 아무도 참조하지 않게 된 파일은 다음 시작 때
+            // ImageGc가 같은 규칙("참조 없는 파일만")으로 정리한다
         }
         onDone()
     }

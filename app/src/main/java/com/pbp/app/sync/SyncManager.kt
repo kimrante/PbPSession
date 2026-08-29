@@ -53,7 +53,15 @@ class SyncManager(private val context: Context, private val db: AppDatabase) {
     /** 상대 메시지 수신 시 호출(알림용, 두 번째 인자는 원격 방 ID). PbpApp에서 주입한다. */
     var onIncomingMessage: ((Message, String) -> Unit)? = null
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // 예외 핸들러가 없으면 start()·attach()의 비보호 구간(DB 조회·Firestore 초기화)
+    // 예외 한 번에 앱이 통째로 죽는다 — 동기화 실패는 다음 기회에 다시 하면 되는
+    // 일이지 크래시가 아니다 (Z1과 같은 계열, 리뷰 4회차)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+                android.util.Log.w("PbpSync", "동기화 작업 실패", e)
+            }
+    )
     // 여러 IO 스레드 + FCM 바인더 스레드에서 접근하므로 동시성 컬렉션 (N7)
     private val listeners = java.util.concurrent.ConcurrentHashMap<Long, ListenerRegistration>()
     private val roomListeners = java.util.concurrent.ConcurrentHashMap<Long, ListenerRegistration>()

@@ -132,7 +132,9 @@ object CaptureRenderer {
             CaptureSheet(room, messages, myUid, avatarCache, firestore, withBackground, page)
         }
         return ImageComposeScene(widthPx, height, Density(RENDER_DENSITY), content = content).use {
-            it.render().encodeToData()!!.bytes
+            // encodeToData는 실패 시 null이다 — !!의 NPE 대신 사유 있는 예외로.
+            // 호출부(makeCapture)의 runCatching이 이 메시지를 하단 바에 그대로 보여 준다
+            it.render().encodeToData()?.bytes ?: error("PNG 인코딩 실패")
         }
     }
 

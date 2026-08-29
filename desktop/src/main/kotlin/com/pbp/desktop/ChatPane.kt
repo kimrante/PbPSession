@@ -364,6 +364,10 @@ internal fun MessageBlock(
     // 계정을 갈아타면 uid가 바뀐다 — 예전 신원으로 보낸 것도 내 말풍선으로 둔다
     val mine = firestore?.isMe(message.authorUid) ?: (message.authorUid == myUid)
     val radiusPx = with(LocalDensity.current) { DesktopDimens.rCell.toPx() }
+    // 캡처 모드에서는 말풍선·서술·판정 카드가 클릭을 삼키면 안 된다 — 행 전체를
+    // 클릭해 범위를 고르는데 자식 clickable이 먼저 먹어 빈 여백에서만 반응했고,
+    // 판정 카드는 굴림(되돌릴 수 없음)까지 나갔다 (모바일 A1과 동일 규칙, 8회차)
+    val capturing = onTap != null
     var wrapper = Modifier.fillMaxWidth().captureBand(mark, Tokens.Signature, radiusPx)
     if (onTap != null) wrapper = wrapper.clickable(onClick = onTap)
     if (mark != CaptureMark.NONE) wrapper = wrapper.padding(vertical = DesktopDimens.gap2)
@@ -371,7 +375,8 @@ internal fun MessageBlock(
     Box(wrapper) {
     when {
         // 판정 요청 — 대상 캐릭터를 가진 쪽만 누를 수 있다 (J5)
-        message.type == Protocol.MessageType.JUDGE -> JudgeCard(message, judgeState, onJudgeTap)
+        message.type == Protocol.MessageType.JUDGE ->
+            JudgeCard(message, judgeState, onJudgeTap, tappable = !capturing)
         message.type == Protocol.MessageType.SYSTEM -> {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
@@ -420,9 +425,11 @@ internal fun MessageBlock(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier.clip(RoundedCornerShape(999.dp)).background(chatterColor)
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                        .then(
+                            if (capturing) Modifier else Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                            )
                         )
                         .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap1)
                 ) {
@@ -445,6 +452,7 @@ internal fun MessageBlock(
                         is GmSpeech.Part.Narration -> NarrationBlock(
                             message, part.text,
                             onLongPress = { onLongPress(message) }, // 복사·캡처는 상대 서술에서도
+                            tappable = !capturing,
                         )
                         is GmSpeech.Part.Quote -> BubbleRow(
                             message = message, myUid = myUid, room = room,
@@ -455,6 +463,7 @@ internal fun MessageBlock(
                             overrideBubbleColor = Tokens.gmQuoteBubble,
                             showTime = showTime && index == lastQuote,
                             onLongPress = onLongPress,
+                            tappable = !capturing,
                         )
                     }
                 }
@@ -469,6 +478,7 @@ internal fun MessageBlock(
                     showHeader = !grouped,
                     showTime = showTime,
                     onLongPress = onLongPress,
+                    tappable = !capturing,
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(DesktopDimens.gap2)) {
@@ -481,6 +491,7 @@ internal fun MessageBlock(
                             showHeader = !grouped && index == 0,
                             showTime = showTime && index == parts.lastIndex,
                             onLongPress = onLongPress,
+                            tappable = !capturing,
                         )
                     }
                 }
@@ -533,14 +544,20 @@ private fun judgeLabel(message: Message): AnnotatedString {
 
 /** 판정 요청 카드 — 세 상태의 크기가 같아야 목록이 흔들리지 않는다 (모바일과 같은 규격) */
 @Composable
-private fun JudgeCard(message: Message, state: JudgeState, onTap: () -> Unit) {
+private fun JudgeCard(
+    message: Message,
+    state: JudgeState,
+    onTap: () -> Unit,
+    /** 캡처 모드에서는 누를 수 없다 — 범위를 고르려던 클릭에 주사위가 굴러간다 (A1) */
+    tappable: Boolean = true,
+) {
     val border = if (state == JudgeState.MyTurn) 2.dp else 1.dp
     val shape = RoundedCornerShape(DesktopDimens.rCard)
     var box = Modifier
         .clip(shape)
         .background(Tokens.Panel)
         .border(border, if (state == JudgeState.MyTurn) Tokens.Signature else Tokens.Line, shape)
-    if (state == JudgeState.MyTurn) box = box.clickable(onClick = onTap)
+    if (state == JudgeState.MyTurn && tappable) box = box.clickable(onClick = onTap)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
             box.padding(
@@ -673,14 +690,23 @@ internal fun GmSpeech.Part.text(): String = when (this) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun NarrationBlock(message: Message, text: String, onLongPress: () -> Unit = {}) {
+internal fun NarrationBlock(
+    message: Message,
+    text: String,
+    onLongPress: () -> Unit = {},
+    /** 캡처 모드(false)에서는 클릭을 삼키지 않는다 — 행 클릭이 범위 선택이다 (A1) */
+    tappable: Boolean = true,
+) {
     val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 4.dp)
     Column(
         Modifier.fillMaxWidth()
             .shadow(3.dp, shape) // 목업 box-shadow 0 3px 12px
             .clip(shape)
             .background(Tokens.NarrBg)
-            .combinedClickable(onClick = {}, onLongClick = onLongPress)
+            .then(
+                if (tappable) Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress)
+                else Modifier
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         // 서술은 문단 자체가 화면 — 서술자·시간 등 메타 표기는 두지 않는다 (모바일과 동일)
@@ -711,6 +737,8 @@ internal fun BubbleRow(
      */
     showTime: Boolean,
     onLongPress: (Message) -> Unit = {},
+    /** 캡처 모드(false)에서는 클릭을 삼키지 않는다 — 행 클릭이 범위 선택이다 (A1) */
+    tappable: Boolean = true,
 ) {
     val mine = (firestore?.isMe(message.authorUid) ?: (message.authorUid == myUid)) &&
         overrideName == null
@@ -779,9 +807,11 @@ internal fun BubbleRow(
                         Modifier.widthIn(max = DesktopDimens.bubbleMax)
                             .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
                             .clip(shape).background(bubbleColor)
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                            .then(
+                                if (tappable) Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                                ) else Modifier
                             )
                     ) {
                         QuoteMark(
@@ -806,9 +836,11 @@ internal fun BubbleRow(
                         Modifier.widthIn(max = DesktopDimens.bubbleMax)
                             .shadow(2.dp, shape) // 목업 box-shadow 0 2px 8px
                             .clip(shape).background(bubbleColor)
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                            .then(
+                                if (tappable) Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { onLongPress(message) }, // 복사는 상대 메시지에서도
+                                ) else Modifier
                             )
                             .padding(horizontal = DesktopDimens.gap3, vertical = DesktopDimens.gap2)
                     ) {

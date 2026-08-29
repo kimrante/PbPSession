@@ -584,13 +584,16 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     // 여러 건이 한 배치로 도착하면(상대 판정의 TEXT+DICE 쌍, 백그라운드 복귀 후 몰아
     // 수신) 리스트가 보던 항목에 앵커되어 firstVisibleItemIndex가 도착 수만큼 커진다.
     // 직전 최신 메시지의 현재 위치로 '이번에 몇 건 추가됐는지'를 세어 보정한다 (P1-7 보강).
-    var prevLatestId by remember { mutableStateOf<Long?>(null) }
+    // 회전·프로세스 재생성에도 남긴다(-1 = 없음) — 남기지 않으면 복원 프레임에
+    // '전부 새 메시지'로 계산돼, 위로 스크롤해 읽던 자리가 최신으로 튕긴다 (5회차)
+    var prevLatestId by rememberSaveable { mutableStateOf(-1L) }
     LaunchedEffect(latestMessageId, pendingScrollToLatest) {
         if (latestMessageId == null) {
-            prevLatestId = null
+            prevLatestId = -1L
             return@LaunchedEffect
         }
-        val prevIndex = prevLatestId?.let { id -> messages.indexOfLast { it.id == id } } ?: -1
+        val prevIndex = if (prevLatestId < 0) -1
+        else messages.indexOfLast { it.id == prevLatestId }
         val appended = if (prevIndex >= 0) messages.size - 1 - prevIndex else messages.size
         prevLatestId = latestMessageId
         // 내 발신이면 무조건, 아니면 바닥 근처를 보고 있을 때만 따라간다 (P1-7)
@@ -977,7 +980,11 @@ fun ChatScreen(nav: NavController, roomId: Long) {
     needValueFor?.let { requestId ->
         val request = remember(messages, requestId) { messages.find { it.id == requestId } }
         if (request == null) {
-            needValueFor = null
+            // 컴포지션 중 상태 쓰기를 피하고, 복원 직후 빈 목록 프레임에서
+            // 다이얼로그를 오탐 폐기하지 않는다 (Y1과 같은 가드, 5회차)
+            LaunchedEffect(requestId, messages.isNotEmpty()) {
+                if (messages.isNotEmpty()) needValueFor = null
+            }
         } else {
             JudgeValueDialog(
                 targetName = request.judgeTarget ?: "",
